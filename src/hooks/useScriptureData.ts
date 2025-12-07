@@ -58,38 +58,38 @@ export function useScriptureData() {
         });
       }
 
-      // Build resources array
+      // Build resources array - include ALL resources without artificial limits
       const newResources: Resource[] = [];
 
-      // Add translation notes
+      // Add ALL translation notes - no truncation
       notes.forEach((note, index) => {
         if (note.note || note.quote) {
           newResources.push({
             id: `note-${index}`,
             type: 'translation-note',
             title: note.quote || `Note on ${note.reference}`,
-            content: note.note,
+            content: note.note, // Full content
             reference: note.reference,
           });
         }
       });
 
-      // Add translation questions
+      // Add ALL translation questions - no truncation
       questions.forEach((q, index) => {
         if (q.question) {
           newResources.push({
             id: `question-${index}`,
             type: 'translation-question',
             title: q.question,
-            content: q.response,
+            content: q.response, // Full content
             reference: q.reference,
           });
         }
       });
 
-      // Fetch word definitions for each word link (limit to avoid too many requests)
+      // Fetch word definitions for ALL word links
       if (wordLinks.length > 0) {
-        const wordPromises = wordLinks.slice(0, 5).map((link) => 
+        const wordPromises = wordLinks.map((link) => 
           fetchTranslationWord(link.articleId).then((word) => ({
             link,
             word,
@@ -104,11 +104,10 @@ export function useScriptureData() {
               id: `word-${index}`,
               type: 'translation-word',
               title: word.term || link.word,
-              content: word.definition || word.content.substring(0, 500),
+              content: word.definition || word.content, // Full content, no truncation
               reference: link.reference,
             });
           } else if (link.word) {
-            // Add the word link even without definition
             newResources.push({
               id: `word-${index}`,
               type: 'translation-word',
