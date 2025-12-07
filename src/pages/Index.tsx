@@ -24,8 +24,8 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, loadScriptureData } = useScriptureData();
-  const { messages, isLoading: chatLoading, sendMessage } = useMultiAgentChat();
+  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData } = useScriptureData();
+  const { messages, isLoading: chatLoading, error: chatError, sendMessage } = useMultiAgentChat();
   const [notes, setNotes] = useState<Note[]>(mockNotes);
   const [history] = useState<HistoryItem[]>(mockHistory);
 
@@ -119,6 +119,8 @@ const Index = () => {
             passage={scripture}
             onAddToNotes={(text) => handleAddToNotes(text, scripture?.reference)}
             isLoading={scriptureLoading}
+            error={scriptureError}
+            onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
           />
         );
       case 'resources':
@@ -126,6 +128,9 @@ const Index = () => {
           <ResourcesCard
             resources={resources}
             onAddToNotes={(text) => handleAddToNotes(text)}
+            isLoading={scriptureLoading}
+            error={scriptureError}
+            onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
           />
         );
       case 'notes':

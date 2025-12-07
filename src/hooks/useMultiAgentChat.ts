@@ -20,6 +20,7 @@ interface ChatResponse {
 export function useMultiAgentChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const sendMessage = useCallback(async (
     content: string, 
@@ -37,6 +38,7 @@ export function useMultiAgentChat() {
     setIsLoading(true);
 
     try {
+      setError(null);
       // Build conversation history for context
       const conversationHistory = messages.slice(-6).map(m => ({
         role: m.role,
@@ -121,14 +123,16 @@ export function useMultiAgentChat() {
         scriptureReference: response.scripture_reference,
         searchQuery: response.search_query,
       };
-    } catch (error) {
-      console.error('Chat error:', error);
+    } catch (err) {
+      console.error('Chat error:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMsg);
       
       // Add error message
       const errorMessage: Message = {
         id: `${Date.now()}-error`,
         role: 'assistant',
-        content: `I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+        content: `I encountered an error: ${errorMsg}. Please try again.`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -146,6 +150,7 @@ export function useMultiAgentChat() {
   return {
     messages,
     isLoading,
+    error,
     sendMessage,
     clearMessages,
   };
