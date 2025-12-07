@@ -92,12 +92,38 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading }
                     components={{
                       p: ({ children }) => <p className="text-sm leading-relaxed mb-2 last:mb-0">{children}</p>,
                       strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
-                      ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
-                      ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>,
-                      li: ({ children }) => <li className="text-sm">{children}</li>,
-                      h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-primary">{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-base font-semibold mb-2 text-primary">{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 text-accent">{children}</h3>,
+                      em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
+                      ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2 ml-2">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2 ml-2">{children}</ol>,
+                      li: ({ children }) => <li className="text-sm leading-relaxed">{children}</li>,
+                      h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 text-primary">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-semibold mb-2 mt-3 text-primary">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 text-accent">{children}</h3>,
+                      h4: ({ children }) => <h4 className="text-sm font-medium mb-1 mt-2 text-foreground">{children}</h4>,
+                      blockquote: ({ children }) => (
+                        <blockquote className="border-l-2 border-primary/50 pl-3 my-2 italic text-muted-foreground">
+                          {children}
+                        </blockquote>
+                      ),
+                      code: ({ children, className }) => {
+                        const isInline = !className;
+                        return isInline ? (
+                          <code className="bg-muted/50 px-1.5 py-0.5 rounded text-xs font-mono text-accent">
+                            {children}
+                          </code>
+                        ) : (
+                          <code className="block bg-muted/30 p-3 rounded-lg text-xs font-mono overflow-x-auto my-2">
+                            {children}
+                          </code>
+                        );
+                      },
+                      pre: ({ children }) => <pre className="bg-muted/30 p-3 rounded-lg overflow-x-auto my-2">{children}</pre>,
+                      a: ({ href, children }) => (
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
+                          {children}
+                        </a>
+                      ),
+                      hr: () => <hr className="border-border/30 my-3" />,
                     }}
                   >
                     {message.content}
