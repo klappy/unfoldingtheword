@@ -17,19 +17,25 @@ serve(async (req) => {
     
     console.log(`[translation-helps-proxy] Endpoint: ${endpoint}, Params:`, params);
 
-    // Map endpoint names to actual API paths
+    // Map endpoint names to actual API paths - all use fetch- prefix
     const endpointMap: Record<string, string> = {
       'fetch-scripture': 'fetch-scripture',
-      'translation-notes': 'translation-notes',
-      'fetch-translation-notes': 'translation-notes',
-      'translation-questions': 'translation-questions',
-      'fetch-translation-questions': 'translation-questions',
-      'translation-word-links': 'translation-word-links',
-      'fetch-translation-word-links': 'translation-word-links',
-      'translation-word': 'translation-word',
-      'fetch-translation-word': 'translation-word',
-      'translation-academy': 'translation-academy',
-      'fetch-translation-academy': 'translation-academy',
+      'scripture': 'fetch-scripture',
+      'translation-notes': 'fetch-translation-notes',
+      'fetch-translation-notes': 'fetch-translation-notes',
+      'notes': 'fetch-translation-notes',
+      'translation-questions': 'fetch-translation-questions',
+      'fetch-translation-questions': 'fetch-translation-questions',
+      'questions': 'fetch-translation-questions',
+      'translation-word-links': 'fetch-translation-word-links',
+      'fetch-translation-word-links': 'fetch-translation-word-links',
+      'word-links': 'fetch-translation-word-links',
+      'translation-word': 'fetch-translation-word',
+      'fetch-translation-word': 'fetch-translation-word',
+      'word': 'fetch-translation-word',
+      'translation-academy': 'fetch-translation-academy',
+      'fetch-translation-academy': 'fetch-translation-academy',
+      'academy': 'fetch-translation-academy',
       'search': 'search',
     };
 
@@ -50,8 +56,8 @@ serve(async (req) => {
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Lovable-App/1.0',
+        'Accept': 'text/markdown, application/json, text/plain',
+        'User-Agent': 'Lovable-Translation-App/1.0',
       },
     });
 
@@ -81,7 +87,7 @@ serve(async (req) => {
     } else {
       // Markdown or text response
       const text = await response.text();
-      console.log(`[translation-helps-proxy] Text response length: ${text.length}`);
+      console.log(`[translation-helps-proxy] Text response length: ${text.length} chars`);
       return new Response(JSON.stringify({ content: text, format: 'markdown' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

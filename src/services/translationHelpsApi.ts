@@ -67,52 +67,148 @@ async function callProxy(endpoint: string, params: Record<string, any>) {
   return data;
 }
 
-export async function fetchScripture(reference: string): Promise<ScriptureResponse> {
-  try {
-    // Use the reference directly as the API expects it (e.g., "John 3:16")
-    const data = await callProxy('fetch-scripture', { reference });
+// Parse markdown scripture response into structured verses
+function parseScriptureMarkdown(content: string, reference: string): { verses: ScriptureVerse[], translation: string } {
+  const verses: ScriptureVerse[] = [];
+  let translation = 'unfoldingWord Literal Text';
+  
+  // Extract translation from markdown
+  const ultMatch = content.match(/\*\*ULT v\d+ \(([^)]+)\)\*\*\s*\n\n([^*]+?)(?=\n\n\*\*|$)/s);
+  if (ultMatch) {
+    translation = ultMatch[1];
+    const verseText = ultMatch[2].trim();
     
-    // Parse the scripture content - handle markdown format
-    let content = data.content || data.text || '';
-    const verses: ScriptureVerse[] = [];
+    // Parse verses - try to split by verse numbers if present
+    const verseMatch = reference.match(/:(\d+)(?:-(\d+))?$/);
+    if (verseMatch) {
+      const startVerse = parseInt(verseMatch[1], 10);
+      const endVerse = verseMatch[2] ? parseInt(verseMatch[2], 10) : startVerse;
+      
+      // Split text by sentence boundaries for multi-verse passages
+      const sentences = verseText.split(/(?<=[.!?])\s+/);
+      const verseCount = endVerse - startVerse + 1;
+      
+      if (sentences.length >= verseCount) {
+        // Distribute sentences across verses
+        const sentencesPerVerse = Math.ceil(sentences.length / verseCount);
+        for (let i = 0; i < verseCount; i++) {
+          const start = i * sentencesPerVerse;
+          const end = Math.min(start + sentencesPerVerse, sentences.length);
+          const text = sentences.slice(start, end).join(' ');
+          if (text.trim()) {
+            verses.push({ number: startVerse + i, text: text.trim() });
+          }
+        }
+      } else {
+        // Single sentence or fewer sentences than verses
+        verses.push({ number: startVerse, text: verseText });
+      }
+    } else {
+      // No verse number in reference, treat as single verse
+      verses.push({ number: 1, text: verseText });
+    }
+  }
+  
+  // Fallback: if no ULT found, try to extract any text after the header
+  if (verses.length === 0) {
+    const headerMatch = content.match(/# [^\n]+\n\n([\s\S]+)/);
+    if (headerMatch) {
+      const textContent = headerMatch[1]
+        .replace(/---[\s\S]*?---/g, '') // Remove frontmatter
+        .replace(/\*\*[^*]+\*\*/g, '') // Remove bold markers
+        .replace(/\n{2,}/g, '\n')
+        .trim();
+      
+      if (textContent) {
+        verses.push({ number: 1, text: textContent.substring(0, 500) });
+      }
+    }
+  }
+  
+  return { verses, translation };
+}
+
+// Parse translation notes from markdown
+function parseNotesMarkdown(content: string, reference: string): TranslationNote[] {
+  const notes: TranslationNote[] = [];
+  
+  // Split by note sections (## number. id format)
+  const noteSections = content.split(/## \d+\.\s+[a-z0-9]+\s*\n/i);
+  
+  for (let i = 1; i < noteSections.length && notes.length < 10; i++) {
+    const section = noteSections[i].trim();
+    if (!section) continue;
     
-    // Try to extract verses from markdown content
-    // Format might be: "**16** For God so loved..." or "16 For God so loved..."
-    const versePattern = /\*?\*?(\d+)\*?\*?\s+([^*\d][^\n]*)/g;
-    let match;
-    while ((match = versePattern.exec(content)) !== null) {
-      verses.push({
-        number: parseInt(match[1], 10),
-        text: match[2].trim(),
+    // Extract title (first # heading or first line)
+    const titleMatch = section.match(/^#\s+([^\n]+)/m);
+    const title = titleMatch ? titleMatch[1].trim() : section.split('\n')[0].substring(0, 100);
+    
+    // Get content (everything after title, limited)
+    const contentStart = titleMatch ? section.indexOf(titleMatch[0]) + titleMatch[0].length : 0;
+    const noteContent = section.substring(contentStart).trim().substring(0, 500);
+    
+    if (title && noteContent) {
+      notes.push({
+        id: `note-${i}`,
+        reference,
+        quote: title,
+        note: noteContent.replace(/\n+/g, ' ').trim(),
       });
     }
+  }
+  
+  return notes;
+}
 
-    // If no verses parsed with that pattern, try USFM format
-    if (verses.length === 0 && content.includes('\\v ')) {
-      const usfmPattern = /\\v\s+(\d+)\s+([^\\]+)/g;
-      while ((match = usfmPattern.exec(content)) !== null) {
-        verses.push({
-          number: parseInt(match[1], 10),
-          text: match[2].trim().replace(/\s+/g, ' '),
+// Parse translation questions from markdown
+function parseQuestionsMarkdown(content: string, reference: string): TranslationQuestion[] {
+  const questions: TranslationQuestion[] = [];
+  
+  // Look for Q&A patterns
+  const qaPattern = /(?:^|\n)(?:\*\*)?Q(?:uestion)?:?\*?\*?\s*([^\n]+)\n+(?:\*\*)?A(?:nswer)?:?\*?\*?\s*([^\n]+)/gi;
+  let match;
+  
+  while ((match = qaPattern.exec(content)) !== null && questions.length < 10) {
+    questions.push({
+      id: `question-${questions.length}`,
+      reference,
+      question: match[1].trim(),
+      response: match[2].trim(),
+    });
+  }
+  
+  // Fallback: look for ### headers with content
+  if (questions.length === 0) {
+    const sections = content.split(/### /);
+    for (let i = 1; i < sections.length && questions.length < 10; i++) {
+      const lines = sections[i].split('\n');
+      const question = lines[0]?.trim();
+      const response = lines.slice(1).join(' ').trim().substring(0, 300);
+      if (question && response) {
+        questions.push({
+          id: `question-${i}`,
+          reference,
+          question,
+          response,
         });
       }
     }
+  }
+  
+  return questions;
+}
 
-    // If still no verses, treat entire content as single verse
-    if (verses.length === 0 && content) {
-      // Clean up any remaining markers
-      content = content.replace(/\\[a-z]+\s*/g, '').replace(/\*\*/g, '').trim();
-      verses.push({
-        number: 1,
-        text: content,
-      });
-    }
+export async function fetchScripture(reference: string): Promise<ScriptureResponse> {
+  try {
+    const data = await callProxy('fetch-scripture', { reference });
+    const content = data.content || data.text || '';
+    const { verses, translation } = parseScriptureMarkdown(content, reference);
 
     return {
       reference: data.reference || reference,
-      translation: data.translation || data.resource || 'unfoldingWord Literal Text',
+      translation,
       text: content,
-      verses,
+      verses: verses.length > 0 ? verses : [{ number: 1, text: 'Scripture content not available' }],
     };
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching scripture:', error);
@@ -122,34 +218,22 @@ export async function fetchScripture(reference: string): Promise<ScriptureRespon
 
 export async function fetchTranslationNotes(reference: string): Promise<TranslationNote[]> {
   try {
-    // Use reference directly, with optional format=md for markdown
-    const data = await callProxy('translation-notes', { reference, format: 'json' });
+    const data = await callProxy('fetch-translation-notes', { reference });
+    const content = data.content || '';
     
-    // Handle various response formats
-    const notes = data.notes || data.content || data.data || (Array.isArray(data) ? data : []);
-    
-    if (Array.isArray(notes)) {
-      return notes.slice(0, 10).map((note: any, index: number) => ({
-        id: note.id || `note-${index}`,
-        reference: note.reference || note.ref || note.Reference || reference,
-        quote: note.quote || note.Quote || note.original || note.OrigQuote || '',
-        note: note.note || note.Note || note.content || note.text || note.OccurrenceNote || '',
-      }));
+    if (typeof content === 'string' && content.length > 0) {
+      return parseNotesMarkdown(content, reference);
     }
     
-    // If content is markdown string, parse it
-    if (typeof data.content === 'string') {
-      const noteMatches = data.content.matchAll(/### ([^\n]+)\n([^#]+)/g);
-      const parsedNotes: TranslationNote[] = [];
-      for (const match of noteMatches) {
-        parsedNotes.push({
-          id: `note-${parsedNotes.length}`,
-          reference,
-          quote: match[1].trim(),
-          note: match[2].trim(),
-        });
-      }
-      return parsedNotes.slice(0, 10);
+    // Handle array response
+    if (Array.isArray(data.notes || data)) {
+      const notes = data.notes || data;
+      return notes.slice(0, 10).map((note: any, index: number) => ({
+        id: note.id || `note-${index}`,
+        reference: note.reference || reference,
+        quote: note.quote || note.Quote || note.title || '',
+        note: note.note || note.Note || note.content || '',
+      }));
     }
     
     return [];
@@ -161,32 +245,22 @@ export async function fetchTranslationNotes(reference: string): Promise<Translat
 
 export async function fetchTranslationQuestions(reference: string): Promise<TranslationQuestion[]> {
   try {
-    const data = await callProxy('translation-questions', { reference, format: 'json' });
+    const data = await callProxy('fetch-translation-questions', { reference });
+    const content = data.content || '';
     
-    const questions = data.questions || data.content || data.data || (Array.isArray(data) ? data : []);
-    
-    if (Array.isArray(questions)) {
-      return questions.slice(0, 10).map((q: any, index: number) => ({
-        id: q.id || `question-${index}`,
-        reference: q.reference || q.ref || q.Reference || reference,
-        question: q.question || q.Question || q.text || '',
-        response: q.response || q.Response || q.answer || q.Answer || '',
-      }));
+    if (typeof content === 'string' && content.length > 0) {
+      return parseQuestionsMarkdown(content, reference);
     }
     
-    // If content is markdown string, parse it
-    if (typeof data.content === 'string') {
-      const qMatches = data.content.matchAll(/\*\*Q:\*\*\s*([^\n]+)\n\*\*A:\*\*\s*([^\n]+)/g);
-      const parsedQuestions: TranslationQuestion[] = [];
-      for (const match of qMatches) {
-        parsedQuestions.push({
-          id: `question-${parsedQuestions.length}`,
-          reference,
-          question: match[1].trim(),
-          response: match[2].trim(),
-        });
-      }
-      return parsedQuestions.slice(0, 10);
+    // Handle array response
+    if (Array.isArray(data.questions || data)) {
+      const questions = data.questions || data;
+      return questions.slice(0, 10).map((q: any, index: number) => ({
+        id: q.id || `question-${index}`,
+        reference: q.reference || reference,
+        question: q.question || q.Question || '',
+        response: q.response || q.Response || q.answer || '',
+      }));
     }
     
     return [];
@@ -198,20 +272,36 @@ export async function fetchTranslationQuestions(reference: string): Promise<Tran
 
 export async function fetchTranslationWordLinks(reference: string): Promise<TranslationWordLink[]> {
   try {
-    const data = await callProxy('translation-word-links', { reference });
+    const data = await callProxy('fetch-translation-word-links', { reference });
+    const content = data.content || '';
+    const links: TranslationWordLink[] = [];
     
-    const links = data.links || data.words || data.content || data.data || (Array.isArray(data) ? data : []);
+    // Parse word links from markdown - look for links like [word](rc://...)
+    if (typeof content === 'string') {
+      const linkPattern = /\[([^\]]+)\]\((rc:\/\/[^)]+|[^)]+)\)/g;
+      let match;
+      while ((match = linkPattern.exec(content)) !== null && links.length < 8) {
+        links.push({
+          id: `word-link-${links.length}`,
+          reference,
+          word: match[1].trim(),
+          articleId: match[2],
+        });
+      }
+    }
     
-    if (Array.isArray(links)) {
-      return links.slice(0, 8).map((link: any, index: number) => ({
+    // Handle array response
+    if (Array.isArray(data.links || data.words || data)) {
+      const rawLinks = data.links || data.words || data;
+      return rawLinks.slice(0, 8).map((link: any, index: number) => ({
         id: link.id || `word-link-${index}`,
-        reference: link.reference || link.ref || link.Reference || reference,
-        word: link.word || link.Word || link.term || link.OrigWords || link.text || '',
-        articleId: link.articleId || link.article || link.rc || link.TWLink || link.link || '',
+        reference: link.reference || reference,
+        word: link.word || link.Word || link.term || '',
+        articleId: link.articleId || link.article || link.rc || '',
       }));
     }
     
-    return [];
+    return links;
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching word links:', error);
     return [];
@@ -220,14 +310,28 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
 
 export async function fetchTranslationWord(articleId: string): Promise<TranslationWord | null> {
   try {
-    // articleId might be a full RC link or just the word name
-    const data = await callProxy('translation-word', { articleId });
+    const data = await callProxy('fetch-translation-word', { articleId });
+    const content = data.content || '';
+    
+    // Parse word from markdown
+    let term = articleId;
+    let definition = '';
+    
+    if (typeof content === 'string') {
+      // Extract title
+      const titleMatch = content.match(/^#\s+([^\n]+)/m);
+      if (titleMatch) term = titleMatch[1].trim();
+      
+      // Extract definition (first paragraph after title)
+      const defMatch = content.match(/^#[^\n]+\n\n([^\n#]+)/m);
+      if (defMatch) definition = defMatch[1].trim().substring(0, 300);
+    }
     
     return {
       id: data.id || articleId,
-      term: data.term || data.title || data.name || articleId,
-      definition: data.definition || data.brief || data.description || '',
-      content: data.content || data.text || data.markdown || data.body || '',
+      term: data.term || data.title || term,
+      definition: data.definition || definition,
+      content: content.substring(0, 1000),
     };
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching translation word:', error);
@@ -237,12 +341,19 @@ export async function fetchTranslationWord(articleId: string): Promise<Translati
 
 export async function fetchTranslationAcademy(moduleId: string): Promise<TranslationAcademy | null> {
   try {
-    const data = await callProxy('translation-academy', { moduleId });
+    const data = await callProxy('fetch-translation-academy', { moduleId });
+    const content = data.content || '';
+    
+    let title = moduleId;
+    if (typeof content === 'string') {
+      const titleMatch = content.match(/^#\s+([^\n]+)/m);
+      if (titleMatch) title = titleMatch[1].trim();
+    }
     
     return {
       id: data.id || moduleId,
-      title: data.title || data.name || moduleId,
-      content: data.content || data.text || data.markdown || data.body || '',
+      title: data.title || title,
+      content: content.substring(0, 2000),
     };
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching academy article:', error);
@@ -250,7 +361,6 @@ export async function fetchTranslationAcademy(moduleId: string): Promise<Transla
   }
 }
 
-// Search across all resources
 export async function searchResources(query: string, resource?: string): Promise<any[]> {
   try {
     const params: Record<string, string> = { query };
