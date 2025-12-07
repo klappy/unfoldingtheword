@@ -128,31 +128,33 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
   return { verses, translation };
 }
 
-// Parse translation notes from markdown
+// Parse translation notes from markdown - preserve full content
 function parseNotesMarkdown(content: string, reference: string): TranslationNote[] {
   const notes: TranslationNote[] = [];
   
-  // Split by note sections (## number. id format)
-  const noteSections = content.split(/## \d+\.\s+[a-z0-9]+\s*\n/i);
+  // Split by note sections (## number. id format like "## 1. abc123")
+  const sectionPattern = /## \d+\.\s+[a-z0-9]+\s*\n/gi;
+  const sections = content.split(sectionPattern);
   
-  for (let i = 1; i < noteSections.length && notes.length < 10; i++) {
-    const section = noteSections[i].trim();
+  // Start from index 1 to skip the header section
+  for (let i = 1; i < sections.length; i++) {
+    const section = sections[i].trim();
     if (!section) continue;
     
-    // Extract title (first # heading or first line)
+    // Extract title (first # heading)
     const titleMatch = section.match(/^#\s+([^\n]+)/m);
-    const title = titleMatch ? titleMatch[1].trim() : section.split('\n')[0].substring(0, 100);
+    const title = titleMatch ? titleMatch[1].trim() : '';
     
-    // Get content (everything after title, limited)
+    // Get full content after the title - don't truncate!
     const contentStart = titleMatch ? section.indexOf(titleMatch[0]) + titleMatch[0].length : 0;
-    const noteContent = section.substring(contentStart).trim().substring(0, 500);
+    const noteContent = section.substring(contentStart).trim();
     
-    if (title && noteContent) {
+    if (title || noteContent) {
       notes.push({
         id: `note-${i}`,
         reference,
-        quote: title,
-        note: noteContent.replace(/\n+/g, ' ').trim(),
+        quote: title || `Note ${i}`,
+        note: noteContent, // Full content, no truncation
       });
     }
   }
@@ -160,15 +162,17 @@ function parseNotesMarkdown(content: string, reference: string): TranslationNote
   return notes;
 }
 
-// Parse translation questions from markdown
+// Parse translation questions from markdown - preserve full content
 function parseQuestionsMarkdown(content: string, reference: string): TranslationQuestion[] {
   const questions: TranslationQuestion[] = [];
   
-  // Look for Q&A patterns
-  const qaPattern = /(?:^|\n)(?:\*\*)?Q(?:uestion)?:?\*?\*?\s*([^\n]+)\n+(?:\*\*)?A(?:nswer)?:?\*?\*?\s*([^\n]+)/gi;
+  // Look for Q&A patterns in multiple formats
+  // Format 1: "**Q:** question\n\n**A:** answer"
+  // Format 2: "Q: question\nA: answer"
+  const qaPattern = /(?:\*\*)?Q(?:uestion)?:?\*?\*?\s*([^\n]+)\n+(?:\*\*)?A(?:nswer)?:?\*?\*?\s*([^\n]+)/gi;
   let match;
   
-  while ((match = qaPattern.exec(content)) !== null && questions.length < 10) {
+  while ((match = qaPattern.exec(content)) !== null) {
     questions.push({
       id: `question-${questions.length}`,
       reference,
@@ -180,10 +184,10 @@ function parseQuestionsMarkdown(content: string, reference: string): Translation
   // Fallback: look for ### headers with content
   if (questions.length === 0) {
     const sections = content.split(/### /);
-    for (let i = 1; i < sections.length && questions.length < 10; i++) {
+    for (let i = 1; i < sections.length; i++) {
       const lines = sections[i].split('\n');
       const question = lines[0]?.trim();
-      const response = lines.slice(1).join(' ').trim().substring(0, 300);
+      const response = lines.slice(1).join('\n').trim(); // Keep full response with formatting
       if (question && response) {
         questions.push({
           id: `question-${i}`,
@@ -313,7 +317,7 @@ export async function fetchTranslationWord(articleId: string): Promise<Translati
     const data = await callProxy('fetch-translation-word', { articleId });
     const content = data.content || '';
     
-    // Parse word from markdown
+    // Parse word from markdown - preserve full content
     let term = articleId;
     let definition = '';
     
@@ -322,16 +326,16 @@ export async function fetchTranslationWord(articleId: string): Promise<Translati
       const titleMatch = content.match(/^#\s+([^\n]+)/m);
       if (titleMatch) term = titleMatch[1].trim();
       
-      // Extract definition (first paragraph after title)
+      // Extract definition (first paragraph after title) - keep full paragraph
       const defMatch = content.match(/^#[^\n]+\n\n([^\n#]+)/m);
-      if (defMatch) definition = defMatch[1].trim().substring(0, 300);
+      if (defMatch) definition = defMatch[1].trim();
     }
     
     return {
       id: data.id || articleId,
       term: data.term || data.title || term,
       definition: data.definition || definition,
-      content: content.substring(0, 1000),
+      content: content, // Full content, no truncation
     };
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching translation word:', error);
