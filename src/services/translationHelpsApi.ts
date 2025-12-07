@@ -132,22 +132,20 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
 function parseNotesMarkdown(content: string, defaultReference: string): TranslationNote[] {
   const notes: TranslationNote[] = [];
   
-  // Split by note sections (## number. id format like "## 1. abc123")
-  const sectionPattern = /## (\d+)\.\s+([a-zA-Z0-9]+)\s*\n/g;
+  // Split by sections starting with "## number." - the content after the number can be anything
+  const sectionPattern = /^## (\d+)\.\s+/gm;
   const sectionMatches = [...content.matchAll(sectionPattern)];
+  
+  console.log('[parseNotesMarkdown] Found sections:', sectionMatches.length);
   
   for (let i = 0; i < sectionMatches.length; i++) {
     const match = sectionMatches[i];
-    const sectionId = match[2];
-    const startIndex = match.index! + match[0].length;
+    const sectionNum = match[1];
+    const startIndex = match.index!;
     const endIndex = i < sectionMatches.length - 1 ? sectionMatches[i + 1].index! : content.length;
     const section = content.substring(startIndex, endIndex).trim();
     
     if (!section) continue;
-    
-    // Extract the title (first # heading in this section)
-    const titleMatch = section.match(/^#\s+([^\n]+)/m);
-    const title = titleMatch ? titleMatch[1].trim() : '';
     
     // Extract the **Reference** field for this specific note
     const refMatch = section.match(/\*\*Reference\*\*:\s*([^\n]+)/);
@@ -155,14 +153,26 @@ function parseNotesMarkdown(content: string, defaultReference: string): Translat
     
     // Extract the **Quote** field if present (the Greek/Hebrew text)
     const quoteMatch = section.match(/\*\*Quote\*\*:\s*([^\n]+)/);
-    const quote = quoteMatch ? quoteMatch[1].trim() : title;
     
-    // Get the main content - everything from title to the metadata fields
-    const contentStart = titleMatch ? section.indexOf(titleMatch[0]) + titleMatch[0].length : 0;
-    let noteContent = section.substring(contentStart);
+    // Extract the **ID** field
+    const idMatch = section.match(/\*\*ID\*\*:\s*([^\n]+)/);
+    const noteId = idMatch ? idMatch[1].trim() : `note-${sectionNum}`;
     
-    // Remove metadata fields from the display content
-    noteContent = noteContent
+    // Get the first line after ## N. as the title/quote
+    const firstLineMatch = section.match(/^## \d+\.\s+(.+)$/m);
+    const firstLine = firstLineMatch ? firstLineMatch[1].trim() : '';
+    
+    // Get any # heading in the section as the title
+    const titleMatch = section.match(/^# ([^\n]+)/m);
+    const title = titleMatch ? titleMatch[1].trim() : firstLine;
+    
+    // The quote is either from Quote field, or the first line after ##, or the title
+    const quote = quoteMatch ? quoteMatch[1].trim() : (firstLine || title);
+    
+    // Get content - everything except metadata fields and section headers
+    let noteContent = section
+      .replace(/^## \d+\.\s+.+$/m, '') // Remove section header
+      .replace(/^# [^\n]+$/m, '') // Remove title
       .replace(/\*\*Reference\*\*:[^\n]+\n?/g, '')
       .replace(/\*\*ID\*\*:[^\n]+\n?/g, '')
       .replace(/\*\*Support Reference\*\*:[^\n]+\n?/g, '')
@@ -170,11 +180,13 @@ function parseNotesMarkdown(content: string, defaultReference: string): Translat
       .replace(/\*\*Occurrence\*\*:[^\n]+\n?/g, '')
       .trim();
     
-    if (title || noteContent) {
+    console.log(`[parseNotesMarkdown] Note ${sectionNum}: ref=${noteReference}, quote=${quote.substring(0, 30)}...`);
+    
+    if (quote || noteContent) {
       notes.push({
-        id: `note-${sectionId}`,
+        id: noteId,
         reference: noteReference,
-        quote: quote || title || `Note ${i + 1}`,
+        quote: quote || `Note ${sectionNum}`,
         note: noteContent,
       });
     }
@@ -183,44 +195,99 @@ function parseNotesMarkdown(content: string, defaultReference: string): Translat
   return notes;
 }
 
-// Parse translation questions from markdown - preserve full content
-function parseQuestionsMarkdown(content: string, reference: string): TranslationQuestion[] {
+// Parse translation questions from markdown
+function parseQuestionsMarkdown(content: string, defaultReference: string): TranslationQuestion[] {
   const questions: TranslationQuestion[] = [];
   
-  // Look for Q&A patterns in multiple formats
-  // Format 1: "**Q:** question\n\n**A:** answer"
-  // Format 2: "Q: question\nA: answer"
-  const qaPattern = /(?:\*\*)?Q(?:uestion)?:?\*?\*?\s*([^\n]+)\n+(?:\*\*)?A(?:nswer)?:?\*?\*?\s*([^\n]+)/gi;
-  let match;
+  // Split by sections starting with "## number."
+  const sectionPattern = /^## (\d+)\.\s+/gm;
+  const sectionMatches = [...content.matchAll(sectionPattern)];
   
-  while ((match = qaPattern.exec(content)) !== null) {
-    questions.push({
-      id: `question-${questions.length}`,
-      reference,
-      question: match[1].trim(),
-      response: match[2].trim(),
-    });
-  }
+  console.log('[parseQuestionsMarkdown] Found sections:', sectionMatches.length);
   
-  // Fallback: look for ### headers with content
-  if (questions.length === 0) {
-    const sections = content.split(/### /);
-    for (let i = 1; i < sections.length; i++) {
-      const lines = sections[i].split('\n');
-      const question = lines[0]?.trim();
-      const response = lines.slice(1).join('\n').trim(); // Keep full response with formatting
-      if (question && response) {
-        questions.push({
-          id: `question-${i}`,
-          reference,
-          question,
-          response,
-        });
-      }
+  for (let i = 0; i < sectionMatches.length; i++) {
+    const match = sectionMatches[i];
+    const sectionNum = match[1];
+    const startIndex = match.index!;
+    const endIndex = i < sectionMatches.length - 1 ? sectionMatches[i + 1].index! : content.length;
+    const section = content.substring(startIndex, endIndex).trim();
+    
+    if (!section) continue;
+    
+    // Get the question text (first line after ## N.)
+    const questionMatch = section.match(/^## \d+\.\s+(.+)$/m);
+    const questionText = questionMatch ? questionMatch[1].trim() : '';
+    
+    // Extract the **Reference** field
+    const refMatch = section.match(/\*\*Reference\*\*:\s*([^\n]+)/);
+    const qReference = refMatch ? refMatch[1].trim() : defaultReference;
+    
+    // Extract the **ID** field
+    const idMatch = section.match(/\*\*ID\*\*:\s*([^\n]+)/);
+    const qId = idMatch ? idMatch[1].trim() : `question-${sectionNum}`;
+    
+    // Get the answer - content between question and metadata
+    let answer = section
+      .replace(/^## \d+\.\s+.+$/m, '') // Remove question line
+      .replace(/\*\*Reference\*\*:[^\n]+\n?/g, '')
+      .replace(/\*\*ID\*\*:[^\n]+\n?/g, '')
+      .trim();
+    
+    console.log(`[parseQuestionsMarkdown] Q${sectionNum}: ${questionText.substring(0, 40)}...`);
+    
+    if (questionText) {
+      questions.push({
+        id: qId,
+        reference: qReference,
+        question: questionText,
+        response: answer,
+      });
     }
   }
   
   return questions;
+}
+
+// Parse translation word links from markdown
+function parseWordLinksMarkdown(content: string, defaultReference: string): TranslationWordLink[] {
+  const links: TranslationWordLink[] = [];
+  
+  // Split by sections starting with "## number."
+  const sectionPattern = /^## (\d+)\.\s+/gm;
+  const sectionMatches = [...content.matchAll(sectionPattern)];
+  
+  console.log('[parseWordLinksMarkdown] Found sections:', sectionMatches.length);
+  
+  for (let i = 0; i < sectionMatches.length; i++) {
+    const match = sectionMatches[i];
+    const sectionNum = match[1];
+    const startIndex = match.index!;
+    const endIndex = i < sectionMatches.length - 1 ? sectionMatches[i + 1].index! : content.length;
+    const section = content.substring(startIndex, endIndex).trim();
+    
+    if (!section) continue;
+    
+    // Get the word (text after ## N.)
+    const wordMatch = section.match(/^## \d+\.\s+(.+)$/m);
+    const word = wordMatch ? wordMatch[1].trim() : '';
+    
+    // Extract the **Reference** field
+    const refMatch = section.match(/\*\*Reference\*\*:\s*([^\n]+)/);
+    const linkReference = refMatch ? refMatch[1].trim() : defaultReference;
+    
+    console.log(`[parseWordLinksMarkdown] Word ${sectionNum}: ${word}`);
+    
+    if (word) {
+      links.push({
+        id: `word-link-${sectionNum}`,
+        reference: linkReference,
+        word: word,
+        articleId: word.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+      });
+    }
+  }
+  
+  return links;
 }
 
 export async function fetchScripture(reference: string): Promise<ScriptureResponse> {
@@ -250,10 +317,10 @@ export async function fetchTranslationNotes(reference: string): Promise<Translat
       return parseNotesMarkdown(content, reference);
     }
     
-    // Handle array response
+    // Handle array response - no limits
     if (Array.isArray(data.notes || data)) {
       const notes = data.notes || data;
-      return notes.slice(0, 10).map((note: any, index: number) => ({
+      return notes.map((note: any, index: number) => ({
         id: note.id || `note-${index}`,
         reference: note.reference || reference,
         quote: note.quote || note.Quote || note.title || '',
@@ -277,10 +344,10 @@ export async function fetchTranslationQuestions(reference: string): Promise<Tran
       return parseQuestionsMarkdown(content, reference);
     }
     
-    // Handle array response
+    // Handle array response - no limits
     if (Array.isArray(data.questions || data)) {
       const questions = data.questions || data;
-      return questions.slice(0, 10).map((q: any, index: number) => ({
+      return questions.map((q: any, index: number) => ({
         id: q.id || `question-${index}`,
         reference: q.reference || reference,
         question: q.question || q.Question || '',
@@ -299,26 +366,16 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
   try {
     const data = await callProxy('fetch-translation-word-links', { reference });
     const content = data.content || '';
-    const links: TranslationWordLink[] = [];
     
-    // Parse word links from markdown - look for links like [word](rc://...)
-    if (typeof content === 'string') {
-      const linkPattern = /\[([^\]]+)\]\((rc:\/\/[^)]+|[^)]+)\)/g;
-      let match;
-      while ((match = linkPattern.exec(content)) !== null && links.length < 8) {
-        links.push({
-          id: `word-link-${links.length}`,
-          reference,
-          word: match[1].trim(),
-          articleId: match[2],
-        });
-      }
+    // Use the new parser for markdown content
+    if (typeof content === 'string' && content.length > 0) {
+      return parseWordLinksMarkdown(content, reference);
     }
     
     // Handle array response
     if (Array.isArray(data.links || data.words || data)) {
       const rawLinks = data.links || data.words || data;
-      return rawLinks.slice(0, 8).map((link: any, index: number) => ({
+      return rawLinks.map((link: any, index: number) => ({
         id: link.id || `word-link-${index}`,
         reference: link.reference || reference,
         word: link.word || link.Word || link.term || '',
@@ -326,7 +383,7 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
       }));
     }
     
-    return links;
+    return [];
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching word links:', error);
     return [];
