@@ -128,33 +128,54 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
   return { verses, translation };
 }
 
-// Parse translation notes from markdown - preserve full content
-function parseNotesMarkdown(content: string, reference: string): TranslationNote[] {
+// Parse translation notes from markdown - each numbered section is a separate note
+function parseNotesMarkdown(content: string, defaultReference: string): TranslationNote[] {
   const notes: TranslationNote[] = [];
   
   // Split by note sections (## number. id format like "## 1. abc123")
-  const sectionPattern = /## \d+\.\s+[a-z0-9]+\s*\n/gi;
-  const sections = content.split(sectionPattern);
+  const sectionPattern = /## (\d+)\.\s+([a-zA-Z0-9]+)\s*\n/g;
+  const sectionMatches = [...content.matchAll(sectionPattern)];
   
-  // Start from index 1 to skip the header section
-  for (let i = 1; i < sections.length; i++) {
-    const section = sections[i].trim();
+  for (let i = 0; i < sectionMatches.length; i++) {
+    const match = sectionMatches[i];
+    const sectionId = match[2];
+    const startIndex = match.index! + match[0].length;
+    const endIndex = i < sectionMatches.length - 1 ? sectionMatches[i + 1].index! : content.length;
+    const section = content.substring(startIndex, endIndex).trim();
+    
     if (!section) continue;
     
-    // Extract title (first # heading)
+    // Extract the title (first # heading in this section)
     const titleMatch = section.match(/^#\s+([^\n]+)/m);
     const title = titleMatch ? titleMatch[1].trim() : '';
     
-    // Get full content after the title - don't truncate!
+    // Extract the **Reference** field for this specific note
+    const refMatch = section.match(/\*\*Reference\*\*:\s*([^\n]+)/);
+    const noteReference = refMatch ? refMatch[1].trim() : defaultReference;
+    
+    // Extract the **Quote** field if present (the Greek/Hebrew text)
+    const quoteMatch = section.match(/\*\*Quote\*\*:\s*([^\n]+)/);
+    const quote = quoteMatch ? quoteMatch[1].trim() : title;
+    
+    // Get the main content - everything from title to the metadata fields
     const contentStart = titleMatch ? section.indexOf(titleMatch[0]) + titleMatch[0].length : 0;
-    const noteContent = section.substring(contentStart).trim();
+    let noteContent = section.substring(contentStart);
+    
+    // Remove metadata fields from the display content
+    noteContent = noteContent
+      .replace(/\*\*Reference\*\*:[^\n]+\n?/g, '')
+      .replace(/\*\*ID\*\*:[^\n]+\n?/g, '')
+      .replace(/\*\*Support Reference\*\*:[^\n]+\n?/g, '')
+      .replace(/\*\*Quote\*\*:[^\n]+\n?/g, '')
+      .replace(/\*\*Occurrence\*\*:[^\n]+\n?/g, '')
+      .trim();
     
     if (title || noteContent) {
       notes.push({
-        id: `note-${i}`,
-        reference,
-        quote: title || `Note ${i}`,
-        note: noteContent, // Full content, no truncation
+        id: `note-${sectionId}`,
+        reference: noteReference,
+        quote: quote || title || `Note ${i + 1}`,
+        note: noteContent,
       });
     }
   }
