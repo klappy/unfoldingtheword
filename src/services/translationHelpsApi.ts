@@ -46,183 +46,84 @@ export interface TranslationAcademy {
   content: string;
 }
 
-// Parse scripture reference (e.g., "John 3:16-17" -> { book: "JHN", chapter: 3, verse: 16, endVerse: 17 })
-function parseReference(reference: string): { book: string; chapter: number; verse?: number; endVerse?: number } {
-  const bookMap: Record<string, string> = {
-    'genesis': 'GEN', 'gen': 'GEN',
-    'exodus': 'EXO', 'exo': 'EXO',
-    'leviticus': 'LEV', 'lev': 'LEV',
-    'numbers': 'NUM', 'num': 'NUM',
-    'deuteronomy': 'DEU', 'deu': 'DEU',
-    'joshua': 'JOS', 'jos': 'JOS',
-    'judges': 'JDG', 'jdg': 'JDG',
-    'ruth': 'RUT', 'rut': 'RUT',
-    '1 samuel': '1SA', '1 sam': '1SA', '1sa': '1SA',
-    '2 samuel': '2SA', '2 sam': '2SA', '2sa': '2SA',
-    '1 kings': '1KI', '1 ki': '1KI', '1ki': '1KI',
-    '2 kings': '2KI', '2 ki': '2KI', '2ki': '2KI',
-    '1 chronicles': '1CH', '1 chr': '1CH', '1ch': '1CH',
-    '2 chronicles': '2CH', '2 chr': '2CH', '2ch': '2CH',
-    'ezra': 'EZR', 'ezr': 'EZR',
-    'nehemiah': 'NEH', 'neh': 'NEH',
-    'esther': 'EST', 'est': 'EST',
-    'job': 'JOB',
-    'psalms': 'PSA', 'psalm': 'PSA', 'psa': 'PSA', 'ps': 'PSA',
-    'proverbs': 'PRO', 'prov': 'PRO', 'pro': 'PRO',
-    'ecclesiastes': 'ECC', 'ecc': 'ECC',
-    'song of solomon': 'SNG', 'song': 'SNG', 'sng': 'SNG',
-    'isaiah': 'ISA', 'isa': 'ISA',
-    'jeremiah': 'JER', 'jer': 'JER',
-    'lamentations': 'LAM', 'lam': 'LAM',
-    'ezekiel': 'EZK', 'ezk': 'EZK', 'eze': 'EZK',
-    'daniel': 'DAN', 'dan': 'DAN',
-    'hosea': 'HOS', 'hos': 'HOS',
-    'joel': 'JOL', 'jol': 'JOL',
-    'amos': 'AMO', 'amo': 'AMO',
-    'obadiah': 'OBA', 'oba': 'OBA',
-    'jonah': 'JON', 'jon': 'JON',
-    'micah': 'MIC', 'mic': 'MIC',
-    'nahum': 'NAM', 'nam': 'NAM',
-    'habakkuk': 'HAB', 'hab': 'HAB',
-    'zephaniah': 'ZEP', 'zep': 'ZEP',
-    'haggai': 'HAG', 'hag': 'HAG',
-    'zechariah': 'ZEC', 'zec': 'ZEC',
-    'malachi': 'MAL', 'mal': 'MAL',
-    'matthew': 'MAT', 'matt': 'MAT', 'mat': 'MAT',
-    'mark': 'MRK', 'mrk': 'MRK',
-    'luke': 'LUK', 'luk': 'LUK',
-    'john': 'JHN', 'jhn': 'JHN',
-    'acts': 'ACT', 'act': 'ACT',
-    'romans': 'ROM', 'rom': 'ROM',
-    '1 corinthians': '1CO', '1 cor': '1CO', '1co': '1CO',
-    '2 corinthians': '2CO', '2 cor': '2CO', '2co': '2CO',
-    'galatians': 'GAL', 'gal': 'GAL',
-    'ephesians': 'EPH', 'eph': 'EPH',
-    'philippians': 'PHP', 'phil': 'PHP', 'php': 'PHP',
-    'colossians': 'COL', 'col': 'COL',
-    '1 thessalonians': '1TH', '1 thess': '1TH', '1th': '1TH',
-    '2 thessalonians': '2TH', '2 thess': '2TH', '2th': '2TH',
-    '1 timothy': '1TI', '1 tim': '1TI', '1ti': '1TI',
-    '2 timothy': '2TI', '2 tim': '2TI', '2ti': '2TI',
-    'titus': 'TIT', 'tit': 'TIT',
-    'philemon': 'PHM', 'phm': 'PHM',
-    'hebrews': 'HEB', 'heb': 'HEB',
-    'james': 'JAS', 'jas': 'JAS',
-    '1 peter': '1PE', '1 pet': '1PE', '1pe': '1PE',
-    '2 peter': '2PE', '2 pet': '2PE', '2pe': '2PE',
-    '1 john': '1JN', '1jn': '1JN',
-    '2 john': '2JN', '2jn': '2JN',
-    '3 john': '3JN', '3jn': '3JN',
-    'jude': 'JUD', 'jud': 'JUD',
-    'revelation': 'REV', 'rev': 'REV',
-  };
-
-  const match = reference.match(/^(\d?\s?[a-zA-Z]+)\s*(\d+)(?::(\d+)(?:-(\d+))?)?$/i);
-  if (!match) {
-    throw new Error(`Invalid reference format: ${reference}`);
-  }
-
-  const bookName = match[1].toLowerCase().trim();
-  const chapter = parseInt(match[2], 10);
-  const verse = match[3] ? parseInt(match[3], 10) : undefined;
-  const endVerse = match[4] ? parseInt(match[4], 10) : undefined;
-
-  const book = bookMap[bookName];
-  if (!book) {
-    throw new Error(`Unknown book: ${bookName}`);
-  }
-
-  return { book, chapter, verse, endVerse };
-}
-
 async function callProxy(endpoint: string, params: Record<string, any>) {
+  console.log(`[translationHelpsApi] Calling ${endpoint} with params:`, params);
+  
   const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
     body: { endpoint, params },
   });
 
   if (error) {
-    console.error(`Proxy error for ${endpoint}:`, error);
+    console.error(`[translationHelpsApi] Proxy error for ${endpoint}:`, error);
     throw new Error(error.message);
   }
 
   if (data?.error) {
-    console.error(`API error for ${endpoint}:`, data.error);
+    console.error(`[translationHelpsApi] API error for ${endpoint}:`, data.error, data.details);
     throw new Error(data.error);
   }
 
+  console.log(`[translationHelpsApi] Response for ${endpoint}:`, data);
   return data;
 }
 
 export async function fetchScripture(reference: string): Promise<ScriptureResponse> {
   try {
-    const parsed = parseReference(reference);
-    const verseRange = parsed.verse 
-      ? (parsed.endVerse ? `${parsed.verse}-${parsed.endVerse}` : `${parsed.verse}`)
-      : undefined;
-
-    const data = await callProxy('fetch-scripture', {
-      book: parsed.book,
-      chapter: parsed.chapter,
-      ...(verseRange && { verse: verseRange }),
-    });
+    // Use the reference directly as the API expects it (e.g., "John 3:16")
+    const data = await callProxy('fetch-scripture', { reference });
     
     // Parse the scripture content - handle markdown format
     let content = data.content || data.text || '';
     const verses: ScriptureVerse[] = [];
     
-    // Check if content contains verse markers like \v 16 or just numbers
-    if (content.includes('\\v ')) {
-      // USFM format - parse verse markers
-      const versePattern = /\\v\s+(\d+)\s+([^\\]+)/g;
-      let match;
-      while ((match = versePattern.exec(content)) !== null) {
+    // Try to extract verses from markdown content
+    // Format might be: "**16** For God so loved..." or "16 For God so loved..."
+    const versePattern = /\*?\*?(\d+)\*?\*?\s+([^*\d][^\n]*)/g;
+    let match;
+    while ((match = versePattern.exec(content)) !== null) {
+      verses.push({
+        number: parseInt(match[1], 10),
+        text: match[2].trim(),
+      });
+    }
+
+    // If no verses parsed with that pattern, try USFM format
+    if (verses.length === 0 && content.includes('\\v ')) {
+      const usfmPattern = /\\v\s+(\d+)\s+([^\\]+)/g;
+      while ((match = usfmPattern.exec(content)) !== null) {
         verses.push({
           number: parseInt(match[1], 10),
           text: match[2].trim().replace(/\s+/g, ' '),
         });
       }
-    } else {
-      // Try standard verse number pattern
-      const verseMatches = content.matchAll(/(\d+)\s+([^0-9]+)/g);
-      for (const match of verseMatches) {
-        verses.push({
-          number: parseInt(match[1], 10),
-          text: match[2].trim(),
-        });
-      }
     }
 
-    // If no verses parsed, treat entire content as single verse
+    // If still no verses, treat entire content as single verse
     if (verses.length === 0 && content) {
-      // Clean up any remaining USFM markers
-      content = content.replace(/\\[a-z]+\s*/g, '').trim();
+      // Clean up any remaining markers
+      content = content.replace(/\\[a-z]+\s*/g, '').replace(/\*\*/g, '').trim();
       verses.push({
-        number: parsed.verse || 1,
+        number: 1,
         text: content,
       });
     }
 
     return {
-      reference,
+      reference: data.reference || reference,
       translation: data.translation || data.resource || 'unfoldingWord Literal Text',
       text: content,
       verses,
     };
   } catch (error) {
-    console.error('Error fetching scripture:', error);
+    console.error('[translationHelpsApi] Error fetching scripture:', error);
     throw error;
   }
 }
 
 export async function fetchTranslationNotes(reference: string): Promise<TranslationNote[]> {
   try {
-    const parsed = parseReference(reference);
-
-    const data = await callProxy('fetch-translation-notes', {
-      book: parsed.book,
-      chapter: parsed.chapter,
-      ...(parsed.verse && { verse: parsed.verse }),
-    });
+    // Use reference directly, with optional format=md for markdown
+    const data = await callProxy('translation-notes', { reference, format: 'json' });
     
     // Handle various response formats
     const notes = data.notes || data.content || data.data || (Array.isArray(data) ? data : []);
@@ -230,113 +131,135 @@ export async function fetchTranslationNotes(reference: string): Promise<Translat
     if (Array.isArray(notes)) {
       return notes.slice(0, 10).map((note: any, index: number) => ({
         id: note.id || `note-${index}`,
-        reference: note.reference || note.ref || reference,
-        quote: note.quote || note.Quote || note.original || '',
+        reference: note.reference || note.ref || note.Reference || reference,
+        quote: note.quote || note.Quote || note.original || note.OrigQuote || '',
         note: note.note || note.Note || note.content || note.text || note.OccurrenceNote || '',
       }));
     }
     
+    // If content is markdown string, parse it
+    if (typeof data.content === 'string') {
+      const noteMatches = data.content.matchAll(/### ([^\n]+)\n([^#]+)/g);
+      const parsedNotes: TranslationNote[] = [];
+      for (const match of noteMatches) {
+        parsedNotes.push({
+          id: `note-${parsedNotes.length}`,
+          reference,
+          quote: match[1].trim(),
+          note: match[2].trim(),
+        });
+      }
+      return parsedNotes.slice(0, 10);
+    }
+    
     return [];
   } catch (error) {
-    console.error('Error fetching translation notes:', error);
+    console.error('[translationHelpsApi] Error fetching translation notes:', error);
     return [];
   }
 }
 
 export async function fetchTranslationQuestions(reference: string): Promise<TranslationQuestion[]> {
   try {
-    const parsed = parseReference(reference);
-
-    const data = await callProxy('fetch-translation-questions', {
-      book: parsed.book,
-      chapter: parsed.chapter,
-      ...(parsed.verse && { verse: parsed.verse }),
-    });
+    const data = await callProxy('translation-questions', { reference, format: 'json' });
     
     const questions = data.questions || data.content || data.data || (Array.isArray(data) ? data : []);
     
     if (Array.isArray(questions)) {
       return questions.slice(0, 10).map((q: any, index: number) => ({
         id: q.id || `question-${index}`,
-        reference: q.reference || q.ref || reference,
+        reference: q.reference || q.ref || q.Reference || reference,
         question: q.question || q.Question || q.text || '',
         response: q.response || q.Response || q.answer || q.Answer || '',
       }));
     }
     
+    // If content is markdown string, parse it
+    if (typeof data.content === 'string') {
+      const qMatches = data.content.matchAll(/\*\*Q:\*\*\s*([^\n]+)\n\*\*A:\*\*\s*([^\n]+)/g);
+      const parsedQuestions: TranslationQuestion[] = [];
+      for (const match of qMatches) {
+        parsedQuestions.push({
+          id: `question-${parsedQuestions.length}`,
+          reference,
+          question: match[1].trim(),
+          response: match[2].trim(),
+        });
+      }
+      return parsedQuestions.slice(0, 10);
+    }
+    
     return [];
   } catch (error) {
-    console.error('Error fetching translation questions:', error);
+    console.error('[translationHelpsApi] Error fetching translation questions:', error);
     return [];
   }
 }
 
 export async function fetchTranslationWordLinks(reference: string): Promise<TranslationWordLink[]> {
   try {
-    const parsed = parseReference(reference);
-
-    const data = await callProxy('fetch-translation-word-links', {
-      book: parsed.book,
-      chapter: parsed.chapter,
-      ...(parsed.verse && { verse: parsed.verse }),
-    });
+    const data = await callProxy('translation-word-links', { reference });
     
     const links = data.links || data.words || data.content || data.data || (Array.isArray(data) ? data : []);
     
     if (Array.isArray(links)) {
-      return links.slice(0, 5).map((link: any, index: number) => ({
+      return links.slice(0, 8).map((link: any, index: number) => ({
         id: link.id || `word-link-${index}`,
-        reference: link.reference || link.ref || reference,
-        word: link.word || link.Word || link.term || link.OrigWords || '',
-        articleId: link.articleId || link.article || link.rc || link.TWLink || '',
+        reference: link.reference || link.ref || link.Reference || reference,
+        word: link.word || link.Word || link.term || link.OrigWords || link.text || '',
+        articleId: link.articleId || link.article || link.rc || link.TWLink || link.link || '',
       }));
     }
     
     return [];
   } catch (error) {
-    console.error('Error fetching word links:', error);
+    console.error('[translationHelpsApi] Error fetching word links:', error);
     return [];
   }
 }
 
 export async function fetchTranslationWord(articleId: string): Promise<TranslationWord | null> {
   try {
-    const data = await callProxy('fetch-translation-word', { articleId });
+    // articleId might be a full RC link or just the word name
+    const data = await callProxy('translation-word', { articleId });
     
     return {
       id: data.id || articleId,
-      term: data.term || data.title || data.name || '',
+      term: data.term || data.title || data.name || articleId,
       definition: data.definition || data.brief || data.description || '',
       content: data.content || data.text || data.markdown || data.body || '',
     };
   } catch (error) {
-    console.error('Error fetching translation word:', error);
+    console.error('[translationHelpsApi] Error fetching translation word:', error);
     return null;
   }
 }
 
 export async function fetchTranslationAcademy(moduleId: string): Promise<TranslationAcademy | null> {
   try {
-    const data = await callProxy('fetch-translation-academy', { moduleId });
+    const data = await callProxy('translation-academy', { moduleId });
     
     return {
       id: data.id || moduleId,
-      title: data.title || data.name || '',
+      title: data.title || data.name || moduleId,
       content: data.content || data.text || data.markdown || data.body || '',
     };
   } catch (error) {
-    console.error('Error fetching academy article:', error);
+    console.error('[translationHelpsApi] Error fetching academy article:', error);
     return null;
   }
 }
 
 // Search across all resources
-export async function searchResources(query: string): Promise<any[]> {
+export async function searchResources(query: string, resource?: string): Promise<any[]> {
   try {
-    const data = await callProxy('search', { query });
+    const params: Record<string, string> = { query };
+    if (resource) params.resource = resource;
+    
+    const data = await callProxy('search', params);
     return data.results || data.data || (Array.isArray(data) ? data : []);
   } catch (error) {
-    console.error('Error searching resources:', error);
+    console.error('[translationHelpsApi] Error searching resources:', error);
     return [];
   }
 }
