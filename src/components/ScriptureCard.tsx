@@ -1,14 +1,17 @@
 import { motion } from 'framer-motion';
-import { Book, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Book, ChevronLeft, ChevronRight, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { ScripturePassage } from '@/types';
+import { Button } from '@/components/ui/button';
 
 interface ScriptureCardProps {
   passage: ScripturePassage | null;
   onAddToNotes: (text: string) => void;
   isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
-export function ScriptureCard({ passage, onAddToNotes, isLoading }: ScriptureCardProps) {
+export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry }: ScriptureCardProps) {
   const handleTextSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) {
@@ -34,6 +37,43 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading }: ScriptureCar
             Fetching from Translation Helps API...
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center px-8 max-w-sm"
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-6">
+            <AlertCircle className="w-8 h-8 text-destructive" />
+          </div>
+          <h2 className="text-lg font-medium text-foreground mb-2">
+            Unable to Load Scripture
+          </h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            {error.includes('404') 
+              ? 'The scripture reference could not be found. Please check the reference format.'
+              : error.includes('network') || error.includes('fetch')
+              ? 'Network error. Please check your connection and try again.'
+              : 'Something went wrong while fetching the scripture data.'}
+          </p>
+          {onRetry && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetry}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try Again
+            </Button>
+          )}
+        </motion.div>
       </div>
     );
   }

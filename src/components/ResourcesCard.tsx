@@ -1,11 +1,15 @@
 import { motion } from 'framer-motion';
-import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { Resource } from '@/types';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface ResourcesCardProps {
   resources: Resource[];
   onAddToNotes: (text: string) => void;
+  isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 const resourceIcons = {
@@ -22,7 +26,7 @@ const resourceColors = {
   'academy-article': 'text-sky-400 bg-sky-500/10 border-sky-500/20',
 };
 
-export function ResourcesCard({ resources, onAddToNotes }: ResourcesCardProps) {
+export function ResourcesCard({ resources, onAddToNotes, isLoading, error, onRetry }: ResourcesCardProps) {
   const handleTextSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) {
@@ -32,6 +36,61 @@ export function ResourcesCard({ resources, onAddToNotes }: ResourcesCardProps) {
       }
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center">
+        <div className="text-center px-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 mb-6">
+            <Loader2 className="w-8 h-8 text-accent animate-spin" />
+          </div>
+          <h2 className="text-lg font-medium text-foreground mb-2">
+            Loading Resources
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Fetching translation notes, questions, and word studies...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center px-8 max-w-sm"
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-6">
+            <AlertCircle className="w-8 h-8 text-destructive" />
+          </div>
+          <h2 className="text-lg font-medium text-foreground mb-2">
+            Unable to Load Resources
+          </h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            {error.includes('404') 
+              ? 'No resources found for this scripture reference.'
+              : error.includes('network') || error.includes('fetch')
+              ? 'Network error. Please check your connection.'
+              : 'Something went wrong while fetching resources.'}
+          </p>
+          {onRetry && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetry}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try Again
+            </Button>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
 
   if (resources.length === 0) {
     return (
