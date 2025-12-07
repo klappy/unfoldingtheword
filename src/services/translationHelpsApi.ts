@@ -1,4 +1,4 @@
-const API_BASE = 'https://translation-helps-mcp.pages.dev';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface ScriptureVerse {
   number: number;
@@ -135,6 +135,24 @@ function parseReference(reference: string): { book: string; chapter: number; ver
   return { book, chapter, verse, endVerse };
 }
 
+async function callProxy(endpoint: string, params: Record<string, any>) {
+  const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
+    body: { endpoint, params },
+  });
+
+  if (error) {
+    console.error(`Proxy error for ${endpoint}:`, error);
+    throw new Error(error.message);
+  }
+
+  if (data?.error) {
+    console.error(`API error for ${endpoint}:`, data.error);
+    throw new Error(data.error);
+  }
+
+  return data;
+}
+
 export async function fetchScripture(reference: string): Promise<ScriptureResponse> {
   try {
     const parsed = parseReference(reference);
@@ -142,43 +160,51 @@ export async function fetchScripture(reference: string): Promise<ScriptureRespon
       ? (parsed.endVerse ? `${parsed.verse}-${parsed.endVerse}` : `${parsed.verse}`)
       : undefined;
 
-    const params = new URLSearchParams({
+    const data = await callProxy('fetch-scripture', {
       book: parsed.book,
-      chapter: parsed.chapter.toString(),
+      chapter: parsed.chapter,
       ...(verseRange && { verse: verseRange }),
     });
-
-    const response = await fetch(`${API_BASE}/fetch-scripture?${params}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch scripture: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     
-    // Parse the scripture content
-    const content = data.content || data.text || '';
+    // Parse the scripture content - handle markdown format
+    let content = data.content || data.text || '';
     const verses: ScriptureVerse[] = [];
     
-    // Try to parse verse numbers from content
-    const verseMatches = content.matchAll(/(\d+)\s*([^0-9]+)/g);
-    for (const match of verseMatches) {
-      verses.push({
-        number: parseInt(match[1], 10),
-        text: match[2].trim(),
-      });
+    // Check if content contains verse markers like \v 16 or just numbers
+    if (content.includes('\\v ')) {
+      // USFM format - parse verse markers
+      const versePattern = /\\v\s+(\d+)\s+([^\\]+)/g;
+      let match;
+      while ((match = versePattern.exec(content)) !== null) {
+        verses.push({
+          number: parseInt(match[1], 10),
+          text: match[2].trim().replace(/\s+/g, ' '),
+        });
+      }
+    } else {
+      // Try standard verse number pattern
+      const verseMatches = content.matchAll(/(\d+)\s+([^0-9]+)/g);
+      for (const match of verseMatches) {
+        verses.push({
+          number: parseInt(match[1], 10),
+          text: match[2].trim(),
+        });
+      }
     }
 
     // If no verses parsed, treat entire content as single verse
     if (verses.length === 0 && content) {
+      // Clean up any remaining USFM markers
+      content = content.replace(/\\[a-z]+\s*/g, '').trim();
       verses.push({
         number: parsed.verse || 1,
-        text: content.trim(),
+        text: content,
       });
     }
 
     return {
       reference,
-      translation: data.translation || 'unfoldingWord Literal Text',
+      translation: data.translation || data.resource || 'unfoldingWord Literal Text',
       text: content,
       verses,
     };
@@ -191,26 +217,22 @@ export async function fetchScripture(reference: string): Promise<ScriptureRespon
 export async function fetchTranslationNotes(reference: string): Promise<TranslationNote[]> {
   try {
     const parsed = parseReference(reference);
-    const params = new URLSearchParams({
+
+    const data = await callProxy('fetch-translation-notes', {
       book: parsed.book,
-      chapter: parsed.chapter.toString(),
-      ...(parsed.verse && { verse: parsed.verse.toString() }),
+      chapter: parsed.chapter,
+      ...(parsed.verse && { verse: parsed.verse }),
     });
-
-    const response = await fetch(`${API_BASE}/fetch-translation-notes?${params}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch translation notes: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const notes = data.notes || data.content || data || [];
+    
+    // Handle various response formats
+    const notes = data.notes || data.content || data.data || (Array.isArray(data) ? data : []);
     
     if (Array.isArray(notes)) {
-      return notes.map((note: any, index: number) => ({
+      return notes.slice(0, 10).map((note: any, index: number) => ({
         id: note.id || `note-${index}`,
-        reference: note.reference || reference,
-        quote: note.quote || note.original || '',
-        note: note.note || note.content || note.text || '',
+        reference: note.reference || note.ref || reference,
+        quote: note.quote || note.Quote || note.original || '',
+        note: note.note || note.Note || note.content || note.text || note.OccurrenceNote || '',
       }));
     }
     
@@ -224,26 +246,21 @@ export async function fetchTranslationNotes(reference: string): Promise<Translat
 export async function fetchTranslationQuestions(reference: string): Promise<TranslationQuestion[]> {
   try {
     const parsed = parseReference(reference);
-    const params = new URLSearchParams({
+
+    const data = await callProxy('fetch-translation-questions', {
       book: parsed.book,
-      chapter: parsed.chapter.toString(),
-      ...(parsed.verse && { verse: parsed.verse.toString() }),
+      chapter: parsed.chapter,
+      ...(parsed.verse && { verse: parsed.verse }),
     });
-
-    const response = await fetch(`${API_BASE}/fetch-translation-questions?${params}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch translation questions: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const questions = data.questions || data.content || data || [];
+    
+    const questions = data.questions || data.content || data.data || (Array.isArray(data) ? data : []);
     
     if (Array.isArray(questions)) {
-      return questions.map((q: any, index: number) => ({
+      return questions.slice(0, 10).map((q: any, index: number) => ({
         id: q.id || `question-${index}`,
-        reference: q.reference || reference,
-        question: q.question || q.text || '',
-        response: q.response || q.answer || '',
+        reference: q.reference || q.ref || reference,
+        question: q.question || q.Question || q.text || '',
+        response: q.response || q.Response || q.answer || q.Answer || '',
       }));
     }
     
@@ -257,26 +274,21 @@ export async function fetchTranslationQuestions(reference: string): Promise<Tran
 export async function fetchTranslationWordLinks(reference: string): Promise<TranslationWordLink[]> {
   try {
     const parsed = parseReference(reference);
-    const params = new URLSearchParams({
+
+    const data = await callProxy('fetch-translation-word-links', {
       book: parsed.book,
-      chapter: parsed.chapter.toString(),
-      ...(parsed.verse && { verse: parsed.verse.toString() }),
+      chapter: parsed.chapter,
+      ...(parsed.verse && { verse: parsed.verse }),
     });
-
-    const response = await fetch(`${API_BASE}/fetch-translation-word-links?${params}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch word links: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const links = data.links || data.words || data.content || data || [];
+    
+    const links = data.links || data.words || data.content || data.data || (Array.isArray(data) ? data : []);
     
     if (Array.isArray(links)) {
-      return links.map((link: any, index: number) => ({
+      return links.slice(0, 5).map((link: any, index: number) => ({
         id: link.id || `word-link-${index}`,
-        reference: link.reference || reference,
-        word: link.word || link.term || '',
-        articleId: link.articleId || link.article || link.rc || '',
+        reference: link.reference || link.ref || reference,
+        word: link.word || link.Word || link.term || link.OrigWords || '',
+        articleId: link.articleId || link.article || link.rc || link.TWLink || '',
       }));
     }
     
@@ -289,20 +301,13 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
 
 export async function fetchTranslationWord(articleId: string): Promise<TranslationWord | null> {
   try {
-    const params = new URLSearchParams({ articleId });
-
-    const response = await fetch(`${API_BASE}/fetch-translation-word?${params}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch translation word: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = await callProxy('fetch-translation-word', { articleId });
     
     return {
       id: data.id || articleId,
-      term: data.term || data.title || '',
-      definition: data.definition || data.brief || '',
-      content: data.content || data.text || data.markdown || '',
+      term: data.term || data.title || data.name || '',
+      definition: data.definition || data.brief || data.description || '',
+      content: data.content || data.text || data.markdown || data.body || '',
     };
   } catch (error) {
     console.error('Error fetching translation word:', error);
@@ -312,19 +317,12 @@ export async function fetchTranslationWord(articleId: string): Promise<Translati
 
 export async function fetchTranslationAcademy(moduleId: string): Promise<TranslationAcademy | null> {
   try {
-    const params = new URLSearchParams({ moduleId });
-
-    const response = await fetch(`${API_BASE}/fetch-translation-academy?${params}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch academy article: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = await callProxy('fetch-translation-academy', { moduleId });
     
     return {
       id: data.id || moduleId,
       title: data.title || data.name || '',
-      content: data.content || data.text || data.markdown || '',
+      content: data.content || data.text || data.markdown || data.body || '',
     };
   } catch (error) {
     console.error('Error fetching academy article:', error);
@@ -335,15 +333,8 @@ export async function fetchTranslationAcademy(moduleId: string): Promise<Transla
 // Search across all resources
 export async function searchResources(query: string): Promise<any[]> {
   try {
-    const params = new URLSearchParams({ query });
-
-    const response = await fetch(`${API_BASE}/search?${params}`);
-    if (!response.ok) {
-      throw new Error(`Search failed: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.results || data || [];
+    const data = await callProxy('search', { query });
+    return data.results || data.data || (Array.isArray(data) ? data : []);
   } catch (error) {
     console.error('Error searching resources:', error);
     return [];
