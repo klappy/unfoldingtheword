@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Send, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -86,19 +87,22 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading }
                     : 'glass-card ai-message'
                 )}
               >
-                {message.role === 'assistant' && message.agent && (
-                  <span className={`agent-badge ${getAgentColor(message.agent)} mb-2`}>
-                    {message.agent === 'scripture' && '📖 Scripture'}
-                    {message.agent === 'notes' && '📝 Notes'}
-                    {message.agent === 'questions' && '❓ Questions'}
-                    {message.agent === 'academy' && '🎓 Academy'}
-                    {message.agent === 'words' && '📚 Words'}
-                  </span>
-                )}
-                
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                <div className="prose prose-sm prose-invert max-w-none">
+                  <ReactMarkdown
+                    components={{
+                      p: ({ children }) => <p className="text-sm leading-relaxed mb-2 last:mb-0">{children}</p>,
+                      strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
+                      ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>,
+                      li: ({ children }) => <li className="text-sm">{children}</li>,
+                      h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-primary">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-semibold mb-2 text-primary">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 text-accent">{children}</h3>,
+                    }}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
 
                 {message.resources && message.resources.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-border/30 space-y-1">
