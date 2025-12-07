@@ -29,10 +29,7 @@ const Index = () => {
   const [notes, setNotes] = useState<Note[]>(mockNotes);
   const [history] = useState<HistoryItem[]>(mockHistory);
 
-  // Load initial scripture on mount
-  useEffect(() => {
-    loadScriptureData('John 3:16-17');
-  }, [loadScriptureData]);
+  // Scripture is loaded when AI identifies a reference in chat
 
   const handleSendMessage = useCallback(async (content: string) => {
     // Send to multi-agent chat
