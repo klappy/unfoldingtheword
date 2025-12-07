@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const API_BASE = 'https://translation-helps-mcp.pages.dev';
+const API_BASE = 'https://translation-helps-mcp.pages.dev/api';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
