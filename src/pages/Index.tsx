@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { SwipeContainer } from '@/components/SwipeContainer';
 import { ChatCard } from '@/components/ChatCard';
@@ -7,8 +7,9 @@ import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryPanel } from '@/components/HistoryPanel';
 import { Message, Note, ResourceLink, HistoryItem } from '@/types';
-import { mockScripture, mockResources, mockHistory, mockNotes } from '@/data/mockData';
+import { mockHistory, mockNotes } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
+import { useScriptureData } from '@/hooks/useScriptureData';
 
 const Index = () => {
   const { toast } = useToast();
@@ -22,12 +23,16 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
+  const { scripture, resources, isLoading: scriptureLoading, loadScriptureData } = useScriptureData();
   const [messages, setMessages] = useState<Message[]>([]);
   const [notes, setNotes] = useState<Note[]>(mockNotes);
   const [isLoading, setIsLoading] = useState(false);
-  const [scripture, setScripture] = useState(mockScripture);
-  const [resources, setResources] = useState(mockResources);
   const [history] = useState<HistoryItem[]>(mockHistory);
+
+  // Load initial scripture on mount
+  useEffect(() => {
+    loadScriptureData('John 3:16-17');
+  }, [loadScriptureData]);
 
   const handleSendMessage = useCallback(async (content: string) => {
     const userMessage: Message = {
@@ -40,38 +45,50 @@ const Index = () => {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Simulate AI response with resources
+    // Extract scripture reference from message if present
+    const refMatch = content.match(/(\d?\s?[a-zA-Z]+)\s*(\d+)(?::(\d+)(?:-(\d+))?)?/i);
+    if (refMatch) {
+      const extractedRef = refMatch[0];
+      try {
+        await loadScriptureData(extractedRef);
+        toast({
+          title: 'Scripture loaded',
+          description: `Loaded ${extractedRef} and related resources`,
+        });
+      } catch {
+        // Continue with response even if scripture loading fails
+      }
+    }
+
+    // Simulate AI response with live resources
     setTimeout(() => {
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Great question about "${content}"! John 3:16 is often called the "Gospel in miniature" because it summarizes the core message of Christianity. The verse emphasizes three key themes:\n\n1. **God's Love** - "God so loved the world" shows the extent and depth of divine love\n2. **God's Gift** - "He gave his only Son" reveals the cost of redemption\n3. **Our Response** - "whoever believes" shows that salvation is available to all who have faith`,
+        content: `Great question about "${content}"! ${scripture ? `Looking at ${scripture.reference}, we can explore the passage together.` : 'Let me help you explore that topic.'}\n\nThe scripture and related resources are now available - swipe right to view the passage and continue swiping to see translation notes, questions, and word studies.`,
         agent: 'scripture',
         timestamp: new Date(),
-        resources: [
+        resources: scripture ? [
           {
             type: 'scripture',
-            reference: 'John 3:16-17',
-            title: 'John 3:16-17 (ULT)',
-            preview: 'For God so loved the world...',
+            reference: scripture.reference,
+            title: `${scripture.reference} (${scripture.translation})`,
+            preview: scripture.verses[0]?.text.substring(0, 50) + '...',
           },
-          {
-            type: 'note',
-            reference: 'John 3:16',
-            title: 'Translation Note: "only Son"',
-          },
-          {
-            type: 'word',
-            reference: 'kosmos',
-            title: 'Word Study: κόσμος (world)',
-          },
-        ],
+          ...(resources.slice(0, 2).map((r) => ({
+            type: r.type === 'translation-note' ? 'note' as const : 
+                  r.type === 'translation-question' ? 'question' as const :
+                  r.type === 'translation-word' ? 'word' as const : 'academy' as const,
+            reference: r.reference || '',
+            title: r.title,
+          }))),
+        ] : [],
       };
 
       setMessages((prev) => [...prev, aiResponse]);
       setIsLoading(false);
-    }, 1500);
-  }, []);
+    }, 500);
+  }, [scripture, resources, loadScriptureData, toast]);
 
   const handleResourceClick = useCallback((resource: ResourceLink) => {
     if (resource.type === 'scripture') {
@@ -129,6 +146,7 @@ const Index = () => {
           <ScriptureCard
             passage={scripture}
             onAddToNotes={(text) => handleAddToNotes(text, scripture?.reference)}
+            isLoading={scriptureLoading}
           />
         );
       case 'resources':

@@ -1,13 +1,14 @@
 import { motion } from 'framer-motion';
-import { Book, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Book, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { ScripturePassage } from '@/types';
 
 interface ScriptureCardProps {
   passage: ScripturePassage | null;
   onAddToNotes: (text: string) => void;
+  isLoading?: boolean;
 }
 
-export function ScriptureCard({ passage, onAddToNotes }: ScriptureCardProps) {
+export function ScriptureCard({ passage, onAddToNotes, isLoading }: ScriptureCardProps) {
   const handleTextSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) {
@@ -18,6 +19,24 @@ export function ScriptureCard({ passage, onAddToNotes }: ScriptureCardProps) {
       }
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center">
+        <div className="text-center px-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+          <h2 className="text-lg font-medium text-foreground mb-2">
+            Loading Scripture
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Fetching from Translation Helps API...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!passage) {
     return (
