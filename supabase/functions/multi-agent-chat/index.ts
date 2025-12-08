@@ -277,17 +277,49 @@ async function fetchScripturePassage(reference: string): Promise<string | null> 
 }
 
 // Detect if input is a scripture reference (book, chapter, verse patterns)
+// Must be specific - require known book names or book+chapter patterns
 function isScriptureReference(input: string): boolean {
-  const trimmed = input.trim();
+  const trimmed = input.trim().toLowerCase();
   
-  // Common book name patterns (including numbered books, abbreviations)
-  // Matches: "John", "1 John", "Genesis 1", "Rom 8:28", "1 Cor 13:4-7", etc.
-  const scripturePattern = /^(\d?\s*[A-Za-z]+)\s*(\d+)?(\s*:\s*\d+(-\d+)?)?$/i;
+  // List of known Bible book names (and common abbreviations)
+  const bibleBooks = [
+    'genesis', 'gen', 'exodus', 'exod', 'ex', 'leviticus', 'lev', 'numbers', 'num', 
+    'deuteronomy', 'deut', 'joshua', 'josh', 'judges', 'judg', 'ruth', 
+    '1 samuel', '2 samuel', '1samuel', '2samuel', '1sam', '2sam', '1 sam', '2 sam',
+    '1 kings', '2 kings', '1kings', '2kings', '1kgs', '2kgs', '1 kgs', '2 kgs',
+    '1 chronicles', '2 chronicles', '1chronicles', '2chronicles', '1chr', '2chr', '1 chr', '2 chr',
+    'ezra', 'nehemiah', 'neh', 'esther', 'esth', 'job', 
+    'psalms', 'psalm', 'ps', 'proverbs', 'prov', 'ecclesiastes', 'eccl', 'eccles',
+    'song of solomon', 'song', 'sos', 'isaiah', 'isa', 'jeremiah', 'jer',
+    'lamentations', 'lam', 'ezekiel', 'ezek', 'daniel', 'dan',
+    'hosea', 'hos', 'joel', 'amos', 'obadiah', 'obad', 'jonah', 'jon',
+    'micah', 'mic', 'nahum', 'nah', 'habakkuk', 'hab', 'zephaniah', 'zeph',
+    'haggai', 'hag', 'zechariah', 'zech', 'malachi', 'mal',
+    'matthew', 'matt', 'mt', 'mark', 'mk', 'luke', 'lk', 'john', 'jn',
+    'acts', 'romans', 'rom', 
+    '1 corinthians', '2 corinthians', '1corinthians', '2corinthians', '1cor', '2cor', '1 cor', '2 cor',
+    'galatians', 'gal', 'ephesians', 'eph', 'philippians', 'phil', 'php',
+    'colossians', 'col', '1 thessalonians', '2 thessalonians', '1thess', '2thess', '1 thess', '2 thess',
+    '1 timothy', '2 timothy', '1timothy', '2timothy', '1tim', '2tim', '1 tim', '2 tim',
+    'titus', 'tit', 'philemon', 'phlm', 'hebrews', 'heb',
+    'james', 'jas', '1 peter', '2 peter', '1peter', '2peter', '1pet', '2pet', '1 pet', '2 pet',
+    '1 john', '2 john', '3 john', '1john', '2john', '3john', '1jn', '2jn', '3jn',
+    'jude', 'revelation', 'rev'
+  ];
   
-  // Also match full book names without chapter/verse
-  const bookOnlyPattern = /^(\d?\s*)?(genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|samuel|kings|chronicles|ezra|nehemiah|esther|job|psalms?|proverbs|ecclesiastes|song\s*of\s*solomon|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|obadiah|jonah|micah|nahum|habakkuk|zephaniah|haggai|zechariah|malachi|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|titus|philemon|hebrews|james|peter|jude|revelation)(\s+\d+)?(\s*:\s*\d+(-\d+)?)?$/i;
+  // Check if input starts with a known book name
+  const startsWithBook = bibleBooks.some(book => {
+    return trimmed === book || 
+           trimmed.startsWith(book + ' ') || 
+           trimmed.startsWith(book + ':');
+  });
   
-  return scripturePattern.test(trimmed) || bookOnlyPattern.test(trimmed);
+  // Also match patterns like "Book Chapter" or "Book Chapter:Verse"
+  const bookChapterPattern = /^(\d?\s*[a-z]+)\s+(\d+)(\s*:\s*\d+(-\d+)?)?$/i;
+  const matchesPattern = bookChapterPattern.test(trimmed);
+  
+  // Only consider it a scripture reference if it matches a known book
+  return startsWithBook || (matchesPattern && bibleBooks.some(book => trimmed.toLowerCase().startsWith(book.split(' ')[0])));
 }
 
 // Direct scripture/resource fetch without AI (for scripture references)
@@ -420,14 +452,14 @@ The user is searching for a topic or keyword. Use search_resources to find relev
   return { resources, scriptureText, scriptureReference, searchQuery };
 }
 
-// Generate a single consolidated response based on fetched resources
-async function generateConsolidatedResponse(
+// Generate a streaming response based on fetched resources
+async function* generateStreamingResponse(
   userMessage: string,
   resources: any[],
   scriptureText: string | null,
   responseLanguage: string,
   conversationHistory: any[]
-): Promise<{ content: string, resourceCounts: { notes: number, questions: number, words: number, academy: number } }> {
+): AsyncGenerator<string, void, unknown> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
@@ -442,8 +474,6 @@ async function generateConsolidatedResponse(
   const questionResources = resources.filter(r => r.resourceType === 'tq');
   const wordResources = resources.filter(r => r.resourceType === 'tw');
   const academyResources = resources.filter(r => r.resourceType === 'ta');
-  
-  const totalResources = resources.length;
 
   const resourceContext = `
 AVAILABLE RESOURCES FROM MCP SERVER (use ONLY these to answer):
@@ -480,33 +510,56 @@ If no relevant resources are found, say so honestly and suggest what to search f
         ...conversationHistory.slice(-4),
         { role: "user", content: userMessage }
       ],
-      stream: false,
+      stream: true,
     }),
   });
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error("Rate limits exceeded, please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required, please add funds.");
+    }
     const errorText = await response.text();
     console.error("AI gateway error:", response.status, errorText);
     throw new Error(`AI gateway error: ${response.status}`);
   }
 
-  const data = await response.json();
-  let content = data.choices?.[0]?.message?.content || "I couldn't find relevant resources for your question.";
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
 
-  // If no resources found, provide default message
-  if (totalResources === 0 && !scriptureText) {
-    content = "I couldn't find specific resources for your question. Try asking about a specific Bible passage or topic.";
-  }
+  const decoder = new TextDecoder();
+  let buffer = "";
 
-  return { 
-    content,
-    resourceCounts: {
-      notes: noteResources.length,
-      questions: questionResources.length,
-      words: wordResources.length,
-      academy: academyResources.length
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex: number;
+    while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+
+      if (line.startsWith(":") || line === "") continue;
+      if (!line.startsWith("data: ")) continue;
+
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === "[DONE]") return;
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) yield content;
+      } catch {
+        // Incomplete JSON, put back and wait
+        buffer = line + "\n" + buffer;
+        break;
+      }
     }
-  };
+  }
 }
 
 serve(async (req) => {
@@ -515,18 +568,19 @@ serve(async (req) => {
   }
 
   try {
-    const { message, conversationHistory = [], scriptureContext, responseLanguage } = await req.json();
+    const { message, conversationHistory = [], scriptureContext, responseLanguage, stream = true } = await req.json();
     
     console.log("Received message:", message);
     console.log("Scripture context:", scriptureContext);
     console.log("Response language:", responseLanguage);
+    console.log("Streaming:", stream);
 
     let resources: any[];
     let scriptureText: string | null;
     let scriptureReference: string | null;
     let searchQuery: string | null;
 
-    // Check if input is a scripture reference - if so, direct fetch without AI
+    // Check if input is a scripture reference - if so, direct fetch first
     if (isScriptureReference(message)) {
       console.log("Detected scripture reference, using direct fetch");
       const result = await fetchDirectResources(message);
@@ -534,6 +588,16 @@ serve(async (req) => {
       scriptureText = result.scriptureText;
       scriptureReference = result.scriptureReference;
       searchQuery = null;
+      
+      // Fallback to search if no resources found from direct fetch
+      if (resources.length === 0 && !scriptureText) {
+        console.log("No resources from direct fetch, falling back to search");
+        const searchResult = await callAIWithTools(message, conversationHistory, scriptureContext);
+        resources = searchResult.resources;
+        scriptureText = searchResult.scriptureText;
+        scriptureReference = searchResult.scriptureReference || scriptureReference;
+        searchQuery = searchResult.searchQuery;
+      }
     } else {
       // Use AI with tools for keyword/topic searches
       console.log("Using AI search for keyword/topic");
@@ -546,14 +610,89 @@ serve(async (req) => {
 
     console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}`);
 
-    // Generate consolidated response
-    const { content, resourceCounts } = await generateConsolidatedResponse(
+    // Calculate resource counts
+    const noteResources = resources.filter(r => r.resourceType === 'tn');
+    const questionResources = resources.filter(r => r.resourceType === 'tq');
+    const wordResources = resources.filter(r => r.resourceType === 'tw');
+    const academyResources = resources.filter(r => r.resourceType === 'ta');
+    
+    const resourceCounts = {
+      notes: noteResources.length,
+      questions: questionResources.length,
+      words: wordResources.length,
+      academy: academyResources.length
+    };
+
+    // If streaming is requested, return SSE stream
+    if (stream) {
+      const encoder = new TextEncoder();
+      
+      // Create a readable stream
+      const readableStream = new ReadableStream({
+        async start(controller) {
+          try {
+            // First, send metadata as a special event
+            const metadata = {
+              type: 'metadata',
+              scripture_reference: scriptureReference,
+              search_query: searchQuery || message,
+              resource_counts: resourceCounts,
+              total_resources: resources.length,
+              mcp_resources: resources
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n\n`));
+            
+            // Stream the AI response
+            const generator = generateStreamingResponse(
+              message,
+              resources,
+              scriptureText,
+              responseLanguage || 'en',
+              conversationHistory
+            );
+            
+            for await (const chunk of generator) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: chunk })}\n\n`));
+            }
+            
+            // Send done event
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+            controller.close();
+          } catch (error) {
+            console.error("Streaming error:", error);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: error instanceof Error ? error.message : 'Unknown error' })}\n\n`));
+            controller.close();
+          }
+        }
+      });
+
+      return new Response(readableStream, {
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive'
+        },
+      });
+    }
+
+    // Non-streaming fallback - collect all content
+    let content = "";
+    const generator = generateStreamingResponse(
       message,
       resources,
       scriptureText,
       responseLanguage || 'en',
       conversationHistory
     );
+    
+    for await (const chunk of generator) {
+      content += chunk;
+    }
+
+    if (!content && resources.length === 0 && !scriptureText) {
+      content = "I couldn't find specific resources for your question. Try asking about a specific Bible passage or topic.";
+    }
 
     // Build the response with a single consolidated message
     const response = {

@@ -1,11 +1,9 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Message, ResourceLink } from '@/types';
 
-interface ChatResponse {
+interface ChatMetadata {
   scripture_reference: string | null;
   search_query: string | null;
-  content: string;
   resource_counts: {
     notes: number;
     questions: number;
@@ -13,8 +11,10 @@ interface ChatResponse {
     academy: number;
   };
   total_resources: number;
-  error?: string;
+  mcp_resources: any[];
 }
+
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/multi-agent-chat`;
 
 export function useMultiAgentChat() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -49,95 +49,160 @@ export function useMultiAgentChat() {
         content: m.content,
       }));
 
-      const { data, error } = await supabase.functions.invoke('multi-agent-chat', {
-        body: {
+      const response = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
           message: content,
           conversationHistory,
           scriptureContext,
           responseLanguage,
-        },
+          stream: true,
+        }),
       });
 
-      if (error) {
-        throw new Error(error.message);
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error("Rate limits exceeded, please try again later.");
+        }
+        if (response.status === 402) {
+          throw new Error("Payment required.");
+        }
+        throw new Error(`Request failed: ${response.status}`);
       }
 
-      const response = data as ChatResponse;
-
-      if (response.error) {
-        throw new Error(response.error);
+      if (!response.body) {
+        throw new Error("No response body");
       }
 
-      // Notify about scripture reference if found
-      if (response.scripture_reference && onScriptureReference) {
-        onScriptureReference(response.scripture_reference);
-      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let metadata: ChatMetadata | null = null;
+      let assistantContent = "";
+      const assistantMessageId = `${Date.now()}-response`;
 
-      // Build resource links for the consolidated response
-      const resources: ResourceLink[] = [];
-      const searchContext = response.scripture_reference || response.search_query || '';
-      
-      if (response.scripture_reference) {
-        resources.push({
-          type: 'scripture',
-          reference: response.scripture_reference,
-          title: response.scripture_reference,
-        });
-      }
-
-      if (response.resource_counts.notes > 0) {
-        resources.push({
-          type: 'note',
-          reference: searchContext,
-          title: 'Translation Notes',
-        });
-      }
-
-      if (response.resource_counts.questions > 0) {
-        resources.push({
-          type: 'question',
-          reference: searchContext,
-          title: 'Study Questions',
-        });
-      }
-
-      if (response.resource_counts.words > 0) {
-        resources.push({
-          type: 'word',
-          reference: searchContext,
-          title: 'Word Studies',
-        });
-      }
-
-      if (response.resource_counts.academy > 0) {
-        resources.push({
-          type: 'academy',
-          reference: searchContext,
-          title: 'Academy Articles',
-        });
-      }
-
-      // Build content with total count
-      const totalCount = response.total_resources;
-      const contentWithCount = totalCount > 0 
-        ? `${response.content}\n\n*${totalCount} resources found — swipe right to explore.*`
-        : response.content;
-
-      // Create single consolidated message
-      const assistantMessage: Message = {
-        id: `${Date.now()}-response`,
+      // Create initial assistant message placeholder
+      const initialAssistantMessage: Message = {
+        id: assistantMessageId,
         role: 'assistant',
-        content: contentWithCount,
+        content: '',
         timestamp: new Date(),
-        resources: resources.length > 0 ? resources : undefined,
       };
+      setMessages(prev => [...prev, initialAssistantMessage]);
 
-      setMessages(prev => [...prev, assistantMessage]);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.startsWith(":") || line === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            
+            if (parsed.type === 'metadata') {
+              metadata = parsed;
+              // Notify about scripture reference if found
+              if (parsed.scripture_reference && onScriptureReference) {
+                onScriptureReference(parsed.scripture_reference);
+              }
+            } else if (parsed.type === 'content') {
+              assistantContent += parsed.content;
+              // Update the assistant message with streaming content
+              setMessages(prev => prev.map(m => 
+                m.id === assistantMessageId 
+                  ? { ...m, content: assistantContent }
+                  : m
+              ));
+            } else if (parsed.type === 'error') {
+              throw new Error(parsed.error);
+            }
+          } catch (e) {
+            // Incomplete JSON, put back
+            if (!(e instanceof SyntaxError)) throw e;
+            buffer = line + "\n" + buffer;
+            break;
+          }
+        }
+      }
+
+      // Build resource links from metadata
+      const resources: ResourceLink[] = [];
+      if (metadata) {
+        const searchContext = metadata.scripture_reference || metadata.search_query || '';
+        
+        if (metadata.scripture_reference) {
+          resources.push({
+            type: 'scripture',
+            reference: metadata.scripture_reference,
+            title: metadata.scripture_reference,
+          });
+        }
+
+        if (metadata.resource_counts.notes > 0) {
+          resources.push({
+            type: 'note',
+            reference: searchContext,
+            title: 'Translation Notes',
+          });
+        }
+
+        if (metadata.resource_counts.questions > 0) {
+          resources.push({
+            type: 'question',
+            reference: searchContext,
+            title: 'Study Questions',
+          });
+        }
+
+        if (metadata.resource_counts.words > 0) {
+          resources.push({
+            type: 'word',
+            reference: searchContext,
+            title: 'Word Studies',
+          });
+        }
+
+        if (metadata.resource_counts.academy > 0) {
+          resources.push({
+            type: 'academy',
+            reference: searchContext,
+            title: 'Academy Articles',
+          });
+        }
+      }
+
+      // Build final content with resource count
+      const totalCount = metadata?.total_resources || 0;
+      const finalContent = totalCount > 0 
+        ? `${assistantContent}\n\n*${totalCount} resources found — swipe right to explore.*`
+        : assistantContent;
+
+      // Update final message with resources
+      setMessages(prev => prev.map(m => 
+        m.id === assistantMessageId 
+          ? { ...m, content: finalContent, resources: resources.length > 0 ? resources : undefined }
+          : m
+      ));
       
       return {
-        scriptureReference: response.scripture_reference,
-        searchQuery: response.search_query,
-        newMessages: [assistantMessage],
+        scriptureReference: metadata?.scripture_reference || null,
+        searchQuery: metadata?.search_query || null,
+        newMessages: [],
       };
     } catch (err) {
       console.error('Chat error:', err);
