@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 const LANGUAGE_KEY = 'bible-study-language';
 const ORGANIZATION_KEY = 'bible-study-organization';
+const VERSION_PREFERENCES_KEY = 'bible-study-version-preferences';
 
 export interface LanguageOption {
   id: string;
@@ -14,6 +15,13 @@ export interface OrganizationOption {
   id: string;
   name: string;
   description?: string;
+}
+
+export interface ScriptureVersion {
+  language: string;
+  organization: string;
+  displayName: string;
+  isFallback?: boolean;
 }
 
 // CatalogEntry interface removed - using direct API calls now
@@ -38,6 +46,7 @@ export function useLanguage() {
   const [organization, setOrganizationState] = useState<string | null>(null);
   const [availableLanguages, setAvailableLanguages] = useState<LanguageOption[]>([]);
   const [availableOrganizations, setAvailableOrganizations] = useState<OrganizationOption[]>([]);
+  const [versionPreferences, setVersionPreferencesState] = useState<ScriptureVersion[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [needsSelection, setNeedsSelection] = useState(false);
@@ -127,15 +136,30 @@ export function useLanguage() {
     return fetchOwnersForLanguage(langId);
   }, [fetchOwnersForLanguage]);
 
-  // Initialize language and organization from localStorage
+  // Initialize language, organization, and version preferences from localStorage
   useEffect(() => {
     const savedLanguage = localStorage.getItem(LANGUAGE_KEY);
     const savedOrganization = localStorage.getItem(ORGANIZATION_KEY);
+    const savedPreferences = localStorage.getItem(VERSION_PREFERENCES_KEY);
     
     if (savedLanguage && savedOrganization) {
       setLanguageState(savedLanguage);
       setOrganizationState(savedOrganization);
       setNeedsSelection(false);
+      
+      // Load version preferences or initialize with defaults
+      if (savedPreferences) {
+        try {
+          setVersionPreferencesState(JSON.parse(savedPreferences));
+        } catch {
+          // Initialize with primary + English fallback
+          const defaultPrefs = buildDefaultVersionPreferences(savedLanguage, savedOrganization);
+          setVersionPreferencesState(defaultPrefs);
+        }
+      } else {
+        const defaultPrefs = buildDefaultVersionPreferences(savedLanguage, savedOrganization);
+        setVersionPreferencesState(defaultPrefs);
+      }
     } else {
       setNeedsSelection(true);
     }
@@ -157,6 +181,11 @@ export function useLanguage() {
     setLanguage(langId);
     setOrganization(orgId);
     setNeedsSelection(false);
+    
+    // Initialize version preferences with primary + English fallback
+    const defaultPrefs = buildDefaultVersionPreferences(langId, orgId);
+    setVersionPreferencesState(defaultPrefs);
+    localStorage.setItem(VERSION_PREFERENCES_KEY, JSON.stringify(defaultPrefs));
   }, [setLanguage, setOrganization]);
 
   const getCurrentLanguage = useCallback((): LanguageOption | null => {
@@ -176,6 +205,26 @@ export function useLanguage() {
     };
   }, [organization, availableOrganizations]);
 
+  // Set version preferences (ordered list)
+  const setVersionPreferences = useCallback((versions: ScriptureVersion[]) => {
+    setVersionPreferencesState(versions);
+    localStorage.setItem(VERSION_PREFERENCES_KEY, JSON.stringify(versions));
+  }, []);
+
+  // Get the active (first) version preference
+  const getActiveVersion = useCallback((): ScriptureVersion | null => {
+    return versionPreferences.length > 0 ? versionPreferences[0] : null;
+  }, [versionPreferences]);
+
+  // Reorder version preferences (move to top)
+  const setActiveVersion = useCallback((version: ScriptureVersion) => {
+    const filtered = versionPreferences.filter(
+      v => !(v.language === version.language && v.organization === version.organization)
+    );
+    const newPrefs = [version, ...filtered];
+    setVersionPreferences(newPrefs);
+  }, [versionPreferences, setVersionPreferences]);
+
   return {
     language,
     organization,
@@ -189,5 +238,34 @@ export function useLanguage() {
     needsSelection,
     getCurrentLanguage,
     getCurrentOrganization,
+    versionPreferences,
+    setVersionPreferences,
+    getActiveVersion,
+    setActiveVersion,
   };
+}
+
+// Helper to build default version preferences
+function buildDefaultVersionPreferences(langId: string, orgId: string): ScriptureVersion[] {
+  const prefs: ScriptureVersion[] = [];
+  
+  // Primary selection
+  prefs.push({
+    language: langId,
+    organization: orgId,
+    displayName: `${orgId} (${langId.toUpperCase()})`,
+    isFallback: false,
+  });
+  
+  // Add English/unfoldingWord fallback if not already English
+  if (langId !== 'en') {
+    prefs.push({
+      language: 'en',
+      organization: 'unfoldingWord',
+      displayName: 'unfoldingWord (EN)',
+      isFallback: true,
+    });
+  }
+  
+  return prefs;
 }
