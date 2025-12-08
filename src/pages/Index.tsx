@@ -1,4 +1,5 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { Resource } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { SwipeContainer } from '@/components/SwipeContainer';
 import { ChatCard } from '@/components/ChatCard';
@@ -84,10 +85,25 @@ const Index = () => {
     }
   }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, currentConversationId, createConversation, saveMessage, updateConversation]);
 
+  // Map ResourceLink type to Resource type for scrolling
+  const getResourceTypeFromLink = (linkType: ResourceLink['type']): Resource['type'] | null => {
+    switch (linkType) {
+      case 'note': return 'translation-note';
+      case 'question': return 'translation-question';
+      case 'word': return 'translation-word';
+      case 'academy': return 'academy-article';
+      default: return null;
+    }
+  };
+
+  const [scrollToResourceType, setScrollToResourceType] = useState<Resource['type'] | null>(null);
+
   const handleResourceClick = useCallback((resource: ResourceLink) => {
     if (resource.type === 'scripture') {
       navigateToCard('scripture');
     } else {
+      const resourceType = getResourceTypeFromLink(resource.type);
+      setScrollToResourceType(resourceType);
       navigateToCard('resources');
     }
   }, [navigateToCard]);
@@ -170,6 +186,8 @@ const Index = () => {
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
+            scrollToType={scrollToResourceType}
+            onScrollComplete={() => setScrollToResourceType(null)}
           />
         );
       case 'notes':
