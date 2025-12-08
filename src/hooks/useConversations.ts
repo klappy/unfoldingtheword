@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { HistoryItem, Message } from '@/types';
+import { HistoryItem, Message, ResourceLink } from '@/types';
 import { useDeviceId } from './useDeviceId';
 
 export function useConversations() {
@@ -117,14 +117,15 @@ export function useConversations() {
     return true;
   }, [currentConversationId]);
 
-  const saveMessage = useCallback(async (conversationId: string, message: { role: string; content: string; agent?: string }) => {
+  const saveMessage = useCallback(async (conversationId: string, message: Message) => {
     const { error } = await supabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
         role: message.role,
         content: message.content,
-        agent: message.agent,
+        agent: message.agent || null,
+        resources: message.resources ? JSON.parse(JSON.stringify(message.resources)) : null,
       });
 
     if (error) {
@@ -152,6 +153,7 @@ export function useConversations() {
       content: msg.content,
       agent: msg.agent as any,
       timestamp: new Date(msg.created_at),
+      resources: (msg.resources as unknown as ResourceLink[]) || undefined,
     }));
   }, []);
 

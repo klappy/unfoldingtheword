@@ -126,6 +126,7 @@ export function useMultiAgentChat() {
       return {
         scriptureReference: response.scripture_reference,
         searchQuery: response.search_query,
+        newMessages: agentMessages,
       };
     } catch (err) {
       console.error('Chat error:', err);
