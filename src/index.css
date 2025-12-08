@@ -75,15 +75,28 @@
 
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    background: hsl(var(--background));
   }
 
   body {
     @apply bg-background text-foreground antialiased;
     background: var(--gradient-ambient);
     min-height: 100vh;
+    min-height: 100dvh;
     overflow: hidden;
     touch-action: none;
     -webkit-overflow-scrolling: touch;
+    /* Safe area insets for iOS */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  #root {
+    height: 100vh;
+    height: 100dvh;
+    background: var(--gradient-ambient);
   }
 
   /* Custom scrollbar - nearly invisible */

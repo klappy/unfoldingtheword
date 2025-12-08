@@ -44,7 +44,7 @@ export function SwipeContainer({
       </AnimatePresence>
 
       {/* Page indicators */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-50">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-50 pb-safe">
         {cardOrder.map((card, index) => (
           <div
             key={card}
