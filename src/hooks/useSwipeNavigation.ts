@@ -4,50 +4,69 @@ import { CardType } from '@/types';
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.3;
 
-// History is now the first card, to the left of chat
 const CARD_ORDER: CardType[] = ['history', 'chat', 'scripture', 'resources', 'notes'];
 
 export function useSwipeNavigation() {
   const [currentCard, setCurrentCard] = useState<CardType>('chat');
   const [swipeDirection, setSwipeDirection] = useState<1 | -1>(1);
-  const [showChat, setShowChat] = useState(true);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   
   const startPos = useRef({ x: 0, y: 0 });
   const startTime = useRef(0);
-  const isDragging = useRef(false);
+  const draggingRef = useRef(false);
 
   const handleTouchStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     const point = 'touches' in e ? e.touches[0] : e;
     startPos.current = { x: point.clientX, y: point.clientY };
     startTime.current = Date.now();
-    isDragging.current = true;
+    draggingRef.current = true;
+    setIsDragging(true);
+    setDragOffset(0);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!draggingRef.current) return;
+    
+    const point = 'touches' in e ? e.touches[0] : e;
+    const deltaX = point.clientX - startPos.current.x;
+    const deltaY = point.clientY - startPos.current.y;
+    
+    // Only track horizontal movement if it's more horizontal than vertical
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      setDragOffset(deltaX);
+    }
   }, []);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    if (!isDragging.current) return;
-    isDragging.current = false;
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setIsDragging(false);
 
     const point = 'changedTouches' in e ? e.changedTouches[0] : e;
     const deltaX = point.clientX - startPos.current.x;
     const deltaTime = Date.now() - startTime.current;
     
     const velocityX = Math.abs(deltaX) / deltaTime;
+    const shouldNavigate = Math.abs(deltaX) > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD;
 
-    if (Math.abs(deltaX) > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD) {
+    if (shouldNavigate && Math.abs(deltaX) > Math.abs(point.clientY - startPos.current.y)) {
       const currentIndex = CARD_ORDER.indexOf(currentCard);
       
       if (deltaX < 0) {
-        // Swipe left - next card (content moves left, new from right)
+        // Swipe left - next card
         setSwipeDirection(1);
         const nextIndex = (currentIndex + 1) % CARD_ORDER.length;
         setCurrentCard(CARD_ORDER[nextIndex]);
       } else {
-        // Swipe right - previous card (content moves right, new from left)
+        // Swipe right - previous card
         setSwipeDirection(-1);
         const prevIndex = (currentIndex - 1 + CARD_ORDER.length) % CARD_ORDER.length;
         setCurrentCard(CARD_ORDER[prevIndex]);
       }
     }
+    
+    setDragOffset(0);
   }, [currentCard]);
 
   const navigateToCard = useCallback((card: CardType) => {
@@ -63,8 +82,10 @@ export function useSwipeNavigation() {
     currentCard,
     currentIndex,
     swipeDirection,
-    showChat,
+    dragOffset,
+    isDragging,
     handleTouchStart,
+    handleTouchMove,
     handleTouchEnd,
     navigateToCard,
     cardOrder: CARD_ORDER,
