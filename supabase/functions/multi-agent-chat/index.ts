@@ -52,15 +52,19 @@ async function fetchMcpResources(query: string, resourceTypes: string[] = ['tn',
   
   for (const resourceType of resourceTypes) {
     try {
-      const url = `${MCP_BASE_URL}/search?q=${encodeURIComponent(query)}&resource=${resourceType}&limit=5`;
+      // Use the correct API path format - /api/search with query parameter
+      const url = `${MCP_BASE_URL}/api/search?query=${encodeURIComponent(query)}&resource=${resourceType}`;
       console.log(`Fetching MCP resources: ${url}`);
       
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        if (data.results && Array.isArray(data.results)) {
-          results.push(...data.results.map((r: any) => ({ ...r, resourceType })));
+        // MCP server returns hits array, not results
+        if (data.hits && Array.isArray(data.hits)) {
+          results.push(...data.hits.map((r: any) => ({ ...r, resourceType })));
         }
+      } else {
+        console.log(`MCP search returned ${response.status} for ${resourceType}`);
       }
     } catch (error) {
       console.error(`Error fetching ${resourceType} resources:`, error);
@@ -82,13 +86,22 @@ async function fetchScripturePassage(reference: string): Promise<string | null> 
     const startVerse = match[3];
     const endVerse = match[4];
     
-    const url = `${MCP_BASE_URL}/passage?book=${encodeURIComponent(book)}&chapter=${chapter}${startVerse ? `&startVerse=${startVerse}` : ''}${endVerse ? `&endVerse=${endVerse}` : ''}`;
+    // Use the correct API path format
+    const url = `${MCP_BASE_URL}/api/fetch-scripture?book=${encodeURIComponent(book)}&chapter=${chapter}${startVerse ? `&startVerse=${startVerse}` : ''}${endVerse ? `&endVerse=${endVerse}` : ''}`;
     console.log(`Fetching scripture: ${url}`);
     
     const response = await fetch(url);
     if (response.ok) {
-      const data = await response.json();
-      return data.text || data.passage || JSON.stringify(data);
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        return data.text || data.passage || data.content || JSON.stringify(data);
+      } else {
+        // Markdown response
+        return await response.text();
+      }
+    } else {
+      console.log(`Scripture fetch returned ${response.status}`);
     }
   } catch (error) {
     console.error('Error fetching scripture:', error);
