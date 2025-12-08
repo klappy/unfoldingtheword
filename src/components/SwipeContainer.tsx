@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { CardType } from '@/types';
 
@@ -32,17 +32,13 @@ export function SwipeContainer({
   const prevCard = cardOrder[prevIndex];
   const nextCard = cardOrder[nextIndex];
 
-  // Calculate positions based on drag
-  const getCardStyle = (position: 'prev' | 'current' | 'next') => {
-    const baseOffset = position === 'prev' ? -100 : position === 'next' ? 100 : 0;
-    const dragPercent = (dragOffset / window.innerWidth) * 100;
-    
-    return {
-      x: `calc(${baseOffset}% + ${dragOffset}px)`,
-      opacity: position === 'current' ? 1 : isDragging ? 0.9 : 0,
-      scale: position === 'current' ? (isDragging ? 1 - Math.abs(dragOffset) * 0.0001 : 1) : 0.95,
-    };
-  };
+  // Memoize rendered cards to prevent unnecessary re-renders
+  const prevCardContent = useMemo(() => renderCard(prevCard), [renderCard, prevCard]);
+  const currentCardContent = useMemo(() => renderCard(currentCard), [renderCard, currentCard]);
+  const nextCardContent = useMemo(() => renderCard(nextCard), [renderCard, nextCard]);
+
+  // Calculate the peek visibility based on drag offset
+  const peekOpacity = Math.min(Math.abs(dragOffset) / 100, 0.95);
 
   return (
     <div
@@ -55,37 +51,46 @@ export function SwipeContainer({
       onMouseUp={onTouchEnd}
       onMouseLeave={onTouchEnd}
     >
-      {/* Previous card (left) */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
-        animate={getCardStyle('prev')}
-        transition={isDragging ? { duration: 0 } : { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-        style={{ willChange: 'transform' }}
-      >
-        {renderCard(prevCard)}
-      </motion.div>
+      {/* Previous card (left) - only visible when dragging right */}
+      {isDragging && dragOffset > 0 && (
+        <motion.div
+          className="absolute inset-0"
+          style={{ 
+            x: `calc(-100% + ${dragOffset}px)`,
+            opacity: peekOpacity,
+          }}
+        >
+          {prevCardContent}
+        </motion.div>
+      )}
 
       {/* Current card (center) */}
       <motion.div
         key={currentCard}
         className="absolute inset-0"
         initial={{ x: swipeDirection * 100 + '%', opacity: 0 }}
-        animate={getCardStyle('current')}
-        transition={isDragging ? { duration: 0 } : { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+        animate={{ 
+          x: dragOffset,
+          opacity: 1,
+        }}
+        transition={isDragging ? { duration: 0 } : { duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
         style={{ willChange: 'transform' }}
       >
-        {renderCard(currentCard)}
+        {currentCardContent}
       </motion.div>
 
-      {/* Next card (right) */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
-        animate={getCardStyle('next')}
-        transition={isDragging ? { duration: 0 } : { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-        style={{ willChange: 'transform' }}
-      >
-        {renderCard(nextCard)}
-      </motion.div>
+      {/* Next card (right) - only visible when dragging left */}
+      {isDragging && dragOffset < 0 && (
+        <motion.div
+          className="absolute inset-0"
+          style={{ 
+            x: `calc(100% + ${dragOffset}px)`,
+            opacity: peekOpacity,
+          }}
+        >
+          {nextCardContent}
+        </motion.div>
+      )}
 
       {/* Page indicators */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-50 pb-safe">
