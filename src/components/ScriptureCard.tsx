@@ -1,21 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Book, ChevronLeft, ChevronRight, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Book, ChevronLeft, ChevronRight, Loader2, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { ScripturePassage } from '@/types';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ScriptureCardProps {
   passage: ScripturePassage | null;
   onAddToNotes: (text: string) => void;
+  onVerseSelect?: (reference: string) => void;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
-  onLoadFullChapter?: (reference: string) => void;
 }
 
-export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry }: ScriptureCardProps) {
+export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, isLoading, error, onRetry }: ScriptureCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [selectedVerse, setSelectedVerse] = useState<{ chapter: number; verse: number } | null>(null);
 
   // Scroll to target chapter/verse when passage changes
   useEffect(() => {
@@ -32,6 +34,11 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
     return () => clearTimeout(timer);
   }, [passage?.book?.book, passage?.targetChapter]);
 
+  // Clear selection when book changes
+  useEffect(() => {
+    setSelectedVerse(null);
+  }, [passage?.book?.book]);
+
   const handleTextSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) {
@@ -39,6 +46,34 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
       if (confirm(`Add to notes?\n\n"${selectedText.substring(0, 100)}${selectedText.length > 100 ? '...' : ''}"`)) {
         onAddToNotes(selectedText);
       }
+    }
+  };
+
+  const handleVerseClick = (chapter: number, verseNum: number, e: React.MouseEvent) => {
+    // Don't trigger if user is selecting text
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim()) return;
+    
+    e.stopPropagation();
+    
+    const bookName = passage?.book?.book || '';
+    const reference = `${bookName} ${chapter}:${verseNum}`;
+    
+    // Toggle selection
+    if (selectedVerse?.chapter === chapter && selectedVerse?.verse === verseNum) {
+      setSelectedVerse(null);
+      // Clear the verse scope - call with just the book
+      onVerseSelect?.(`${bookName} ${chapter}`);
+    } else {
+      setSelectedVerse({ chapter, verse: verseNum });
+      onVerseSelect?.(reference);
+    }
+  };
+
+  const clearVerseSelection = () => {
+    if (selectedVerse && passage?.book?.book) {
+      setSelectedVerse(null);
+      onVerseSelect?.(`${passage.book.book} ${selectedVerse.chapter}`);
     }
   };
 
@@ -136,6 +171,27 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
           <div className="swipe-indicator" />
         </div>
 
+        {/* Selected verse indicator */}
+        {selectedVerse && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="px-6 pb-2"
+          >
+            <div className="flex items-center justify-between bg-primary/10 rounded-lg px-3 py-2">
+              <span className="text-xs text-primary font-medium">
+                Focused: {passage.book.book} {selectedVerse.chapter}:{selectedVerse.verse}
+              </span>
+              <button
+                onClick={clearVerseSelection}
+                className="text-primary/70 hover:text-primary transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Header - sticky with background */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -173,10 +229,19 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
                   className="scripture-text text-lg"
                 >
                   {chapter.verses.map((verse, index) => {
+                    const isSelected = selectedVerse?.chapter === chapter.chapter && selectedVerse?.verse === verse.number;
+                    
                     // First verse of chapter gets the drop cap
                     if (index === 0) {
                       return (
-                        <span key={`${chapter.chapter}-${verse.number}-${index}`}>
+                        <span 
+                          key={`${chapter.chapter}-${verse.number}-${index}`}
+                          onClick={(e) => handleVerseClick(chapter.chapter, verse.number, e)}
+                          className={cn(
+                            "cursor-pointer transition-all rounded-sm",
+                            isSelected && "bg-primary/20 ring-1 ring-primary/30"
+                          )}
+                        >
                           <span className="drop-cap-chapter">{chapter.chapter}</span>
                           <sup className="scripture-verse">{verse.number}</sup>
                           {verse.text}
@@ -189,7 +254,14 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
                     }
 
                     return (
-                      <span key={`${chapter.chapter}-${verse.number}-${index}`}>
+                      <span 
+                        key={`${chapter.chapter}-${verse.number}-${index}`}
+                        onClick={(e) => handleVerseClick(chapter.chapter, verse.number, e)}
+                        className={cn(
+                          "cursor-pointer transition-all rounded-sm hover:bg-primary/5",
+                          isSelected && "bg-primary/20 ring-1 ring-primary/30"
+                        )}
+                      >
                         <sup className="scripture-verse">{verse.number}</sup>
                         {verse.text}
                         {verse.isParagraphEnd && index < chapter.verses.length - 1 && (
@@ -208,7 +280,7 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
         {/* Selection hint */}
         <div className="absolute bottom-20 left-0 right-0 text-center">
           <p className="text-xs text-muted-foreground/50">
-            Select text to add to notes
+            {selectedVerse ? 'Tap verse again to clear filter' : 'Tap a verse to focus resources'}
           </p>
         </div>
       </div>

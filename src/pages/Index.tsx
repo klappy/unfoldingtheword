@@ -25,7 +25,7 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData, loadKeywordResources, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData, loadKeywordResources, filterByVerse, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
   const { 
@@ -119,6 +119,11 @@ const Index = () => {
     navigateToCard('chat');
   }, [clearMessages, clearScriptureData, setCurrentConversationId, navigateToCard]);
 
+  const handleVerseSelect = useCallback((reference: string) => {
+    console.log('[Index] Verse selected:', reference);
+    filterByVerse(reference);
+  }, [filterByVerse]);
+
 
   const renderCard = useCallback((card: CardType) => {
     switch (card) {
@@ -144,6 +149,7 @@ const Index = () => {
           <ScriptureCard
             passage={scripture}
             onAddToNotes={(text) => handleAddToNotes(text, scripture?.reference)}
+            onVerseSelect={handleVerseSelect}
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
@@ -174,7 +180,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, scriptureLoading, scriptureError, loadScriptureData, resources, navigateToCard, notes, handleDeleteNote]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, navigateToCard, notes, handleDeleteNote]);
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
