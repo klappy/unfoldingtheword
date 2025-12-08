@@ -532,6 +532,93 @@ const BOOK_CHAPTERS: Record<string, number> = {
   '2 John': 1, '3 John': 1, 'Jude': 1, 'Revelation': 22,
 };
 
+// Map non-English book names to English (for book chapter lookup)
+// Combined Spanish, Portuguese, French - only unique entries (shared names map to same English)
+const BOOK_NAME_ALIASES: Record<string, string> = {
+  // Spanish / Portuguese / French (unique entries only)
+  'Génesis': 'Genesis', 'Gênesis': 'Genesis', 'Genèse': 'Genesis',
+  'Éxodo': 'Exodus', 'Êxodo': 'Exodus', 'Exode': 'Exodus',
+  'Levítico': 'Leviticus', 'Lévitique': 'Leviticus',
+  'Números': 'Numbers', 'Nombres': 'Numbers',
+  'Deuteronomio': 'Deuteronomy', 'Deutéronome': 'Deuteronomy',
+  'Josué': 'Joshua', 'Jueces': 'Judges', 'Juízes': 'Judges', 'Juges': 'Judges',
+  'Rut': 'Ruth', 'Rute': 'Ruth',
+  '1 Reyes': '1 Kings', '1 Reis': '1 Kings', '1 Rois': '1 Kings',
+  '2 Reyes': '2 Kings', '2 Reis': '2 Kings', '2 Rois': '2 Kings',
+  '1 Crónicas': '1 Chronicles', '1 Crônicas': '1 Chronicles', '1 Chroniques': '1 Chronicles',
+  '2 Crónicas': '2 Chronicles', '2 Crônicas': '2 Chronicles', '2 Chroniques': '2 Chronicles',
+  'Esdras': 'Ezra', 'Nehemías': 'Nehemiah', 'Neemias': 'Nehemiah', 'Néhémie': 'Nehemiah',
+  'Ester': 'Esther', 'Jó': 'Job',
+  'Salmos': 'Psalms', 'Salmo': 'Psalms', 'Psaumes': 'Psalms',
+  'Proverbios': 'Proverbs', 'Provérbios': 'Proverbs', 'Proverbes': 'Proverbs',
+  'Eclesiastés': 'Ecclesiastes', 'Eclesiastes': 'Ecclesiastes', 'Ecclésiaste': 'Ecclesiastes',
+  'Cantares': 'Song of Solomon', 'Cantar de los Cantares': 'Song of Solomon', 'Cânticos': 'Song of Solomon', 'Cantares de Salomão': 'Song of Solomon', 'Cantique des Cantiques': 'Song of Solomon',
+  'Isaías': 'Isaiah', 'Ésaïe': 'Isaiah',
+  'Jeremías': 'Jeremiah', 'Jeremias': 'Jeremiah', 'Jérémie': 'Jeremiah',
+  'Lamentaciones': 'Lamentations', 'Lamentações': 'Lamentations',
+  'Ezequiel': 'Ezekiel', 'Ézéchiel': 'Ezekiel',
+  'Oseas': 'Hosea', 'Oséias': 'Hosea', 'Osée': 'Hosea',
+  'Joël': 'Joel',
+  'Abdías': 'Obadiah', 'Obadias': 'Obadiah', 'Abdias': 'Obadiah',
+  'Jonás': 'Jonah', 'Jonas': 'Jonah',
+  'Miqueas': 'Micah', 'Miquéias': 'Micah', 'Michée': 'Micah',
+  'Nahúm': 'Nahum', 'Naum': 'Nahum',
+  'Habacuc': 'Habakkuk', 'Habacuque': 'Habakkuk',
+  'Sofonías': 'Zephaniah', 'Sofonias': 'Zephaniah', 'Sophonie': 'Zephaniah',
+  'Hageo': 'Haggai', 'Ageu': 'Haggai', 'Aggée': 'Haggai',
+  'Zacarías': 'Zechariah', 'Zacarias': 'Zechariah', 'Zacharie': 'Zechariah',
+  'Malaquías': 'Malachi', 'Malaquias': 'Malachi', 'Malachie': 'Malachi',
+  'Mateo': 'Matthew', 'Mateus': 'Matthew', 'Matthieu': 'Matthew',
+  'Marcos': 'Mark', 'Marc': 'Mark',
+  'Lucas': 'Luke', 'Luc': 'Luke',
+  'Juan': 'John', 'João': 'John', 'Jean': 'John',
+  'Hechos': 'Acts', 'Atos': 'Acts', 'Actes': 'Acts',
+  'Romanos': 'Romans', 'Romains': 'Romans',
+  '1 Corintios': '1 Corinthians', '1 Coríntios': '1 Corinthians', '1 Corinthiens': '1 Corinthians',
+  '2 Corintios': '2 Corinthians', '2 Coríntios': '2 Corinthians', '2 Corinthiens': '2 Corinthians',
+  'Gálatas': 'Galatians', 'Galates': 'Galatians',
+  'Efesios': 'Ephesians', 'Efésios': 'Ephesians', 'Éphésiens': 'Ephesians',
+  'Filipenses': 'Philippians', 'Philippiens': 'Philippians',
+  'Colosenses': 'Colossians', 'Colossenses': 'Colossians',
+  '1 Tesalonicenses': '1 Thessalonians', '1 Tessalonicenses': '1 Thessalonians', '1 Thessaloniciens': '1 Thessalonians',
+  '2 Tesalonicenses': '2 Thessalonians', '2 Tessalonicenses': '2 Thessalonians', '2 Thessaloniciens': '2 Thessalonians',
+  '1 Timoteo': '1 Timothy', '1 Timóteo': '1 Timothy', '1 Timothée': '1 Timothy',
+  '2 Timoteo': '2 Timothy', '2 Timóteo': '2 Timothy', '2 Timothée': '2 Timothy',
+  'Tito': 'Titus',
+  'Filemón': 'Philemon', 'Filemon': 'Philemon', 'Filemom': 'Philemon', 'Philémon': 'Philemon',
+  'Hebreos': 'Hebrews', 'Hébreux': 'Hebrews',
+  'Santiago': 'James', 'Tiago': 'James', 'Jacques': 'James',
+  '1 Pedro': '1 Peter', '1 Pierre': '1 Peter',
+  '2 Pedro': '2 Peter', '2 Pierre': '2 Peter',
+  '1 Juan': '1 John', '1 João': '1 John',
+  '2 Juan': '2 John', '2 João': '2 John',
+  '3 Juan': '3 John', '3 João': '3 John',
+  'Judas': 'Jude',
+  'Apocalipsis': 'Revelation', 'Apocalipse': 'Revelation', 'Apocalypse': 'Revelation',
+};
+
+// Normalize book name to English for chapter count lookup
+function normalizeBookName(bookName: string): string {
+  // First check if it's already in the BOOK_CHAPTERS map (English name)
+  if (BOOK_CHAPTERS[bookName]) {
+    return bookName;
+  }
+  // Check alias map (case-insensitive for robustness)
+  const normalized = BOOK_NAME_ALIASES[bookName];
+  if (normalized) {
+    return normalized;
+  }
+  // Try case-insensitive match
+  const lowerBookName = bookName.toLowerCase();
+  for (const [alias, english] of Object.entries(BOOK_NAME_ALIASES)) {
+    if (alias.toLowerCase() === lowerBookName) {
+      return english;
+    }
+  }
+  // Return original if no match found
+  return bookName;
+}
+
 export interface BookChapter {
   chapter: number;
   verses: ScriptureVerse[];
@@ -546,7 +633,8 @@ export interface BookData {
 
 // Fetch entire book - all chapters
 export async function fetchBook(bookName: string): Promise<BookData> {
-  const totalChapters = BOOK_CHAPTERS[bookName];
+  const normalizedName = normalizeBookName(bookName);
+  const totalChapters = BOOK_CHAPTERS[normalizedName];
   if (!totalChapters) {
     throw new Error(`Unknown book: ${bookName}`);
   }
@@ -617,7 +705,8 @@ export interface BookDataWithFallback extends BookData {
 
 // Fetch entire book with fallback support
 export async function fetchBookWithFallback(bookName: string): Promise<BookDataWithFallback> {
-  const totalChapters = BOOK_CHAPTERS[bookName];
+  const normalizedName = normalizeBookName(bookName);
+  const totalChapters = BOOK_CHAPTERS[normalizedName];
   if (!totalChapters) {
     throw new Error(`Unknown book: ${bookName}`);
   }
