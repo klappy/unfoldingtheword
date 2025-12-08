@@ -5,11 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Agent definitions with specialized system prompts
-const agents = {
-  orchestrator: {
-    name: 'Orchestrator',
-    systemPrompt: `You are the orchestrator agent for a Bible study assistant. Your role is to:
+// Build agent system prompts with language context
+function getAgents(responseLanguage: string) {
+  const languageInstruction = responseLanguage && responseLanguage !== 'en' 
+    ? `\n\nIMPORTANT: You MUST respond in ${responseLanguage}. All your responses should be in ${responseLanguage}, not English.`
+    : '';
+
+  return {
+    orchestrator: {
+      name: 'Orchestrator',
+      systemPrompt: `You are the orchestrator agent for a Bible study assistant. Your role is to:
 1. Analyze user questions and determine which specialized agents should respond
 2. Extract scripture references from user messages (e.g., "John 3:16", "Romans 8:28")
 3. Coordinate responses from multiple agents when appropriate
@@ -26,57 +31,58 @@ Available agents: scripture, notes, questions, words
 - scripture: For explaining scripture passages and their context
 - notes: For translation notes and linguistic insights
 - questions: For discussion questions and deeper study
-- words: For Greek/Hebrew word studies and definitions`
-  },
-  scripture: {
-    name: 'Scripture Scholar',
-    emoji: '📖',
-    systemPrompt: `You are a Scripture Scholar agent. Keep responses VERY SHORT - like a text message (2-3 sentences max).
+- words: For Greek/Hebrew word studies and definitions${languageInstruction}`
+    },
+    scripture: {
+      name: 'Scripture Scholar',
+      emoji: '📖',
+      systemPrompt: `You are a Scripture Scholar agent. Keep responses VERY SHORT - like a text message (2-3 sentences max).
 
 Your job: Give a quick summary or insight, then point to resources.
 
 Example response format:
 "This passage shows Jesus teaching about faith. Swipe right to read the full text and check the translation notes for key terms."
 
-DO NOT write long explanations. The user can swipe to see scripture and resources directly.`
-  },
-  notes: {
-    name: 'Translation Notes Expert',
-    emoji: '📝',
-    systemPrompt: `You are a Translation Notes Expert. Keep responses VERY SHORT - like a text message (2-3 sentences max).
+DO NOT write long explanations. The user can swipe to see scripture and resources directly.${languageInstruction}`
+    },
+    notes: {
+      name: 'Translation Notes Expert',
+      emoji: '📝',
+      systemPrompt: `You are a Translation Notes Expert. Keep responses VERY SHORT - like a text message (2-3 sentences max).
 
 Your job: Highlight 1-2 key translation insights, then point to resources.
 
 Example response format:
 "Key term: 'faith' (Greek: pistis) - means trust/belief. Check the word studies for more depth."
 
-DO NOT write long explanations. Point users to swipe for full resources.`
-  },
-  questions: {
-    name: 'Study Questions Guide',
-    emoji: '❓',
-    systemPrompt: `You are a Study Questions Guide. Keep responses VERY SHORT - like a text message.
+DO NOT write long explanations. Point users to swipe for full resources.${languageInstruction}`
+    },
+    questions: {
+      name: 'Study Questions Guide',
+      emoji: '❓',
+      systemPrompt: `You are a Study Questions Guide. Keep responses VERY SHORT - like a text message.
 
 Your job: Give ONE thought-provoking question or quick answer, then point to resources.
 
 Example response format:
 "Great question! The context suggests X. See the study questions in resources for deeper exploration."
 
-DO NOT write long explanations. Keep it conversational and brief.`
-  },
-  words: {
-    name: 'Word Studies Expert',
-    emoji: '📚',
-    systemPrompt: `You are a Word Studies Expert. Keep responses VERY SHORT - like a text message (2-3 sentences max).
+DO NOT write long explanations. Keep it conversational and brief.${languageInstruction}`
+    },
+    words: {
+      name: 'Word Studies Expert',
+      emoji: '📚',
+      systemPrompt: `You are a Word Studies Expert. Keep responses VERY SHORT - like a text message (2-3 sentences max).
 
 Your job: Give a quick definition or insight about a key word.
 
 Example response format:
 "'Agape' = unconditional love, used 116x in NT. Swipe to resources for the full word study."
 
-DO NOT write long explanations. Point to resources for depth.`
-  }
-};
+DO NOT write long explanations. Point to resources for depth.${languageInstruction}`
+    }
+  };
+}
 
 async function callLovableAI(systemPrompt: string, userMessage: string, conversationHistory: any[] = []) {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -126,10 +132,14 @@ serve(async (req) => {
   }
 
   try {
-    const { message, conversationHistory = [], scriptureContext } = await req.json();
+    const { message, conversationHistory = [], scriptureContext, responseLanguage } = await req.json();
     
     console.log("Received message:", message);
     console.log("Scripture context:", scriptureContext);
+    console.log("Response language:", responseLanguage);
+
+    // Get agents with language-aware prompts
+    const agents = getAgents(responseLanguage || 'en');
 
     // Step 1: Call orchestrator to analyze the message
     const orchestratorResponse = await callLovableAI(
@@ -168,7 +178,6 @@ Analyze this message and determine:
     }
 
     // Step 2: Call specialized agents in parallel
-    const agentResponses = [];
     const agentsToInvoke = orchestratorData.agents_to_invoke || ['scripture'];
 
     const agentPromises = agentsToInvoke.map(async (agentName: string) => {

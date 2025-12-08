@@ -131,7 +131,8 @@ const Index = () => {
         } catch (error) {
           console.error('[Index] Failed to load scripture:', error);
         }
-      }
+      },
+      targetLanguageName // Pass language for localized chat responses
     );
 
     if (convId && result?.newMessages) {
