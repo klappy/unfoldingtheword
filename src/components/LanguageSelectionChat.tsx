@@ -289,7 +289,7 @@ export function LanguageSelectionChat({
               </div>
 
               {/* Organization options */}
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                 {organizations.map((org, i) => (
                   <motion.button
                     key={org.id}
