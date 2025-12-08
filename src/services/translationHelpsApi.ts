@@ -76,7 +76,7 @@ interface ProxyResponse {
   fallbackInfo: FallbackInfo;
 }
 
-async function callProxyWithFallback(endpoint: string, params: Record<string, any>): Promise<ProxyResponse> {
+async function callProxyWithFallback(endpoint: string, params: Record<string, any>, throwOnError = true): Promise<ProxyResponse> {
   const requestedLanguage = params.language || getCurrentLanguage();
   const requestedOrganization = params.organization || getCurrentOrganization();
   const paramsWithDefaults = { ...params, language: requestedLanguage, organization: requestedOrganization };
@@ -113,17 +113,42 @@ async function callProxyWithFallback(endpoint: string, params: Record<string, an
       actualLanguage = 'en';
       actualOrganization = 'unfoldingWord';
       console.log(`[translationHelpsApi] Fallback successful for ${endpoint}`);
+    } else {
+      // Both primary and fallback failed - return empty data gracefully
+      console.log(`[translationHelpsApi] Both primary and fallback failed for ${endpoint}, returning empty`);
+      return {
+        data: { content: '', hits: [] },
+        fallbackInfo: {
+          usedFallback: true,
+          requestedLanguage,
+          requestedOrganization,
+          actualLanguage: 'en',
+          actualOrganization: 'unfoldingWord',
+        }
+      };
     }
   }
 
-  if (error) {
-    console.error(`[translationHelpsApi] Proxy error for ${endpoint}:`, error);
-    throw new Error(error.message);
-  }
-
-  if (data?.error) {
-    console.error(`[translationHelpsApi] API error for ${endpoint}:`, data.error, data.details);
-    throw new Error(data.error);
+  // Handle errors gracefully - don't throw for missing resources
+  if (error || data?.error) {
+    const errorMsg = error?.message || data?.error || 'Unknown error';
+    console.warn(`[translationHelpsApi] Error for ${endpoint}: ${errorMsg}`);
+    
+    if (throwOnError) {
+      throw new Error(errorMsg);
+    }
+    
+    // Return empty data for graceful degradation
+    return {
+      data: { content: '', hits: [] },
+      fallbackInfo: {
+        usedFallback,
+        requestedLanguage,
+        requestedOrganization,
+        actualLanguage,
+        actualOrganization,
+      }
+    };
   }
 
   console.log(`[translationHelpsApi] Response for ${endpoint}:`, data);
@@ -140,9 +165,9 @@ async function callProxyWithFallback(endpoint: string, params: Record<string, an
   };
 }
 
-// Legacy function for backwards compatibility
+// Legacy function for backwards compatibility - graceful fallback, no throws
 async function callProxy(endpoint: string, params: Record<string, any>) {
-  const result = await callProxyWithFallback(endpoint, params);
+  const result = await callProxyWithFallback(endpoint, params, false);
   return result.data;
 }
 
