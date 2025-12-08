@@ -43,7 +43,7 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, verseFilter, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
   const { 
@@ -189,6 +189,7 @@ const Index = () => {
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
+            fallbackState={fallbackState}
           />
         );
       case 'resources':

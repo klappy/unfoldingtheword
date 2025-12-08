@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.translation-helps-proxy]
 verify_jwt = false
+
+[functions.translate-content]
+verify_jwt = false
