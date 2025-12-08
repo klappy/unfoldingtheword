@@ -78,28 +78,33 @@ export function useScriptureData() {
 
   const loadScriptureData = useCallback(async (reference: string, retryCount = 0) => {
     const maxRetries = 3;
-    setIsLoading(true);
-    setError(null);
-
-    console.log('[useScriptureData] Loading data for:', reference, retryCount > 0 ? `(retry ${retryCount})` : '');
-
+    
+    // Parse reference FIRST, before any state changes
     const parsed = parseReference(reference);
     if (!parsed) {
       console.error('[useScriptureData] Could not parse reference:', reference);
       setError('Invalid scripture reference');
-      setIsLoading(false);
       return;
     }
 
     const { book, chapter, verse } = parsed;
     
-    // Clear scripture if loading a different book (show skeleton for new book)
-    // Keep existing scripture if same book (just scrolling to new chapter)
+    // Check if loading a different book - need skeleton
     const currentBook = scripture?.book?.book;
-    if (currentBook && currentBook.toLowerCase() !== book.toLowerCase()) {
-      console.log('[useScriptureData] Different book, clearing for skeleton');
+    const isDifferentBook = !currentBook || currentBook.toLowerCase() !== book.toLowerCase();
+    
+    // Clear scripture BEFORE setting loading to ensure skeleton shows
+    // Always clear on first load or different book
+    if (isDifferentBook || !scripture) {
+      console.log('[useScriptureData] Clearing scripture for skeleton (first load or different book)');
       setScripture(null);
     }
+    
+    // NOW set loading state - this will trigger skeleton since passage is null
+    setIsLoading(true);
+    setError(null);
+
+    console.log('[useScriptureData] Loading data for:', reference, retryCount > 0 ? `(retry ${retryCount})` : '');
 
     try {
       // Start ALL fetches in parallel - book AND resources
