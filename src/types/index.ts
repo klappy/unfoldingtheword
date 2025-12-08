@@ -45,6 +45,7 @@ export interface HistoryItem {
   preview: string;
   timestamp: Date;
   scripture?: string;
+  scriptureReference?: string;
 }
 
 export type CardType = 'chat' | 'scripture' | 'resources' | 'notes';

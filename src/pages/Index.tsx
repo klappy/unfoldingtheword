@@ -6,11 +6,12 @@ import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryPanel } from '@/components/HistoryPanel';
-import { Note, ResourceLink, HistoryItem } from '@/types';
-import { mockHistory, mockNotes } from '@/data/mockData';
+import { ResourceLink, HistoryItem, Message } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
+import { useNotes } from '@/hooks/useNotes';
+import { useConversations } from '@/hooks/useConversations';
 
 const Index = () => {
   const { toast } = useToast();
@@ -25,13 +26,31 @@ const Index = () => {
   } = useSwipeNavigation();
 
   const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData } = useScriptureData();
-  const { messages, isLoading: chatLoading, error: chatError, sendMessage } = useMultiAgentChat();
-  const [notes, setNotes] = useState<Note[]>(mockNotes);
-  const [history] = useState<HistoryItem[]>(mockHistory);
-
-  // Scripture is loaded when AI identifies a reference in chat
+  const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
+  const { notes, addNote, deleteNote } = useNotes();
+  const { 
+    conversations, 
+    currentConversationId, 
+    setCurrentConversationId,
+    createConversation, 
+    updateConversation,
+    saveMessage,
+    loadConversationMessages,
+  } = useConversations();
 
   const handleSendMessage = useCallback(async (content: string) => {
+    // Create conversation on first message if needed
+    let convId = currentConversationId;
+    if (!convId) {
+      const title = content.length > 40 ? content.substring(0, 40) + '...' : content;
+      convId = await createConversation(title, content);
+    }
+
+    // Save user message
+    if (convId) {
+      await saveMessage(convId, { role: 'user', content });
+    }
+
     // Send to multi-agent chat
     const result = await sendMessage(
       content,
@@ -40,6 +59,10 @@ const Index = () => {
         // Load scripture when AI identifies a reference
         try {
           await loadScriptureData(scriptureRef);
+          // Update conversation with scripture reference
+          if (convId) {
+            await updateConversation(convId, { scriptureReference: scriptureRef });
+          }
           toast({
             title: 'Scripture loaded',
             description: `Loaded ${scriptureRef} and related resources`,
@@ -50,6 +73,21 @@ const Index = () => {
       }
     );
 
+    // Save assistant messages
+    if (convId && result) {
+      // Get the last few messages that are assistant messages
+      const recentMessages = messages.slice(-10);
+      for (const msg of recentMessages) {
+        if (msg.role === 'assistant') {
+          await saveMessage(convId, { 
+            role: 'assistant', 
+            content: msg.content,
+            agent: msg.agent 
+          });
+        }
+      }
+    }
+
     // If AI found a scripture reference, notify user
     if (result?.scriptureReference) {
       toast({
@@ -57,7 +95,7 @@ const Index = () => {
         description: 'Swipe right to view scripture and resources',
       });
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, toast]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, toast, currentConversationId, createConversation, saveMessage, updateConversation, messages]);
 
   const handleResourceClick = useCallback((resource: ResourceLink) => {
     if (resource.type === 'scripture') {
@@ -71,33 +109,47 @@ const Index = () => {
     });
   }, [navigateToCard, toast]);
 
-  const handleAddToNotes = useCallback((content: string, sourceReference?: string) => {
-    const newNote: Note = {
-      id: Date.now().toString(),
-      content,
-      sourceReference,
-      createdAt: new Date(),
-      highlighted: true,
-    };
-    setNotes((prev) => [newNote, ...prev]);
-    toast({
-      title: 'Added to notes',
-      description: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-    });
-  }, [toast]);
+  const handleAddToNotes = useCallback(async (content: string, sourceReference?: string) => {
+    const note = await addNote(content, sourceReference);
+    if (note) {
+      toast({
+        title: 'Added to notes',
+        description: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+      });
+    }
+  }, [addNote, toast]);
 
-  const handleDeleteNote = useCallback((id: string) => {
-    setNotes((prev) => prev.filter((note) => note.id !== id));
-  }, []);
+  const handleDeleteNote = useCallback(async (id: string) => {
+    await deleteNote(id);
+  }, [deleteNote]);
 
-  const handleHistorySelect = useCallback((item: HistoryItem) => {
+  const handleHistorySelect = useCallback(async (item: HistoryItem) => {
     closeHistory();
     toast({
       title: 'Loading conversation',
       description: item.title,
     });
-    // In a real app, this would load the conversation
-  }, [closeHistory, toast]);
+    
+    // Load conversation messages
+    const loadedMessages = await loadConversationMessages(item.id);
+    setMessages(loadedMessages);
+    setCurrentConversationId(item.id);
+    
+    // Load scripture if available
+    if (item.scriptureReference) {
+      await loadScriptureData(item.scriptureReference);
+    }
+  }, [closeHistory, toast, loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData]);
+
+  const handleNewConversation = useCallback(() => {
+    clearMessages();
+    setCurrentConversationId(null);
+    closeHistory();
+    toast({
+      title: 'New conversation',
+      description: 'Starting fresh',
+    });
+  }, [clearMessages, setCurrentConversationId, closeHistory, toast]);
 
   const handleLoadFullChapter = useCallback(async (chapterRef: string) => {
     try {
@@ -171,9 +223,10 @@ const Index = () => {
       {/* History panel (swipe down) */}
       <HistoryPanel
         isOpen={showHistory}
-        items={history}
+        items={conversations}
         onClose={closeHistory}
         onSelectItem={handleHistorySelect}
+        onNewConversation={handleNewConversation}
       />
     </div>
   );

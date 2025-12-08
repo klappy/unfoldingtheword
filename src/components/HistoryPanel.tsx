@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { History, X, MessageSquare, Book } from 'lucide-react';
+import { History, X, MessageSquare, Book, Plus } from 'lucide-react';
 import { HistoryItem } from '@/types';
 
 interface HistoryPanelProps {
@@ -7,9 +7,10 @@ interface HistoryPanelProps {
   items: HistoryItem[];
   onClose: () => void;
   onSelectItem: (item: HistoryItem) => void;
+  onNewConversation?: () => void;
 }
 
-export function HistoryPanel({ isOpen, items, onClose, onSelectItem }: HistoryPanelProps) {
+export function HistoryPanel({ isOpen, items, onClose, onSelectItem, onNewConversation }: HistoryPanelProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -38,12 +39,23 @@ export function HistoryPanel({ isOpen, items, onClose, onSelectItem }: HistoryPa
                 <History className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium">History</span>
               </div>
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-              >
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-2">
+                {onNewConversation && (
+                  <button
+                    onClick={onNewConversation}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                    New
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             {/* History items */}
@@ -77,10 +89,10 @@ export function HistoryPanel({ isOpen, items, onClose, onSelectItem }: HistoryPa
                           <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                             {item.preview}
                           </p>
-                          {item.scripture && (
+                          {(item.scripture || item.scriptureReference) && (
                             <div className="flex items-center gap-1 mt-2 text-xs text-primary">
                               <Book className="w-3 h-3" />
-                              <span>{item.scripture}</span>
+                              <span>{item.scripture || item.scriptureReference}</span>
                             </div>
                           )}
                         </div>
