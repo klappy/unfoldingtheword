@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Globe, Search, Check, Building2, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 interface LanguageSelectorProps {
   languages: LanguageOption[];
   organizations: OrganizationOption[];
+  getOrganizationsForLanguage: (langId: string) => OrganizationOption[];
   isLoading: boolean;
   onSelect: (languageId: string, organizationId: string) => void;
   selectedLanguage?: string | null;
@@ -22,6 +23,7 @@ type Step = 'language' | 'organization';
 export function LanguageSelector({ 
   languages, 
   organizations,
+  getOrganizationsForLanguage,
   isLoading, 
   onSelect, 
   selectedLanguage,
@@ -31,7 +33,23 @@ export function LanguageSelector({
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [tempLanguage, setTempLanguage] = useState<string | null>(selectedLanguage || null);
-  const [tempOrganization, setTempOrganization] = useState<string | null>(selectedOrganization || 'unfoldingWord');
+  const [tempOrganization, setTempOrganization] = useState<string | null>(selectedOrganization || null);
+
+  // Get organizations available for the selected language
+  const availableOrgsForLanguage = useMemo(() => {
+    if (!tempLanguage) return organizations;
+    return getOrganizationsForLanguage(tempLanguage);
+  }, [tempLanguage, getOrganizationsForLanguage, organizations]);
+
+  // Auto-select organization if only one is available
+  useEffect(() => {
+    if (step === 'organization' && availableOrgsForLanguage.length === 1) {
+      setTempOrganization(availableOrgsForLanguage[0].id);
+    } else if (step === 'organization' && !tempOrganization && availableOrgsForLanguage.length > 0) {
+      // Default to first available
+      setTempOrganization(availableOrgsForLanguage[0].id);
+    }
+  }, [step, availableOrgsForLanguage, tempOrganization]);
 
   const filteredLanguages = useMemo(() => {
     if (!searchQuery.trim()) return languages;
@@ -241,7 +259,7 @@ export function LanguageSelector({
                 transition={{ delay: 0.2 }}
               >
                 <div className="space-y-3">
-                  {organizations.map((org, index) => (
+                  {availableOrgsForLanguage.map((org, index) => (
                     <motion.button
                       key={org.id}
                       initial={{ opacity: 0, y: 10 }}
