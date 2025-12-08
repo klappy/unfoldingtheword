@@ -93,13 +93,17 @@ async function callProxyWithFallback(endpoint: string, params: Record<string, an
   let actualOrganization = requestedOrganization;
 
   // Check if we got empty/error response and need to fallback to English
-  const isEmpty = !data || data?.error || 
+  // Also check for invoke-level errors (e.g., 404/500 from proxy)
+  const hasError = error || data?.error;
+  const isEmpty = !data || 
     (data?.content === '' && !data?.hits?.length) ||
     (Array.isArray(data) && data.length === 0) ||
     (data?.total_hits === 0);
+  
+  const needsFallback = (hasError || isEmpty) && requestedLanguage !== 'en';
 
-  if (isEmpty && requestedLanguage !== 'en') {
-    console.log(`[translationHelpsApi] No content for ${requestedLanguage}, falling back to English/unfoldingWord`);
+  if (needsFallback) {
+    console.log(`[translationHelpsApi] No content or error for ${requestedLanguage}, falling back to English/unfoldingWord`);
     
     const fallbackParams = { ...params, language: 'en', organization: 'unfoldingWord' };
     const fallbackResult = await supabase.functions.invoke('translation-helps-proxy', {
