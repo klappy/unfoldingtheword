@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 const LANGUAGE_KEY = 'bible-study-language';
 const ORGANIZATION_KEY = 'bible-study-organization';
@@ -40,59 +39,11 @@ export function useLanguage() {
   const [isLoading, setIsLoading] = useState(true);
   const [needsSelection, setNeedsSelection] = useState(false);
 
-  // Fetch available languages from API
+  // Use the built-in language list (the API doesn't have a languages endpoint)
   const fetchLanguages = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
-        body: { endpoint: 'catalog-languages', params: {} },
-      });
-
-      if (error) {
-        console.error('[useLanguage] Error fetching languages:', error);
-        setAvailableLanguages(FALLBACK_LANGUAGES);
-        return;
-      }
-
-      // Parse the response - it may be an array or have a content property
-      let languages: LanguageOption[] = [];
-      
-      if (Array.isArray(data)) {
-        languages = data.map((lang: any) => ({
-          id: lang.id || lang.code || lang.languageId || lang.lc,
-          name: lang.name || lang.englishName || lang.ln || lang.id,
-          nativeName: lang.nativeName || lang.localName || lang.ln || lang.name,
-          direction: lang.direction || lang.ld || 'ltr',
-        }));
-      } else if (data?.languages) {
-        languages = data.languages.map((lang: any) => ({
-          id: lang.id || lang.code || lang.languageId || lang.lc,
-          name: lang.name || lang.englishName || lang.ln || lang.id,
-          nativeName: lang.nativeName || lang.localName || lang.ln || lang.name,
-          direction: lang.direction || lang.ld || 'ltr',
-        }));
-      } else if (data?.content) {
-        // Might be markdown/text - use fallback
-        console.warn('[useLanguage] Got text response instead of JSON, using fallback');
-        setAvailableLanguages(FALLBACK_LANGUAGES);
-        return;
-      }
-
-      if (languages.length > 0) {
-        // Sort by name, but put English first
-        languages.sort((a, b) => {
-          if (a.id === 'en') return -1;
-          if (b.id === 'en') return 1;
-          return a.name.localeCompare(b.name);
-        });
-        setAvailableLanguages(languages);
-      } else {
-        console.warn('[useLanguage] No languages in response, using fallback');
-        setAvailableLanguages(FALLBACK_LANGUAGES);
-      }
-    } catch (error) {
-      console.error('[useLanguage] Failed to fetch languages:', error);
-      setAvailableLanguages(FALLBACK_LANGUAGES);
-    }
+    // The Translation Helps MCP API doesn't have a language list endpoint
+    // Use the curated fallback list which covers major Bible translation languages
+    setAvailableLanguages(FALLBACK_LANGUAGES);
   }, []);
 
   // Initialize language and organization from localStorage
