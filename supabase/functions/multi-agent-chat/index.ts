@@ -546,8 +546,13 @@ async function* generateStreamingResponse(
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  const languageInstruction = responseLanguage && responseLanguage !== 'en' 
-    ? `\n\nIMPORTANT: You MUST respond in ${responseLanguage}. All your responses should be in ${responseLanguage}, not English.`
+  // Always add language instruction if responseLanguage is specified and not English
+  const isEnglish = !responseLanguage || 
+    responseLanguage.toLowerCase() === 'en' || 
+    responseLanguage.toLowerCase() === 'english';
+  
+  const languageInstruction = !isEnglish
+    ? `\n\n**CRITICAL LANGUAGE REQUIREMENT**: You MUST respond ENTIRELY in ${responseLanguage}. Every single word of your response must be in ${responseLanguage}. Do NOT respond in English under any circumstances.`
     : '';
 
   // Group resources by type
