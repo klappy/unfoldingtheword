@@ -556,18 +556,32 @@ async function* generateStreamingResponse(
   const wordResources = resources.filter(r => r.resourceType === 'tw');
   const academyResources = resources.filter(r => r.resourceType === 'ta');
 
+  console.log(`Resource breakdown: notes=${noteResources.length}, questions=${questionResources.length}, words=${wordResources.length}, academy=${academyResources.length}`);
+  
+  // Log sample resource to understand structure
+  if (resources.length > 0) {
+    console.log("Sample resource structure:", JSON.stringify(resources[0], null, 2));
+  }
+
+  // Build resource context - handle different property names from MCP API
+  const formatResource = (r: any): string => {
+    const title = r.title || r.reference || r.term || r.word || 'Resource';
+    const content = r.content || r.snippet || r.text || r.note || r.response || r.definition || r.question || '';
+    return `- ${title}: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}`;
+  };
+
   const resourceContext = `
 AVAILABLE RESOURCES FROM MCP SERVER (use ONLY these to answer):
 
 ${scriptureText ? `SCRIPTURE TEXT:\n${scriptureText}\n` : ''}
 
-${noteResources.length > 0 ? `TRANSLATION NOTES:\n${noteResources.slice(0, 5).map(r => `- ${r.title || r.reference}: ${r.content || r.snippet || r.text}`).join('\n')}\n` : ''}
+${noteResources.length > 0 ? `TRANSLATION NOTES (${noteResources.length} total):\n${noteResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 
-${questionResources.length > 0 ? `TRANSLATION QUESTIONS:\n${questionResources.slice(0, 5).map(r => `- ${r.title || r.reference}: ${r.content || r.snippet || r.text}`).join('\n')}\n` : ''}
+${questionResources.length > 0 ? `TRANSLATION QUESTIONS (${questionResources.length} total):\n${questionResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 
-${wordResources.length > 0 ? `WORD STUDIES:\n${wordResources.slice(0, 5).map(r => `- ${r.title || r.term}: ${r.content || r.snippet || r.definition}`).join('\n')}\n` : ''}
+${wordResources.length > 0 ? `WORD STUDIES (${wordResources.length} total):\n${wordResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 
-${academyResources.length > 0 ? `ACADEMY ARTICLES:\n${academyResources.slice(0, 5).map(r => `- ${r.title}: ${r.content || r.snippet}`).join('\n')}\n` : ''}
+${academyResources.length > 0 ? `ACADEMY ARTICLES (${academyResources.length} total):\n${academyResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 `;
 
   // Detect user intent - pastoral/support needs vs research/study
