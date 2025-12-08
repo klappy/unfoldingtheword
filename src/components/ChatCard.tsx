@@ -41,12 +41,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading }
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Swipe indicator */}
-      <div className="pt-4 pb-2">
-        <div className="swipe-indicator" />
-      </div>
-
+    <div className="flex flex-col h-full pt-4">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 fade-edges">
         <div className="max-w-2xl mx-auto space-y-6 pt-4">
