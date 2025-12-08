@@ -1,4 +1,4 @@
-import { ReactNode, useRef, useEffect } from 'react';
+import { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CardType } from '@/types';
 
@@ -6,6 +6,7 @@ interface SwipeContainerProps {
   children: ReactNode;
   currentCard: CardType;
   cardOrder: CardType[];
+  swipeDirection: 1 | -1;
   onTouchStart: (e: React.TouchEvent | React.MouseEvent) => void;
   onTouchEnd: (e: React.TouchEvent | React.MouseEvent) => void;
 }
@@ -14,20 +15,11 @@ export function SwipeContainer({
   children,
   currentCard,
   cardOrder,
+  swipeDirection,
   onTouchStart,
   onTouchEnd,
 }: SwipeContainerProps) {
   const currentIndex = cardOrder.indexOf(currentCard);
-  const prevIndexRef = useRef(currentIndex);
-  const direction = useRef(1); // 1 = going right (next), -1 = going left (prev)
-
-  useEffect(() => {
-    // Determine direction based on index change
-    if (currentIndex !== prevIndexRef.current) {
-      direction.current = currentIndex > prevIndexRef.current ? 1 : -1;
-      prevIndexRef.current = currentIndex;
-    }
-  }, [currentIndex]);
 
   return (
     <div
@@ -37,15 +29,16 @@ export function SwipeContainer({
       onMouseDown={onTouchStart}
       onMouseUp={onTouchEnd}
     >
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence mode="wait" initial={false} custom={swipeDirection}>
         <motion.div
           key={currentCard}
-          initial={{ opacity: 0, x: direction.current * 50 }}
+          custom={swipeDirection}
+          initial={{ opacity: 0, x: swipeDirection * 100 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: direction.current * -50 }}
+          exit={{ opacity: 0, x: swipeDirection * -100 }}
           transition={{ 
-            duration: 0.25, 
-            ease: [0.32, 0.72, 0, 1] 
+            duration: 0.2, 
+            ease: [0.25, 0.1, 0.25, 1] 
           }}
           className="absolute inset-0"
         >

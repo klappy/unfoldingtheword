@@ -17,6 +17,7 @@ const Index = () => {
   const { toast } = useToast();
   const {
     currentCard,
+    swipeDirection,
     handleTouchStart,
     handleTouchEnd,
     navigateToCard,
@@ -222,6 +223,7 @@ const Index = () => {
       <SwipeContainer
         currentCard={currentCard}
         cardOrder={cardOrder}
+        swipeDirection={swipeDirection}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
