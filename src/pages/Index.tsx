@@ -7,14 +7,12 @@ import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
-import { useToast } from '@/hooks/use-toast';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
 import { useNotes } from '@/hooks/useNotes';
 import { useConversations } from '@/hooks/useConversations';
 
 const Index = () => {
-  const { toast } = useToast();
   const {
     currentCard,
     swipeDirection,
@@ -67,10 +65,6 @@ const Index = () => {
           if (convId) {
             await updateConversation(convId, { scriptureReference: scriptureRef });
           }
-          toast({
-            title: 'Scripture loaded',
-            description: `Loaded ${scriptureRef} and related resources`,
-          });
         } catch (error) {
           console.error('Failed to load scripture:', error);
         }
@@ -83,19 +77,10 @@ const Index = () => {
       }
     }
 
-    if (result?.scriptureReference) {
-      toast({
-        title: 'Resources updated',
-        description: 'Swipe right to view scripture and resources',
-      });
-    } else if (result?.searchQuery) {
+    if (result?.searchQuery) {
       await loadKeywordResources(result.searchQuery);
-      toast({
-        title: 'Resources found',
-        description: `Found resources for "${result.searchQuery}"`,
-      });
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, toast, currentConversationId, createConversation, saveMessage, updateConversation]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, currentConversationId, createConversation, saveMessage, updateConversation]);
 
   const handleResourceClick = useCallback((resource: ResourceLink) => {
     if (resource.type === 'scripture') {
@@ -103,32 +88,17 @@ const Index = () => {
     } else {
       navigateToCard('resources');
     }
-    toast({
-      title: `Opening ${resource.title}`,
-      description: resource.reference,
-    });
-  }, [navigateToCard, toast]);
+  }, [navigateToCard]);
 
   const handleAddToNotes = useCallback(async (content: string, sourceReference?: string) => {
-    const note = await addNote(content, sourceReference);
-    if (note) {
-      toast({
-        title: 'Added to notes',
-        description: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-      });
-    }
-  }, [addNote, toast]);
+    await addNote(content, sourceReference);
+  }, [addNote]);
 
   const handleDeleteNote = useCallback(async (id: string) => {
     await deleteNote(id);
   }, [deleteNote]);
 
   const handleHistorySelect = useCallback(async (item: HistoryItem) => {
-    toast({
-      title: 'Loading conversation',
-      description: item.title,
-    });
-    
     const loadedMessages = await loadConversationMessages(item.id);
     setMessages(loadedMessages);
     setCurrentConversationId(item.id);
@@ -137,32 +107,23 @@ const Index = () => {
       await loadScriptureData(item.scriptureReference);
     }
     
-    // Navigate to chat after selecting
     navigateToCard('chat');
-  }, [toast, loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard]);
+  }, [loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard]);
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
     clearScriptureData();
     setCurrentConversationId(null);
     navigateToCard('chat');
-    toast({
-      title: 'New conversation',
-      description: 'Starting fresh',
-    });
-  }, [clearMessages, clearScriptureData, setCurrentConversationId, navigateToCard, toast]);
+  }, [clearMessages, clearScriptureData, setCurrentConversationId, navigateToCard]);
 
   const handleLoadFullChapter = useCallback(async (chapterRef: string) => {
     try {
       await loadScriptureData(chapterRef);
-      toast({
-        title: 'Loading full chapter',
-        description: chapterRef,
-      });
     } catch (error) {
       console.error('Failed to load full chapter:', error);
     }
-  }, [loadScriptureData, toast]);
+  }, [loadScriptureData]);
 
   const renderCard = useCallback((card: CardType) => {
     switch (card) {
