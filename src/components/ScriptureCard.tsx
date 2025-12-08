@@ -18,9 +18,10 @@ interface ScriptureCardProps {
   onRetry?: () => void;
   fallbackState?: FallbackState;
   onTranslateRequest?: () => void;
+  isTranslating?: boolean;
 }
 
-export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilter, isLoading, error, onRetry, fallbackState, onTranslateRequest }: ScriptureCardProps) {
+export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilter, isLoading, error, onRetry, fallbackState, onTranslateRequest, isTranslating }: ScriptureCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   
@@ -266,6 +267,7 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilte
               <FallbackBadge 
                 onTranslateClick={onTranslateRequest}
                 showTranslateButton={!!onTranslateRequest}
+                isTranslating={isTranslating}
               />
             )}
           </div>
