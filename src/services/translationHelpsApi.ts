@@ -393,6 +393,103 @@ export async function fetchScripture(reference: string): Promise<ScriptureRespon
   }
 }
 
+// Bible book chapter counts
+const BOOK_CHAPTERS: Record<string, number> = {
+  'Genesis': 50, 'Exodus': 40, 'Leviticus': 27, 'Numbers': 36, 'Deuteronomy': 34,
+  'Joshua': 24, 'Judges': 21, 'Ruth': 4, '1 Samuel': 31, '2 Samuel': 24,
+  '1 Kings': 22, '2 Kings': 25, '1 Chronicles': 29, '2 Chronicles': 36,
+  'Ezra': 10, 'Nehemiah': 13, 'Esther': 10, 'Job': 42, 'Psalms': 150,
+  'Proverbs': 31, 'Ecclesiastes': 12, 'Song of Solomon': 8, 'Isaiah': 66,
+  'Jeremiah': 52, 'Lamentations': 5, 'Ezekiel': 48, 'Daniel': 12, 'Hosea': 14,
+  'Joel': 3, 'Amos': 9, 'Obadiah': 1, 'Jonah': 4, 'Micah': 7, 'Nahum': 3,
+  'Habakkuk': 3, 'Zephaniah': 3, 'Haggai': 2, 'Zechariah': 14, 'Malachi': 4,
+  'Matthew': 28, 'Mark': 16, 'Luke': 24, 'John': 21, 'Acts': 28,
+  'Romans': 16, '1 Corinthians': 16, '2 Corinthians': 13, 'Galatians': 6,
+  'Ephesians': 6, 'Philippians': 4, 'Colossians': 4, '1 Thessalonians': 5,
+  '2 Thessalonians': 3, '1 Timothy': 6, '2 Timothy': 4, 'Titus': 3, 'Philemon': 1,
+  'Hebrews': 13, 'James': 5, '1 Peter': 5, '2 Peter': 3, '1 John': 5,
+  '2 John': 1, '3 John': 1, 'Jude': 1, 'Revelation': 22,
+};
+
+export interface BookChapter {
+  chapter: number;
+  verses: ScriptureVerse[];
+}
+
+export interface BookData {
+  book: string;
+  chapters: BookChapter[];
+  translation: string;
+  metadata?: ScriptureResponse['metadata'];
+}
+
+// Fetch entire book - all chapters
+export async function fetchBook(bookName: string): Promise<BookData> {
+  const totalChapters = BOOK_CHAPTERS[bookName];
+  if (!totalChapters) {
+    throw new Error(`Unknown book: ${bookName}`);
+  }
+
+  console.log(`[translationHelpsApi] Fetching full book: ${bookName} (${totalChapters} chapters)`);
+
+  // Fetch all chapters in parallel (batch to avoid overwhelming the API)
+  const chapters: BookChapter[] = [];
+  const batchSize = 5;
+  
+  for (let i = 1; i <= totalChapters; i += batchSize) {
+    const batch = [];
+    for (let j = i; j < Math.min(i + batchSize, totalChapters + 1); j++) {
+      batch.push(j);
+    }
+    
+    const batchResults = await Promise.all(
+      batch.map(async (chapterNum) => {
+        try {
+          const reference = `${bookName} ${chapterNum}`;
+          const data = await callProxy('fetch-scripture', { reference });
+          const content = data.content || data.text || '';
+          const { verses } = parseScriptureMarkdown(content, reference);
+          return { chapter: chapterNum, verses };
+        } catch (err) {
+          console.error(`[fetchBook] Failed to fetch ${bookName} ${chapterNum}:`, err);
+          return { chapter: chapterNum, verses: [] };
+        }
+      })
+    );
+    
+    chapters.push(...batchResults);
+  }
+
+  // Sort by chapter number
+  chapters.sort((a, b) => a.chapter - b.chapter);
+
+  // Get metadata from first chapter
+  let translation = 'unfoldingWord Literal Text';
+  let metadata: ScriptureResponse['metadata'] | undefined;
+
+  if (chapters.length > 0 && chapters[0].verses.length > 0) {
+    try {
+      const firstChapterRef = `${bookName} 1`;
+      const firstData = await callProxy('fetch-scripture', { reference: firstChapterRef });
+      const content = firstData.content || '';
+      const parsed = parseScriptureMarkdown(content, firstChapterRef);
+      translation = parsed.translation;
+      metadata = parsed.metadata;
+    } catch {
+      // Use defaults
+    }
+  }
+
+  console.log(`[translationHelpsApi] Fetched ${bookName}: ${chapters.length} chapters, ${chapters.reduce((sum, c) => sum + c.verses.length, 0)} total verses`);
+
+  return {
+    book: bookName,
+    chapters,
+    translation,
+    metadata,
+  };
+}
+
 export async function fetchTranslationNotes(reference: string): Promise<TranslationNote[]> {
   try {
     const data = await callProxy('fetch-translation-notes', { reference });
