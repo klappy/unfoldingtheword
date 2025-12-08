@@ -150,6 +150,7 @@ const Index = () => {
             passage={scripture}
             onAddToNotes={(text) => handleAddToNotes(text, scripture?.reference)}
             onVerseSelect={handleVerseSelect}
+            verseFilter={verseFilter}
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
