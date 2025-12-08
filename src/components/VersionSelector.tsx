@@ -120,22 +120,23 @@ export function VersionSelector({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-2xl shadow-2xl max-h-[80vh] flex flex-col"
+            className="fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-2xl shadow-2xl max-h-[70vh] overflow-hidden flex flex-col"
           >
             {/* Handle */}
-            <div className="flex justify-center pt-3 pb-2">
+            <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/20" />
             </div>
 
             {/* Header */}
-            <div className="px-6 pb-4">
+            <div className="px-6 pb-4 flex-shrink-0">
               <h2 className="text-lg font-semibold text-foreground">Scripture Version</h2>
               <p className="text-sm text-muted-foreground">
                 Select your preferred translation
               </p>
             </div>
 
-              <ScrollArea className="flex-1 min-h-0 max-h-[calc(80vh-180px)] px-6 pb-6">
+            {/* Scrollable content */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-4">
               {isLoading ? (
                 <div className="py-8 text-center text-muted-foreground">
                   Loading scripture resources...
@@ -149,6 +150,9 @@ export function VersionSelector({
                         <BookOpen className="w-4 h-4 text-primary" />
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           {currentLanguage.toUpperCase()} Resources
+                        </span>
+                        <span className="text-xs text-primary ml-auto">
+                          ({primaryResources.length} available)
                         </span>
                       </div>
                       <div className="space-y-2">
@@ -189,6 +193,9 @@ export function VersionSelector({
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           English Fallback
                         </span>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          ({fallbackResources.length} available)
+                        </span>
                       </div>
                       <div className="space-y-2">
                         {fallbackResources.map((version) => (
@@ -221,10 +228,10 @@ export function VersionSelector({
                   )}
                 </div>
               )}
-            </ScrollArea>
+            </div>
 
             {/* Close button */}
-            <div className="px-6 pb-6 pt-2">
+            <div className="px-6 pb-6 pt-2 flex-shrink-0 border-t border-border/50">
               <Button
                 variant="outline"
                 className="w-full"
