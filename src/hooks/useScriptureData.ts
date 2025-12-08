@@ -6,6 +6,7 @@ import {
   fetchTranslationQuestions,
   fetchTranslationWordLinks,
   fetchTranslationWord,
+  searchResources,
 } from '@/services/translationHelpsApi';
 
 export function useScriptureData() {
@@ -129,6 +130,159 @@ export function useScriptureData() {
     }
   }, []);
 
+  // New function: Search for resources by keyword (for non-scripture queries)
+  const loadKeywordResources = useCallback(async (keyword: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    console.log('[useScriptureData] Searching for keyword:', keyword);
+
+    try {
+      // Search across all resource types
+      const [twResults, tnResults, tqResults, taResults] = await Promise.all([
+        searchResources(keyword, 'tw').catch(err => {
+          console.error('[useScriptureData] TW search failed:', err);
+          return [];
+        }),
+        searchResources(keyword, 'tn').catch(err => {
+          console.error('[useScriptureData] TN search failed:', err);
+          return [];
+        }),
+        searchResources(keyword, 'tq').catch(err => {
+          console.error('[useScriptureData] TQ search failed:', err);
+          return [];
+        }),
+        searchResources(keyword, 'ta').catch(err => {
+          console.error('[useScriptureData] TA search failed:', err);
+          return [];
+        }),
+      ]);
+
+      console.log('[useScriptureData] Search results:', {
+        tw: twResults.length,
+        tn: tnResults.length,
+        tq: tqResults.length,
+        ta: taResults.length,
+      });
+
+      const newResources: Resource[] = [];
+
+      // Parse Translation Words results
+      twResults.slice(0, 10).forEach((hit: any, index: number) => {
+        let content = '';
+        try {
+          const blocks = JSON.parse(hit.content || '[]');
+          if (Array.isArray(blocks)) {
+            content = blocks.map((b: any) => b.text || '').join('\n').trim();
+          }
+        } catch {
+          content = hit.content || '';
+        }
+
+        const titleMatch = content.match(/^#\s+([^\n]+)/m);
+        const title = titleMatch ? titleMatch[1].trim() : (hit.path?.split('/').pop()?.replace('.md', '') || keyword);
+
+        if (content) {
+          newResources.push({
+            id: `tw-${index}`,
+            type: 'translation-word',
+            title,
+            content,
+            reference: keyword,
+          });
+        }
+      });
+
+      // Parse Translation Notes results
+      tnResults.slice(0, 10).forEach((hit: any, index: number) => {
+        let content = '';
+        try {
+          const blocks = JSON.parse(hit.content || '[]');
+          if (Array.isArray(blocks)) {
+            content = blocks.map((b: any) => b.text || '').join('\n').trim();
+          }
+        } catch {
+          content = hit.content || '';
+        }
+
+        const ref = hit.path?.match(/(\w+)\/(\d+)\/(\d+)/);
+        const reference = ref ? `${ref[1]} ${ref[2]}:${ref[3]}` : keyword;
+
+        if (content) {
+          newResources.push({
+            id: `tn-${index}`,
+            type: 'translation-note',
+            title: `Note on "${keyword}"`,
+            content,
+            reference,
+          });
+        }
+      });
+
+      // Parse Translation Questions results
+      tqResults.slice(0, 10).forEach((hit: any, index: number) => {
+        let content = '';
+        try {
+          const blocks = JSON.parse(hit.content || '[]');
+          if (Array.isArray(blocks)) {
+            content = blocks.map((b: any) => b.text || '').join('\n').trim();
+          }
+        } catch {
+          content = hit.content || '';
+        }
+
+        const ref = hit.path?.match(/(\w+)\/(\d+)\/(\d+)/);
+        const reference = ref ? `${ref[1]} ${ref[2]}:${ref[3]}` : keyword;
+
+        if (content) {
+          newResources.push({
+            id: `tq-${index}`,
+            type: 'translation-question',
+            title: `Question about "${keyword}"`,
+            content,
+            reference,
+          });
+        }
+      });
+
+      // Parse Translation Academy results
+      taResults.slice(0, 5).forEach((hit: any, index: number) => {
+        let content = '';
+        try {
+          const blocks = JSON.parse(hit.content || '[]');
+          if (Array.isArray(blocks)) {
+            content = blocks.map((b: any) => b.text || '').join('\n').trim();
+          }
+        } catch {
+          content = hit.content || '';
+        }
+
+        const titleMatch = content.match(/^#\s+([^\n]+)/m);
+        const title = titleMatch ? titleMatch[1].trim() : (hit.path?.split('/').pop()?.replace('.md', '') || keyword);
+
+        if (content) {
+          newResources.push({
+            id: `ta-${index}`,
+            type: 'academy-article',
+            title,
+            content,
+            reference: keyword,
+          });
+        }
+      });
+
+      console.log('[useScriptureData] Built keyword resources:', newResources.length);
+      setResources(newResources);
+      // Clear scripture for keyword searches
+      setScripture(null);
+    } catch (err) {
+      console.error('[useScriptureData] Error searching keyword:', err);
+      setError(err instanceof Error ? err.message : 'Failed to search');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const clearData = useCallback(() => {
     setScripture(null);
     setResources([]);
@@ -141,6 +295,7 @@ export function useScriptureData() {
     isLoading,
     error,
     loadScriptureData,
+    loadKeywordResources,
     clearData,
   };
 }
