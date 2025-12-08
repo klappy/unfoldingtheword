@@ -120,7 +120,7 @@ export function VersionSelector({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-2xl shadow-2xl max-h-[70vh]"
+            className="fixed inset-x-0 bottom-0 z-50 bg-background rounded-t-2xl shadow-2xl max-h-[80vh] flex flex-col"
           >
             {/* Handle */}
             <div className="flex justify-center pt-3 pb-2">
@@ -135,7 +135,7 @@ export function VersionSelector({
               </p>
             </div>
 
-            <ScrollArea className="max-h-[50vh] px-6 pb-6">
+              <ScrollArea className="flex-1 min-h-0 max-h-[calc(80vh-180px)] px-6 pb-6">
               {isLoading ? (
                 <div className="py-8 text-center text-muted-foreground">
                   Loading scripture resources...

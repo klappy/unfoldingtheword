@@ -81,6 +81,20 @@ function getCurrentOrganization(): string {
   return localStorage.getItem('bible-study-organization') || 'unfoldingWord';
 }
 
+// Get the current scripture resource from version preferences (ult, ust, ulb, udb)
+function getCurrentResource(): string {
+  const prefsJson = localStorage.getItem('bible-study-version-preferences');
+  if (prefsJson) {
+    try {
+      const prefs = JSON.parse(prefsJson);
+      if (prefs.length > 0 && prefs[0].resource) {
+        return prefs[0].resource;
+      }
+    } catch {}
+  }
+  return 'ult'; // Default to ULT
+}
+
 export interface FallbackInfo {
   usedFallback: boolean;
   requestedLanguage: string;
@@ -215,14 +229,36 @@ function parseYamlFrontmatter(content: string): { metadata: Record<string, strin
   return { metadata, body };
 }
 
-// Parse scripture content - extract ULT translation with proper verse handling
-function parseScriptureMarkdown(content: string, reference: string): { 
+// Parse scripture content - extract requested translation with proper verse handling
+function parseScriptureMarkdown(content: string, reference: string, resource: string = 'ult'): { 
   verses: ScriptureVerse[]; 
   translation: string;
   metadata?: ScriptureResponse['metadata'];
 } {
   const verses: ScriptureVerse[] = [];
-  let translation = 'unfoldingWord Literal Text';
+  
+  // Map resource ID to section header pattern and display name
+  const resourcePatterns: Record<string, { pattern: RegExp; displayName: string }> = {
+    'ult': { 
+      pattern: /\*\*ULT v\d+[^*]*\*\*\s*\n\n([\s\S]*?)(?=\n\n\*\*[A-Z]|$)/, 
+      displayName: 'unfoldingWord Literal Text' 
+    },
+    'ust': { 
+      pattern: /\*\*UST v\d+[^*]*\*\*\s*\n\n([\s\S]*?)(?=\n\n\*\*[A-Z]|$)/, 
+      displayName: 'unfoldingWord Simplified Text' 
+    },
+    'ulb': { 
+      pattern: /\*\*ULB v\d+[^*]*\*\*\s*\n\n([\s\S]*?)(?=\n\n\*\*[A-Z]|$)/, 
+      displayName: 'Unlocked Literal Bible' 
+    },
+    'udb': { 
+      pattern: /\*\*UDB v\d+[^*]*\*\*\s*\n\n([\s\S]*?)(?=\n\n\*\*[A-Z]|$)/, 
+      displayName: 'Unlocked Dynamic Bible' 
+    },
+  };
+  
+  const resourceConfig = resourcePatterns[resource.toLowerCase()] || resourcePatterns['ult'];
+  let translation = resourceConfig.displayName;
   
   // Parse YAML frontmatter
   const { metadata, body } = parseYamlFrontmatter(content);
@@ -234,15 +270,25 @@ function parseScriptureMarkdown(content: string, reference: string): {
     license: metadata.license || 'CC BY-SA 4.0',
   } : undefined;
 
-  // Find the ULT section - this is the primary translation we want to display
-  // Format: **ULT v87 (unfoldingWord® Literal Text)**\n\nContent...
-  const ultMatch = body.match(/\*\*ULT v\d+[^*]*\*\*\s*\n\n([\s\S]*?)(?=\n\n\*\*[A-Z]|$)/);
+  // Find the requested translation section
+  const translationMatch = body.match(resourceConfig.pattern);
   
-  if (ultMatch) {
-    translation = 'unfoldingWord Literal Text';
-    const ultContent = ultMatch[1].trim();
-    
-    // Parse verses from ULT content
+  // Fallback to ULT if requested resource not found
+  let contentToProcess = '';
+  if (translationMatch) {
+    contentToProcess = translationMatch[1].trim();
+  } else if (resource.toLowerCase() !== 'ult') {
+    // Try ULT as fallback
+    const ultMatch = body.match(resourcePatterns['ult'].pattern);
+    if (ultMatch) {
+      contentToProcess = ultMatch[1].trim();
+      translation = resourcePatterns['ult'].displayName + ' (fallback)';
+      console.log(`[parseScriptureMarkdown] ${resource.toUpperCase()} not found, falling back to ULT`);
+    }
+  }
+  
+  if (contentToProcess) {
+    // Parse verses from content
     // Format: "1 Text of verse one. 2 Text of verse two. \"
     // Backslash \ indicates paragraph end
     
@@ -252,7 +298,7 @@ function parseScriptureMarkdown(content: string, reference: string): {
     const potentialMatches: { index: number; verseNum: number }[] = [];
     let match;
     
-    while ((match = versePattern.exec(ultContent)) !== null) {
+    while ((match = versePattern.exec(contentToProcess)) !== null) {
       potentialMatches.push({ index: match.index, verseNum: parseInt(match[1], 10) });
     }
     
@@ -283,10 +329,10 @@ function parseScriptureMarkdown(content: string, reference: string): {
       
       // Get the start position after the verse number
       const verseNumStr = current.verseNum.toString();
-      const textStart = current.index + ultContent.slice(current.index).indexOf(verseNumStr) + verseNumStr.length;
-      const textEnd = next ? next.index : ultContent.length;
+      const textStart = current.index + contentToProcess.slice(current.index).indexOf(verseNumStr) + verseNumStr.length;
+      const textEnd = next ? next.index : contentToProcess.length;
       
-      let verseText = ultContent.slice(textStart, textEnd).trim();
+      let verseText = contentToProcess.slice(textStart, textEnd).trim();
       
       // Check if this verse ends with a paragraph marker (backslash)
       const isParagraphEnd = verseText.endsWith('\\');
@@ -307,9 +353,9 @@ function parseScriptureMarkdown(content: string, reference: string): {
     }
   }
   
-  // Fallback: if no ULT section found, try to parse any numbered content
+  // Fallback: if no section found, try to parse any numbered content
   if (verses.length === 0) {
-    console.log('[parseScriptureMarkdown] No ULT section found, using fallback parsing');
+    console.log('[parseScriptureMarkdown] No translation section found, using fallback parsing');
     
     // Try to find any section with verse-like content
     const lines = body.split('\n');
@@ -343,7 +389,7 @@ function parseScriptureMarkdown(content: string, reference: string): {
     }
   }
 
-  console.log('[parseScriptureMarkdown] Parsed verses:', verses.length);
+  console.log('[parseScriptureMarkdown] Parsed verses:', verses.length, 'for', resource.toUpperCase());
   
   return { verses, translation, metadata: scriptureMetadata };
 }
@@ -512,12 +558,13 @@ function parseWordLinksMarkdown(content: string, defaultReference: string): Tran
 
 export async function fetchScripture(reference: string): Promise<ScriptureResponse> {
   try {
+    const resource = getCurrentResource();
     const data = await callProxy('fetch-scripture', { reference });
     const content = data.content || data.text || '';
     
     console.log('[translationHelpsApi] Raw scripture content preview:', content.substring(0, 500));
     
-    const { verses, translation, metadata } = parseScriptureMarkdown(content, reference);
+    const { verses, translation, metadata } = parseScriptureMarkdown(content, reference, resource);
 
     return {
       reference: data.reference || reference,
@@ -692,13 +739,14 @@ export async function fetchBook(bookName: string): Promise<BookData> {
       batch.push(j);
     }
     
+    const resource = getCurrentResource();
     const batchResults = await Promise.all(
       batch.map(async (chapterNum) => {
         try {
           const reference = `${bookName} ${chapterNum}`;
           const data = await callProxy('fetch-scripture', { reference });
           const content = data.content || data.text || '';
-          const { verses } = parseScriptureMarkdown(content, reference);
+          const { verses } = parseScriptureMarkdown(content, reference, resource);
           return { chapter: chapterNum, verses };
         } catch (err) {
           console.error(`[fetchBook] Failed to fetch ${bookName} ${chapterNum}:`, err);
@@ -719,10 +767,11 @@ export async function fetchBook(bookName: string): Promise<BookData> {
 
   if (chapters.length > 0 && chapters[0].verses.length > 0) {
     try {
+      const resource = getCurrentResource();
       const firstChapterRef = `${bookName} 1`;
       const firstData = await callProxy('fetch-scripture', { reference: firstChapterRef });
       const content = firstData.content || '';
-      const parsed = parseScriptureMarkdown(content, firstChapterRef);
+      const parsed = parseScriptureMarkdown(content, firstChapterRef, resource);
       translation = parsed.translation;
       metadata = parsed.metadata;
     } catch {
@@ -780,6 +829,7 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
       batch.push(j);
     }
     
+    const resource = getCurrentResource();
     const batchResults = await Promise.all(
       batch.map(async (chapterNum) => {
         try {
@@ -791,7 +841,7 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
             organization: actualOrganization 
           });
           const content = data.content || data.text || '';
-          const { verses } = parseScriptureMarkdown(content, reference);
+          const { verses } = parseScriptureMarkdown(content, reference, resource);
           return { chapter: chapterNum, verses };
         } catch (err) {
           console.error(`[fetchBookWithFallback] Failed to fetch ${bookName} ${chapterNum}:`, err);
@@ -810,8 +860,9 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
   let metadata: ScriptureResponse['metadata'] | undefined;
 
   if (chapters.length > 0 && chapters[0].verses.length > 0) {
+    const resource = getCurrentResource();
     const content = firstResult.data.content || '';
-    const parsed = parseScriptureMarkdown(content, firstRef);
+    const parsed = parseScriptureMarkdown(content, firstRef, resource);
     translation = parsed.translation;
     metadata = parsed.metadata;
   }

@@ -47,19 +47,50 @@ export function useScriptureData() {
   const [error, setError] = useState<string | null>(null);
   const [fallbackState, setFallbackState] = useState<FallbackState>({ hasFallback: false, fallbackInfo: null });
   
-  // Cache for fetched books
+  // Cache for fetched books - keyed by bookName:resource
   const bookCache = useRef<Map<string, ScriptureBook>>(new Map());
   const hasShownFallbackToast = useRef(false);
+  const currentResourceRef = useRef<string>('ult');
+
+  // Get current resource from preferences
+  const getCurrentResourceFromPrefs = (): string => {
+    const prefsJson = localStorage.getItem('bible-study-version-preferences');
+    if (prefsJson) {
+      try {
+        const prefs = JSON.parse(prefsJson);
+        if (prefs.length > 0 && prefs[0].resource) {
+          return prefs[0].resource;
+        }
+      } catch {}
+    }
+    return 'ult';
+  };
+
+  // Clear cache when resource changes
+  const clearBookCache = useCallback(() => {
+    bookCache.current.clear();
+    console.log('[useScriptureData] Book cache cleared');
+  }, []);
 
   // Load book data in background with fallback support
   const loadBookInBackground = useCallback(async (bookName: string): Promise<{ book: ScriptureBook; fallbackInfo: FallbackInfo | null } | null> => {
+    const resource = getCurrentResourceFromPrefs();
+    const cacheKey = `${bookName}:${resource}`;
+    
+    // Check if resource changed - clear cache if so
+    if (currentResourceRef.current !== resource) {
+      console.log(`[useScriptureData] Resource changed from ${currentResourceRef.current} to ${resource}, clearing cache`);
+      bookCache.current.clear();
+      currentResourceRef.current = resource;
+    }
+    
     // Check cache first
-    if (bookCache.current.has(bookName)) {
-      console.log(`[useScriptureData] Book cache hit: ${bookName}`);
-      return { book: bookCache.current.get(bookName)!, fallbackInfo: null };
+    if (bookCache.current.has(cacheKey)) {
+      console.log(`[useScriptureData] Book cache hit: ${cacheKey}`);
+      return { book: bookCache.current.get(cacheKey)!, fallbackInfo: null };
     }
 
-    console.log(`[useScriptureData] Loading book in background: ${bookName}`);
+    console.log(`[useScriptureData] Loading book in background: ${bookName} (resource: ${resource})`);
     try {
       const fetchedBook = await fetchBookWithFallback(bookName);
       const bookData: ScriptureBook = {
@@ -68,7 +99,7 @@ export function useScriptureData() {
         translation: fetchedBook.translation,
         metadata: fetchedBook.metadata,
       };
-      bookCache.current.set(bookName, bookData);
+      bookCache.current.set(cacheKey, bookData);
       return { book: bookData, fallbackInfo: fetchedBook.fallbackInfo };
     } catch (err) {
       console.error(`[useScriptureData] Failed to load book ${bookName}:`, err);
