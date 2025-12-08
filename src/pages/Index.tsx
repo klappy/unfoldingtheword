@@ -22,6 +22,7 @@ const Index = () => {
     organization,
     availableLanguages,
     availableOrganizations,
+    getOrganizationsForLanguage,
     isLoading: languageLoading,
     needsSelection,
     getCurrentLanguage,
@@ -228,6 +229,7 @@ const Index = () => {
         <LanguageSelector
           languages={availableLanguages}
           organizations={availableOrganizations}
+          getOrganizationsForLanguage={getOrganizationsForLanguage}
           isLoading={languageLoading}
           onSelect={(langId, orgId) => {
             completeSelection(langId, orgId);
