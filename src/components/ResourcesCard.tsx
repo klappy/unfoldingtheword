@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -268,6 +268,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
 export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, error, onRetry }: ResourcesCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [activeType, setActiveType] = useState<string | null>(null);
 
   // Group resources by type
   const groupedResources = resources.reduce((acc, resource) => {
@@ -278,6 +279,37 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, er
 
   const resourceTypes = ['translation-note', 'translation-question', 'translation-word', 'academy-article'] as const;
   const availableTypes = resourceTypes.filter(type => groupedResources[type]?.length > 0);
+
+  // Track which section is in view
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const containerTop = container.scrollTop;
+      let currentType: string | null = null;
+
+      for (const type of availableTypes) {
+        const section = sectionRefs.current[type];
+        if (section) {
+          const sectionTop = section.offsetTop - container.offsetTop;
+          if (sectionTop <= containerTop + 100) {
+            currentType = type;
+          }
+        }
+      }
+
+      setActiveType(currentType || availableTypes[0] || null);
+    };
+
+    // Set initial active type
+    if (availableTypes.length > 0) {
+      setActiveType(availableTypes[0]);
+    }
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [availableTypes]);
 
   const scrollToType = (type: string) => {
     const sectionEl = sectionRefs.current[type];
@@ -379,19 +411,21 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, er
         <div className="swipe-indicator" />
       </div>
 
-      {/* Type summary - clickable icons */}
+      {/* Type summary - clickable icons with active state */}
       <div className="px-4 pb-2">
         <div className="flex flex-wrap gap-2 justify-center">
           {availableTypes.map(type => {
             const Icon = resourceIcons[type];
             const count = groupedResources[type].length;
+            const isActive = activeType === type;
             return (
               <button 
                 key={type}
                 onClick={() => scrollToType(type)}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border transition-all hover:scale-105 active:scale-95',
-                  resourceColors[type]
+                  resourceColors[type],
+                  isActive && 'ring-2 ring-offset-1 ring-offset-background scale-110'
                 )}
               >
                 <Icon className="w-3 h-3" />
@@ -402,28 +436,46 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, er
         </div>
       </div>
 
-      {/* Resources list - grouped by type */}
+      {/* Resources list - grouped by type with section headers */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 pb-20 fade-edges">
-        <div className="max-w-xl mx-auto space-y-3 pt-2">
+        <div className="max-w-xl mx-auto space-y-6 pt-2">
           {resourceTypes.map(type => {
             const typeResources = groupedResources[type];
             if (!typeResources?.length) return null;
+            
+            const Icon = resourceIcons[type];
+            const label = resourceLabels[type];
+            const colorClass = resourceColors[type].split(' ')[0]; // Get just the text color
             
             return (
               <div 
                 key={type} 
                 ref={el => { sectionRefs.current[type] = el; }}
               >
-                {typeResources.map((resource, index) => (
-                  <div key={resource.id} className={index > 0 ? 'mt-3' : ''}>
+                {/* Section header */}
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <Icon className={cn('w-4 h-4', colorClass)} />
+                  <h3 className={cn('text-sm font-medium', colorClass)}>
+                    {label}s
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    ({typeResources.length})
+                  </span>
+                  <div className="flex-1 h-px bg-border/50" />
+                </div>
+                
+                {/* Resources in this section */}
+                <div className="space-y-3">
+                  {typeResources.map((resource, index) => (
                     <ExpandableResource
+                      key={resource.id}
                       resource={resource}
                       index={index}
                       onAddToNotes={onAddToNotes}
                       onSearch={onSearch}
                     />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             );
           })}
