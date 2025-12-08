@@ -99,6 +99,18 @@ const Index = () => {
     // In a real app, this would load the conversation
   }, [closeHistory, toast]);
 
+  const handleLoadFullChapter = useCallback(async (chapterRef: string) => {
+    try {
+      await loadScriptureData(chapterRef);
+      toast({
+        title: 'Loading full chapter',
+        description: chapterRef,
+      });
+    } catch (error) {
+      console.error('Failed to load full chapter:', error);
+    }
+  }, [loadScriptureData, toast]);
+
   const renderCurrentCard = () => {
     switch (currentCard) {
       case 'chat':
@@ -118,6 +130,7 @@ const Index = () => {
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
+            onLoadFullChapter={handleLoadFullChapter}
           />
         );
       case 'resources':

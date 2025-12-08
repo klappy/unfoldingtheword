@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Book, ChevronLeft, ChevronRight, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Book, ChevronLeft, ChevronRight, Loader2, AlertCircle, RefreshCw, BookOpen } from 'lucide-react';
 import { ScripturePassage } from '@/types';
 import { Button } from '@/components/ui/button';
 
@@ -9,9 +9,18 @@ interface ScriptureCardProps {
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  onLoadFullChapter?: (reference: string) => void;
 }
 
-export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry }: ScriptureCardProps) {
+export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry, onLoadFullChapter }: ScriptureCardProps) {
+  // Check if this is a partial chapter (not all verses)
+  const isPartialChapter = passage && passage.verses.length < 20;
+  
+  // Extract chapter reference from passage reference (e.g., "John 3:16" -> "John 3")
+  const getChapterReference = (ref: string) => {
+    const match = ref.match(/^(.+?\s+\d+)/);
+    return match ? match[1] : ref;
+  };
   const handleTextSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) {
@@ -115,11 +124,11 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
         <div className="swipe-indicator" />
       </div>
 
-      {/* Header */}
+      {/* Header - sticky with background */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="px-6 pb-4"
+        className="px-6 pb-3 bg-background/95 backdrop-blur-sm z-10"
       >
         <div className="flex items-center gap-2 text-primary">
           <Book className="w-4 h-4" />
@@ -128,9 +137,9 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
         <span className="text-xs text-muted-foreground">{passage.translation}</span>
       </motion.div>
 
-      {/* Scripture content */}
+      {/* Scripture content - with top padding to prevent overlap */}
       <div 
-        className="flex-1 overflow-y-auto px-6 pb-20 fade-edges"
+        className="flex-1 overflow-y-auto px-6 pb-24 fade-edges"
         onMouseUp={handleTextSelection}
         onTouchEnd={handleTextSelection}
       >
@@ -138,7 +147,7 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="scripture-text text-lg max-w-xl mx-auto"
+          className="scripture-text text-lg max-w-xl mx-auto pt-2"
         >
           {passage.verses.map((verse) => (
             <span key={verse.number} className="inline">
@@ -147,6 +156,24 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
             </span>
           ))}
         </motion.div>
+
+        {/* Load full chapter button */}
+        {isPartialChapter && onLoadFullChapter && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="flex justify-center mt-8 mb-4"
+          >
+            <button
+              onClick={() => onLoadFullChapter(getChapterReference(passage.reference))}
+              className="flex items-center gap-2 text-xs text-muted-foreground/70 hover:text-primary transition-colors py-2 px-4 rounded-full border border-border/30 hover:border-primary/30"
+            >
+              <BookOpen className="w-3 h-3" />
+              <span>Read full chapter</span>
+            </button>
+          </motion.div>
+        )}
       </div>
 
       {/* Selection hint */}
