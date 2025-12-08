@@ -97,9 +97,25 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
             </h3>
             
             {!isExpanded && (
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {contentPreview}
-              </p>
+              <div className="prose prose-sm prose-invert max-w-none">
+                <ReactMarkdown
+                  components={{
+                    p: ({ children }) => <p className="text-sm text-muted-foreground leading-relaxed mb-0 line-clamp-3">{children}</p>,
+                    strong: ({ children }) => <strong className="text-foreground font-semibold">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    ul: ({ children }) => <ul className="list-disc list-inside text-sm text-muted-foreground mb-0 line-clamp-3">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal list-inside text-sm text-muted-foreground mb-0 line-clamp-3">{children}</ol>,
+                    li: ({ children }) => <li className="text-sm truncate">{children}</li>,
+                    h1: ({ children }) => <span className="text-sm font-semibold text-foreground">{children}</span>,
+                    h2: ({ children }) => <span className="text-sm font-medium text-foreground">{children}</span>,
+                    h3: ({ children }) => <span className="text-sm font-medium text-foreground">{children}</span>,
+                    blockquote: ({ children }) => <span className="italic text-muted-foreground">{children}</span>,
+                    a: ({ children }) => <span className="text-primary">{children}</span>,
+                  }}
+                >
+                  {contentPreview}
+                </ReactMarkdown>
+              </div>
             )}
           </div>
           

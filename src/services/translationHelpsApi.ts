@@ -392,28 +392,70 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
 
 export async function fetchTranslationWord(articleId: string): Promise<TranslationWord | null> {
   try {
-    const data = await callProxy('fetch-translation-word', { articleId });
-    const content = data.content || '';
+    // Use search endpoint with article filter to get full word content
+    // The fetch-translation-word endpoint returns ToC without proper articleId format
+    const data = await callProxy('search', { 
+      query: `${articleId} definition meaning`,
+      resource: 'tw',
+      article: articleId 
+    });
     
-    // Parse word from markdown - preserve full content
+    console.log('[fetchTranslationWord] Search result for', articleId, ':', data?.hits?.length || 0, 'hits');
+    
+    // Find the best match from search results
+    const hits = data?.hits || [];
+    const exactMatch = hits.find((hit: any) => {
+      const path = hit.path || hit.id || '';
+      const wordFromPath = path.split('/').pop()?.replace('.md', '') || '';
+      return wordFromPath.toLowerCase() === articleId.toLowerCase();
+    });
+    
+    const hit = exactMatch || hits[0];
+    
+    if (!hit) {
+      console.log('[fetchTranslationWord] No results found for', articleId);
+      return null;
+    }
+    
+    // Parse content from the search result
+    let rawContent = hit.content || '';
     let term = articleId;
     let definition = '';
+    let fullContent = '';
     
-    if (typeof content === 'string') {
-      // Extract title
-      const titleMatch = content.match(/^#\s+([^\n]+)/m);
-      if (titleMatch) term = titleMatch[1].trim();
-      
-      // Extract definition (first paragraph after title) - keep full paragraph
-      const defMatch = content.match(/^#[^\n]+\n\n([^\n#]+)/m);
-      if (defMatch) definition = defMatch[1].trim();
+    // The content is JSON-stringified array of text blocks
+    try {
+      const contentBlocks = JSON.parse(rawContent);
+      if (Array.isArray(contentBlocks)) {
+        fullContent = contentBlocks
+          .map((block: any) => block.text || '')
+          .join('\n')
+          .trim();
+      }
+    } catch {
+      // If not JSON, use as-is
+      fullContent = rawContent;
+    }
+    
+    // Extract term from title
+    const titleMatch = fullContent.match(/^#\s+([^\n]+)/m);
+    if (titleMatch) term = titleMatch[1].trim();
+    
+    // Extract definition section
+    const defMatch = fullContent.match(/## Definition:\s*\n\n?([\s\S]*?)(?=\n##|\n\(|$)/);
+    if (defMatch) {
+      definition = defMatch[1].trim();
+    } else {
+      // Fallback: first paragraph after title
+      const firstParaMatch = fullContent.match(/^#[^\n]+\n\n([^\n#]+)/m);
+      if (firstParaMatch) definition = firstParaMatch[1].trim();
     }
     
     return {
-      id: data.id || articleId,
-      term: data.term || data.title || term,
-      definition: data.definition || definition,
-      content: content, // Full content, no truncation
+      id: hit.id || articleId,
+      term: term,
+      definition: definition,
+      content: fullContent,
     };
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching translation word:', error);
