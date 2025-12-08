@@ -490,8 +490,14 @@ export async function searchResources(query: string, resource?: string): Promise
     const params: Record<string, string> = { query };
     if (resource) params.resource = resource;
     
+    console.log('[searchResources] Searching with params:', params);
     const data = await callProxy('search', params);
-    return data.results || data.data || (Array.isArray(data) ? data : []);
+    console.log('[searchResources] Raw response:', data);
+    
+    // The API returns { hits: [...] } or { results: [...] }
+    const hits = data.hits || data.results || data.data || (Array.isArray(data) ? data : []);
+    console.log('[searchResources] Found', hits.length, 'results for', resource || 'all');
+    return hits;
   } catch (error) {
     console.error('[translationHelpsApi] Error searching resources:', error);
     return [];

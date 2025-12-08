@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { SwipeContainer } from '@/components/SwipeContainer';
 import { ChatCard } from '@/components/ChatCard';
@@ -6,7 +6,7 @@ import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryPanel } from '@/components/HistoryPanel';
-import { ResourceLink, HistoryItem, Message, Resource } from '@/types';
+import { ResourceLink, HistoryItem, Message } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
@@ -25,7 +25,7 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData, loadKeywordResources, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
   const { 
@@ -38,41 +38,8 @@ const Index = () => {
     loadConversationMessages,
   } = useConversations();
 
-  // Aggregate resources from chat messages when no scripture-sourced resources exist
-  const aggregatedResources = useMemo((): Resource[] => {
-    // If we have scripture-sourced resources, use those
-    if (resources.length > 0) {
-      return resources;
-    }
-    
-    // Otherwise, build resources from chat message ResourceLinks
-    const resourcesFromChat: Resource[] = [];
-    const seenRefs = new Set<string>();
-    
-    for (const message of messages) {
-      if (message.resources) {
-        for (const link of message.resources) {
-          const key = `${link.type}-${link.reference}`;
-          if (!seenRefs.has(key)) {
-            seenRefs.add(key);
-            resourcesFromChat.push({
-              id: key,
-              type: link.type === 'scripture' ? 'translation-note' : 
-                    link.type === 'note' ? 'translation-note' :
-                    link.type === 'question' ? 'translation-question' :
-                    link.type === 'word' ? 'translation-word' :
-                    'academy-article',
-              title: link.title,
-              content: link.preview || '',
-              reference: link.reference,
-            });
-          }
-        }
-      }
-    }
-    
-    return resourcesFromChat;
-  }, [resources, messages]);
+  // Use resources from useScriptureData (now handles both scripture refs and keyword searches)
+  // The aggregatedResources useMemo is no longer needed since loadKeywordResources populates resources directly
 
   const handleSendMessage = useCallback(async (content: string) => {
     // Create conversation on first message if needed
@@ -130,8 +97,15 @@ const Index = () => {
         title: 'Resources updated',
         description: 'Swipe right to view scripture and resources',
       });
+    } else if (result?.searchQuery) {
+      // For keyword searches, load resources from search API
+      await loadKeywordResources(result.searchQuery);
+      toast({
+        title: 'Resources found',
+        description: `Found resources for "${result.searchQuery}"`,
+      });
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, toast, currentConversationId, createConversation, saveMessage, updateConversation]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, toast, currentConversationId, createConversation, saveMessage, updateConversation]);
 
   const handleResourceClick = useCallback((resource: ResourceLink) => {
     if (resource.type === 'scripture') {
@@ -225,7 +199,7 @@ const Index = () => {
       case 'resources':
         return (
           <ResourcesCard
-            resources={aggregatedResources}
+            resources={resources}
             onAddToNotes={(text) => handleAddToNotes(text)}
             isLoading={scriptureLoading}
             error={scriptureError}
