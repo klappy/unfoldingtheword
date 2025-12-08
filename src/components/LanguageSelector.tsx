@@ -262,59 +262,66 @@ export function LanguageSelector({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                {isLoadingOrgs ? (
-                  <div className="space-y-3">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-16 w-full rounded-xl" />
-                    ))}
+                <ScrollArea className="h-[40vh] rounded-lg">
+                  <div className="space-y-3 pr-2">
+                    {isLoadingOrgs ? (
+                      <>
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                        ))}
+                      </>
+                    ) : (
+                      availableOrgsForLanguage.map((org, index) => (
+                        <motion.button
+                          key={org.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.1 * Math.min(index, 5) }}
+                          onClick={() => handleOrganizationSelect(org.id)}
+                          onMouseEnter={() => setHoveredId(org.id)}
+                          onMouseLeave={() => setHoveredId(null)}
+                          className={cn(
+                            'w-full flex items-center justify-between px-5 py-4 rounded-xl transition-all border',
+                            'hover:bg-primary/5 active:scale-[0.99]',
+                            tempOrganization === org.id 
+                              ? 'bg-primary/10 border-primary/30 ring-1 ring-primary/20' 
+                              : 'border-border bg-card/50'
+                          )}
+                        >
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium text-foreground">
+                              {org.name}
+                            </span>
+                            {org.description && (
+                              <span className="text-xs text-muted-foreground mt-0.5">
+                                {org.description}
+                              </span>
+                            )}
+                          </div>
+                          <AnimatePresence>
+                            {(tempOrganization === org.id || hoveredId === org.id) && (
+                              <motion.div
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0, opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                              >
+                                <Check className={cn(
+                                  'w-5 h-5',
+                                  tempOrganization === org.id ? 'text-primary' : 'text-muted-foreground/50'
+                                )} />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.button>
+                      ))
+                    )}
                   </div>
-                ) : (
-                <div className="space-y-3">
-                  {availableOrgsForLanguage.map((org, index) => (
-                    <motion.button
-                      key={org.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 * index }}
-                      onClick={() => handleOrganizationSelect(org.id)}
-                      onMouseEnter={() => setHoveredId(org.id)}
-                      onMouseLeave={() => setHoveredId(null)}
-                      className={cn(
-                        'w-full flex items-center justify-between px-5 py-4 rounded-xl transition-all border',
-                        'hover:bg-primary/5 active:scale-[0.99]',
-                        tempOrganization === org.id 
-                          ? 'bg-primary/10 border-primary/30 ring-1 ring-primary/20' 
-                          : 'border-border bg-card/50'
-                      )}
-                    >
-                      <div className="flex flex-col items-start">
-                        <span className="font-medium text-foreground">
-                          {org.name}
-                        </span>
-                        {org.description && (
-                          <span className="text-xs text-muted-foreground mt-0.5">
-                            {org.description}
-                          </span>
-                        )}
-                      </div>
-                      <AnimatePresence>
-                        {(tempOrganization === org.id || hoveredId === org.id) && (
-                          <motion.div
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            transition={{ duration: 0.15 }}
-                          >
-                            <Check className={cn(
-                              'w-5 h-5',
-                              tempOrganization === org.id ? 'text-primary' : 'text-muted-foreground/50'
-                            )} />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.button>
-                  ))}
-                </div>
+                </ScrollArea>
+                {!isLoadingOrgs && availableOrgsForLanguage.length > 4 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    {availableOrgsForLanguage.length} organizations available
+                  </p>
                 )}
               </motion.div>
 
