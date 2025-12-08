@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Resource } from '@/types';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,8 @@ interface ResourcesCardProps {
   resources: Resource[];
   onAddToNotes: (text: string) => void;
   onSearch?: (query: string) => void;
+  onClearVerseFilter?: () => void;
+  verseFilter?: string | null;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -265,7 +267,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
   );
 }
 
-export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, error, onRetry }: ResourcesCardProps) {
+export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry }: ResourcesCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeType, setActiveType] = useState<string | null>(null);
@@ -428,6 +430,27 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, er
       <div className="pt-4 pb-2">
         <div className="swipe-indicator" />
       </div>
+
+      {/* Verse filter badge */}
+      {verseFilter && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="px-4 pb-2"
+        >
+          <div className="flex items-center justify-between bg-primary/10 rounded-lg px-3 py-2">
+            <span className="text-xs text-primary font-medium">
+              Filtered: {verseFilter}
+            </span>
+            <button
+              onClick={onClearVerseFilter}
+              className="text-primary/70 hover:text-primary transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Type summary - clickable icons with active state */}
       <div className="px-4 pb-2">
