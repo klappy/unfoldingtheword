@@ -532,9 +532,32 @@ const BOOK_CHAPTERS: Record<string, number> = {
   '2 John': 1, '3 John': 1, 'Jude': 1, 'Revelation': 22,
 };
 
-// Map non-English book names to English (for book chapter lookup)
-// Combined Spanish, Portuguese, French - only unique entries (shared names map to same English)
+// Map non-English book names and abbreviations to English (for book chapter lookup)
+// Combined Spanish, Portuguese, French + common abbreviations
 const BOOK_NAME_ALIASES: Record<string, string> = {
+  // Common abbreviations
+  'Gen': 'Genesis', 'Exo': 'Exodus', 'Exod': 'Exodus', 'Lev': 'Leviticus', 'Num': 'Numbers', 'Deut': 'Deuteronomy',
+  'Josh': 'Joshua', 'Judg': 'Judges', 'Jdg': 'Judges', 'Rth': 'Ruth',
+  '1Sam': '1 Samuel', '2Sam': '2 Samuel', '1Kgs': '1 Kings', '2Kgs': '2 Kings', '1 Kgs': '1 Kings', '2 Kgs': '2 Kings',
+  '1Chr': '1 Chronicles', '2Chr': '2 Chronicles', '1 Chr': '1 Chronicles', '2 Chr': '2 Chronicles',
+  'Neh': 'Nehemiah', 'Est': 'Esther', 'Psa': 'Psalms', 'Ps': 'Psalms', 'Pss': 'Psalms',
+  'Pro': 'Proverbs', 'Prov': 'Proverbs', 'Ecc': 'Ecclesiastes', 'Eccl': 'Ecclesiastes',
+  'Song': 'Song of Solomon', 'Sos': 'Song of Solomon', 'SOS': 'Song of Solomon', 'SS': 'Song of Solomon',
+  'Isa': 'Isaiah', 'Jer': 'Jeremiah', 'Lam': 'Lamentations', 'Ezek': 'Ezekiel', 'Eze': 'Ezekiel',
+  'Dan': 'Daniel', 'Hos': 'Hosea', 'Joe': 'Joel', 'Amo': 'Amos', 'Oba': 'Obadiah', 'Obad': 'Obadiah',
+  'Jon': 'Jonah', 'Mic': 'Micah', 'Nah': 'Nahum', 'Hab': 'Habakkuk', 'Zep': 'Zephaniah', 'Zeph': 'Zephaniah',
+  'Hag': 'Haggai', 'Zec': 'Zechariah', 'Zech': 'Zechariah', 'Mal': 'Malachi',
+  'Mat': 'Matthew', 'Matt': 'Matthew', 'Mrk': 'Mark', 'Luk': 'Luke', 'Joh': 'John', 'Jn': 'John',
+  'Act': 'Acts', 'Rom': 'Romans', '1Cor': '1 Corinthians', '2Cor': '2 Corinthians', '1 Cor': '1 Corinthians', '2 Cor': '2 Corinthians',
+  'Gal': 'Galatians', 'Eph': 'Ephesians', 'Phil': 'Philippians', 'Php': 'Philippians',
+  'Col': 'Colossians', '1Th': '1 Thessalonians', '2Th': '2 Thessalonians', '1 Th': '1 Thessalonians', '2 Th': '2 Thessalonians',
+  '1Thess': '1 Thessalonians', '2Thess': '2 Thessalonians', '1 Thess': '1 Thessalonians', '2 Thess': '2 Thessalonians',
+  '1Tim': '1 Timothy', '2Tim': '2 Timothy', '1 Tim': '1 Timothy', '2 Tim': '2 Timothy',
+  'Tit': 'Titus', 'Phm': 'Philemon', 'Phlm': 'Philemon', 'Heb': 'Hebrews', 'Jas': 'James', 'Jam': 'James',
+  '1Pet': '1 Peter', '2Pet': '2 Peter', '1 Pet': '1 Peter', '2 Pet': '2 Peter',
+  '1Jn': '1 John', '2Jn': '2 John', '3Jn': '3 John', '1 Jn': '1 John', '2 Jn': '2 John', '3 Jn': '3 John',
+  '1John': '1 John', '2John': '2 John', '3John': '3 John',
+  'Jud': 'Jude', 'Rev': 'Revelation', 'Apo': 'Revelation',
   // Spanish / Portuguese / French (unique entries only)
   'Génesis': 'Genesis', 'Gênesis': 'Genesis', 'Genèse': 'Genesis',
   'Éxodo': 'Exodus', 'Êxodo': 'Exodus', 'Exode': 'Exodus',
