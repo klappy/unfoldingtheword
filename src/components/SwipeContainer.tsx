@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CardType } from '@/types';
 
@@ -18,6 +18,16 @@ export function SwipeContainer({
   onTouchEnd,
 }: SwipeContainerProps) {
   const currentIndex = cardOrder.indexOf(currentCard);
+  const prevIndexRef = useRef(currentIndex);
+  const direction = useRef(1); // 1 = going right (next), -1 = going left (prev)
+
+  useEffect(() => {
+    // Determine direction based on index change
+    if (currentIndex !== prevIndexRef.current) {
+      direction.current = currentIndex > prevIndexRef.current ? 1 : -1;
+      prevIndexRef.current = currentIndex;
+    }
+  }, [currentIndex]);
 
   return (
     <div
@@ -27,14 +37,14 @@ export function SwipeContainer({
       onMouseDown={onTouchStart}
       onMouseUp={onTouchEnd}
     >
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={currentCard}
-          initial={{ opacity: 0, x: 50 }}
+          initial={{ opacity: 0, x: direction.current * 50 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -50 }}
+          exit={{ opacity: 0, x: direction.current * -50 }}
           transition={{ 
-            duration: 0.3, 
+            duration: 0.25, 
             ease: [0.32, 0.72, 0, 1] 
           }}
           className="absolute inset-0"
