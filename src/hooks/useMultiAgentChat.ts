@@ -223,6 +223,8 @@ export function useMultiAgentChat() {
       return null;
     } finally {
       setIsLoading(false);
+      // Ensure no messages are left in streaming state
+      setMessages(prev => prev.map(m => m.isStreaming ? { ...m, isStreaming: false } : m));
     }
   }, [messages]);
 
