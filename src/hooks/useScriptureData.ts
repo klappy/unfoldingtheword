@@ -167,8 +167,8 @@ export function useScriptureData() {
 
       const newResources: Resource[] = [];
 
-      // Parse Translation Words results
-      twResults.slice(0, 10).forEach((hit: any, index: number) => {
+      // Parse Translation Words results - prioritize exact keyword matches
+      const parsedTwResults = twResults.map((hit: any, index: number) => {
         let content = '';
         try {
           const blocks = JSON.parse(hit.content || '[]');
@@ -181,16 +181,30 @@ export function useScriptureData() {
 
         const titleMatch = content.match(/^#\s+([^\n]+)/m);
         const title = titleMatch ? titleMatch[1].trim() : (hit.path?.split('/').pop()?.replace('.md', '') || keyword);
+        const pathWord = hit.path?.split('/').pop()?.replace('.md', '')?.toLowerCase() || '';
+        const keywordLower = keyword.toLowerCase().split(' ')[0]; // Get first word of query
+        
+        // Score exact matches higher
+        const isExactMatch = pathWord === keywordLower || title.toLowerCase() === keywordLower;
 
-        if (content) {
-          newResources.push({
-            id: `tw-${index}`,
-            type: 'translation-word',
-            title,
-            content,
-            reference: keyword,
-          });
-        }
+        return { hit, content, title, isExactMatch, originalIndex: index };
+      }).filter(r => r.content);
+
+      // Sort: exact matches first, then by original order
+      parsedTwResults.sort((a, b) => {
+        if (a.isExactMatch && !b.isExactMatch) return -1;
+        if (!a.isExactMatch && b.isExactMatch) return 1;
+        return a.originalIndex - b.originalIndex;
+      });
+
+      parsedTwResults.slice(0, 10).forEach((parsed, index) => {
+        newResources.push({
+          id: `tw-${index}`,
+          type: 'translation-word',
+          title: parsed.title,
+          content: parsed.content,
+          reference: keyword,
+        });
       });
 
       // Parse Translation Notes results
