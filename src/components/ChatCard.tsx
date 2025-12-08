@@ -212,18 +212,18 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                 </div>
 
                 {message.resources && message.resources.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border/30 space-y-1">
+                  <div className="mt-3 pt-3 border-t border-border/30 space-y-3">
                     {message.resources.map((resource, i) => (
                       <button
                         key={i}
                         onClick={() => onResourceClick(resource)}
-                        className="inline-resource text-xs block text-left"
+                        className="inline-resource text-sm block text-left py-1"
                       >
-                        {resource.type === 'scripture' && '📖'} 
-                        {resource.type === 'note' && '📝'} 
-                        {resource.type === 'question' && '❓'} 
-                        {resource.type === 'academy' && '🎓'} 
-                        {resource.type === 'word' && '📚'} 
+                        {resource.type === 'scripture' && '📖 '} 
+                        {resource.type === 'note' && '📝 '} 
+                        {resource.type === 'question' && '❓ '} 
+                        {resource.type === 'academy' && '🎓 '} 
+                        {resource.type === 'word' && '📚 '}
                         {resource.title}
                       </button>
                     ))}
