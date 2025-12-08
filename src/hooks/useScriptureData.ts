@@ -370,6 +370,13 @@ export function useScriptureData() {
     setError(null);
   }, []);
 
+  // Clear verse filter and show all resources
+  const clearVerseFilter = useCallback(() => {
+    console.log('[useScriptureData] Clearing verse filter');
+    setVerseFilter(null);
+    setResources(allResources);
+  }, [allResources]);
+
   // Filter resources by verse reference
   const filterByVerse = useCallback((verseReference: string) => {
     console.log('[useScriptureData] Filtering resources for:', verseReference);
@@ -383,29 +390,16 @@ export function useScriptureData() {
       return;
     }
 
-    setVerseFilter(verseReference);
-
-    // If no verse specified, show all resources for that chapter
+    // If no verse specified, clear the filter entirely
     if (!parsed.verse) {
-      const chapterPrefix = `${parsed.book} ${parsed.chapter}:`;
-      const chapterOnly = `${parsed.book} ${parsed.chapter}`;
-      const filtered = allResources.filter(r => 
-        r.reference?.startsWith(chapterPrefix) || 
-        r.reference === chapterOnly ||
-        r.reference?.includes(`${parsed.book} ${parsed.chapter}`)
-      );
-      console.log('[useScriptureData] Filtered to chapter:', filtered.length, 'resources');
-      setResources(filtered.length > 0 ? filtered : allResources);
+      setVerseFilter(null);
+      setResources(allResources);
       return;
     }
 
-    // Filter to specific verse
-    const versePatterns = [
-      `${parsed.book} ${parsed.chapter}:${parsed.verse}`,
-      `${parsed.book} ${parsed.chapter}:${parsed.verse}-`,
-      `-${parsed.verse}`,
-    ];
+    setVerseFilter(verseReference);
 
+    // Filter to specific verse
     const filtered = allResources.filter(r => {
       if (!r.reference) return false;
       
@@ -440,6 +434,7 @@ export function useScriptureData() {
     loadScriptureData,
     loadKeywordResources,
     filterByVerse,
+    clearVerseFilter,
     clearData,
   };
 }

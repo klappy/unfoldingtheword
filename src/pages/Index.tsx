@@ -25,7 +25,7 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, verseFilter, loadScriptureData, loadKeywordResources, filterByVerse, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, verseFilter, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
   const { 
@@ -166,11 +166,7 @@ const Index = () => {
               handleSendMessage(query);
             }}
             verseFilter={verseFilter}
-            onClearVerseFilter={() => {
-              if (scripture?.book?.book && scripture?.targetChapter) {
-                filterByVerse(`${scripture.book.book} ${scripture.targetChapter}`);
-              }
-            }}
+            onClearVerseFilter={clearVerseFilter}
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
