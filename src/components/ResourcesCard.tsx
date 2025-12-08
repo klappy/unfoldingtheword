@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { Resource } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchTranslationWord, fetchTranslationAcademy } from '@/services/translationHelpsApi';
 
 interface ResourcesCardProps {
@@ -350,32 +351,56 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
     }
   };
 
-  // Show loading only when no resources exist yet
-  if (isLoading && resources.length === 0) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center">
-        <div className="text-center px-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 mb-6">
-            <Loader2 className="w-8 h-8 text-accent animate-spin" />
-          </div>
-          <h2 className="text-lg font-medium text-foreground mb-2">
-            Loading Resources
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Fetching translation notes, questions, and word studies...
-          </p>
+  // Skeleton loading component
+  const ResourcesSkeleton = () => (
+    <div className="flex flex-col h-full">
+      <div className="pt-4 pb-2">
+        <div className="swipe-indicator" />
+      </div>
+      {/* Type filter skeleton */}
+      <div className="px-4 pb-3">
+        <div className="flex gap-2">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="w-20 h-8 rounded-full" />
+          ))}
         </div>
       </div>
-    );
+      {/* Resource cards skeleton */}
+      <div className="flex-1 overflow-hidden px-4 pb-24">
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="glass-card rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <Skeleton className="w-10 h-10 rounded-lg shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="w-20 h-3" />
+                    <Skeleton className="w-16 h-3" />
+                  </div>
+                  <Skeleton className="w-3/4 h-4" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="w-full h-3" />
+                    <Skeleton className="w-full h-3" />
+                    <Skeleton className="w-2/3 h-3" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Show skeleton when loading without existing data
+  if (isLoading && resources.length === 0) {
+    return <ResourcesSkeleton />;
   }
 
-  // Loading overlay when refreshing with existing data
+  // Subtle loading overlay when refreshing with existing data
   const loadingOverlay = isLoading && resources.length > 0 ? (
-    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-20 flex items-center justify-center">
-      <div className="text-center">
-        <Loader2 className="w-8 h-8 text-accent animate-spin mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
+    <div className="absolute inset-0 z-20 pointer-events-none">
+      <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px]" />
     </div>
   ) : null;
 

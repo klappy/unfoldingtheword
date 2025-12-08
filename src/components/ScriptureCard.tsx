@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Book, ChevronLeft, ChevronRight, Loader2, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { ScripturePassage } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 interface ScriptureCardProps {
@@ -96,32 +97,55 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilte
     }
   };
 
-  // Show loading only when no passage exists yet
-  if (isLoading && !passage) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center">
-        <div className="text-center px-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          </div>
-          <h2 className="text-lg font-medium text-foreground mb-2">
-            Loading Scripture
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Fetching the complete book...
-          </p>
+  // Skeleton loading component
+  const ScriptureSkeleton = () => (
+    <div className="flex flex-col h-full">
+      <div className="pt-4 pb-2">
+        <div className="swipe-indicator" />
+      </div>
+      <div className="px-6 pb-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Skeleton className="w-4 h-4 rounded" />
+          <Skeleton className="w-24 h-4" />
+        </div>
+        <Skeleton className="w-16 h-3" />
+      </div>
+      <div className="flex-1 overflow-hidden px-6 pb-24">
+        <div className="max-w-xl mx-auto pt-2 space-y-8">
+          {[1, 2, 3].map((chapter) => (
+            <div key={chapter} className="space-y-3">
+              {/* Chapter heading skeleton */}
+              <div className="flex items-start gap-2">
+                <Skeleton className="w-12 h-12 rounded" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="w-full h-4" />
+                  <Skeleton className="w-full h-4" />
+                  <Skeleton className="w-3/4 h-4" />
+                </div>
+              </div>
+              {/* Verse lines skeleton */}
+              {[1, 2, 3, 4].map((line) => (
+                <div key={line} className="flex gap-1">
+                  <Skeleton className="w-4 h-3 shrink-0" />
+                  <Skeleton className={cn("h-4", line % 2 === 0 ? "w-full" : "w-4/5")} />
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
-    );
+    </div>
+  );
+
+  // Show skeleton when loading without existing data
+  if (isLoading && !passage) {
+    return <ScriptureSkeleton />;
   }
 
-  // Loading overlay when refreshing with existing data
+  // Show skeleton overlay when refreshing with existing data
   const loadingOverlay = isLoading && passage ? (
-    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-20 flex items-center justify-center">
-      <div className="text-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
+    <div className="absolute inset-0 z-20 pointer-events-none">
+      <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px]" />
     </div>
   ) : null;
 
