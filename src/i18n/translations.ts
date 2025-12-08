@@ -649,25 +649,38 @@ const languageMapping: Record<string, string> = {
 };
 
 export function getTranslations(languageCode: string): TranslationStrings {
-  // Try exact match first
+  console.log('[translations] getTranslations called with:', languageCode);
+  
+  // Try exact match first (case-insensitive)
+  const lowerCode = languageCode.toLowerCase();
+  if (translations[lowerCode]) {
+    console.log('[translations] Found exact match for:', lowerCode);
+    return translations[lowerCode];
+  }
+  
+  // Try exact match with original case
   if (translations[languageCode]) {
+    console.log('[translations] Found match for:', languageCode);
     return translations[languageCode];
   }
   
   // Try mapped language
-  const mappedCode = languageMapping[languageCode.toLowerCase()];
+  const mappedCode = languageMapping[lowerCode];
   if (mappedCode && translations[mappedCode]) {
+    console.log('[translations] Found mapped match:', mappedCode);
     return translations[mappedCode];
   }
   
   // Try base language (e.g., 'es' from 'es-419')
-  const baseCode = languageCode.split('-')[0].toLowerCase();
+  const baseCode = lowerCode.split('-')[0];
   const mappedBase = languageMapping[baseCode];
   if (mappedBase && translations[mappedBase]) {
+    console.log('[translations] Found base match:', mappedBase);
     return translations[mappedBase];
   }
   
   // Return English as default
+  console.log('[translations] No match found, returning English default');
   return translations['en'];
 }
 

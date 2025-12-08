@@ -18,10 +18,20 @@ export function useI18n(languageCode: string): UseI18nReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [aiTranslations, setAiTranslations] = useState<Partial<TranslationStrings> | null>(null);
 
-  const hasStaticTranslations = useMemo(() => hasStaticTranslation(languageCode), [languageCode]);
+  console.log('[useI18n] Called with languageCode:', languageCode);
+
+  const hasStaticTranslations = useMemo(() => {
+    const result = hasStaticTranslation(languageCode);
+    console.log('[useI18n] hasStaticTranslation for', languageCode, ':', result);
+    return result;
+  }, [languageCode]);
   
   // Get base translations (static or English fallback)
-  const baseTranslations = useMemo(() => getTranslations(languageCode), [languageCode]);
+  const baseTranslations = useMemo(() => {
+    const result = getTranslations(languageCode);
+    console.log('[useI18n] Got translations for', languageCode, '- sample key scripture.empty.title:', result['scripture.empty.title']);
+    return result;
+  }, [languageCode]);
 
   // Check cache on mount
   useEffect(() => {
