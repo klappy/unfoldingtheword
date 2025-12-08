@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Sparkles, Globe, Languages, Loader2 } from 'lucide-react';
+import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
 import { TranslationStrings } from '@/i18n/translations';
+import { useResetSession } from '@/hooks/useResetSession';
 
 interface ChatCardProps {
   messages: Message[];
@@ -21,8 +22,11 @@ interface ChatCardProps {
 
 export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, currentLanguage, onChangeLanguage, t, hasStaticTranslations, onTranslateUi, isTranslatingUi }: ChatCardProps) {
   const [input, setInput] = useState('');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { resetSession } = useResetSession();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,9 +35,22 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isLoading) {
+      const trimmedInput = input.trim().toLowerCase();
+      // Detect reset command
+      if (trimmedInput === 'reset' || trimmedInput === 'reset all' || trimmedInput === 'clear all data') {
+        setInput('');
+        setShowResetConfirm(true);
+        return;
+      }
       onSendMessage(input.trim());
       setInput('');
     }
+  };
+
+  const handleReset = async () => {
+    setIsResetting(true);
+    await resetSession();
+    // Page will reload after reset
   };
 
   const getAgentColor = (agent?: string) => {
@@ -298,6 +315,48 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
           </div>
         </form>
       </div>
+
+      {/* Reset confirmation dialog */}
+      {showResetConfirm && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+        >
+          <motion.div
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            className="glass-card rounded-2xl p-6 max-w-sm w-full space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center">
+                <RotateCcw className="w-5 h-5 text-destructive" />
+              </div>
+              <h3 className="text-lg font-medium text-foreground">Reset Everything?</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete all your conversations, notes, and language preferences. This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                disabled={isResetting}
+                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={isResetting}
+                className="px-4 py-2 text-sm bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isResetting && <Loader2 className="w-3 h-3 animate-spin" />}
+                {isResetting ? 'Resetting...' : 'Yes, reset'}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 }

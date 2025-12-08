@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Globe, Sparkles, Search, Check, Loader2 } from 'lucide-react';
+import { Sparkles, Search, Loader2, RotateCcw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { LanguageOption, OrganizationOption } from '@/hooks/useLanguage';
+import { useResetSession } from '@/hooks/useResetSession';
 import { cn } from '@/lib/utils';
 
 interface LanguageSelectionChatProps {
@@ -29,6 +30,16 @@ export function LanguageSelectionChat({
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageOption | null>(null);
   const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const { resetSession } = useResetSession();
+
+  // Handle reset command
+  const handleReset = async () => {
+    setIsResetting(true);
+    await resetSession();
+    // Page will reload after reset
+  };
 
   // Filter to top languages for quick selection
   const topLanguages = useMemo(() => {
@@ -309,6 +320,47 @@ export function LanguageSelectionChat({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Reset option at bottom */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className="mt-auto pt-8 pb-4"
+        >
+          {!showResetConfirm ? (
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="mx-auto flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset all data</span>
+            </button>
+          ) : (
+            <div className="glass-card rounded-xl px-4 py-3 space-y-3">
+              <p className="text-sm text-foreground text-center">
+                This will delete all your conversations, notes, and preferences. Are you sure?
+              </p>
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  disabled={isResetting}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReset}
+                  disabled={isResetting}
+                  className="px-4 py-2 text-sm bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isResetting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {isResetting ? 'Resetting...' : 'Yes, reset everything'}
+                </button>
+              </div>
+            </div>
+          )}
+        </motion.div>
       </div>
     </div>
   );
