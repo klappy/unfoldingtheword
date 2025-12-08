@@ -76,8 +76,9 @@ export function useMultiAgentChat() {
       const agentMessages: Message[] = response.agents.map((agent, index) => {
         const agentType = agent.agent as AgentType;
         
-        // Build resource links based on agent type
+        // Build resource links based on agent type and available references
         const resources: ResourceLink[] = [];
+        const searchContext = response.scripture_reference || response.search_query || '';
         
         if (response.scripture_reference) {
           resources.push({
@@ -87,27 +88,41 @@ export function useMultiAgentChat() {
           });
         }
 
-        if (agent.agent === 'notes') {
+        // Add resource links for each agent type - works for both scripture refs and keyword searches
+        if (agent.agent === 'notes' && searchContext) {
           resources.push({
             type: 'note',
-            reference: response.scripture_reference || '',
-            title: 'View Translation Notes',
+            reference: searchContext,
+            title: response.scripture_reference ? 'View Translation Notes' : `Notes on "${searchContext}"`,
+            preview: agent.content.slice(0, 150),
           });
         }
 
-        if (agent.agent === 'questions') {
+        if (agent.agent === 'questions' && searchContext) {
           resources.push({
             type: 'question',
-            reference: response.scripture_reference || '',
-            title: 'Study Questions',
+            reference: searchContext,
+            title: response.scripture_reference ? 'Study Questions' : `Questions about "${searchContext}"`,
+            preview: agent.content.slice(0, 150),
           });
         }
 
-        if (agent.agent === 'words') {
+        if (agent.agent === 'words' && searchContext) {
           resources.push({
             type: 'word',
-            reference: response.scripture_reference || '',
-            title: 'Word Studies',
+            reference: searchContext,
+            title: response.scripture_reference ? 'Word Studies' : `"${searchContext}" Word Study`,
+            preview: agent.content.slice(0, 150),
+          });
+        }
+
+        if (agent.agent === 'scripture' && searchContext && !response.scripture_reference) {
+          // For keyword searches without a specific scripture ref, add an academy-style resource
+          resources.push({
+            type: 'academy',
+            reference: searchContext,
+            title: `Learn about "${searchContext}"`,
+            preview: agent.content.slice(0, 150),
           });
         }
 
