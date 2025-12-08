@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FallbackBadge } from '@/components/FallbackBadge';
 import { FallbackState } from '@/hooks/useScriptureData';
 import { VersionSelector } from '@/components/VersionSelector';
-import { ScriptureVersion, OrganizationOption } from '@/hooks/useLanguage';
+import { ScriptureVersion } from '@/hooks/useLanguage';
 import { cn } from '@/lib/utils';
 import { useVisibleChapters } from '@/hooks/useVisibleChapters';
 
@@ -25,7 +25,6 @@ interface ScriptureCardProps {
   // Version selector props
   versionPreferences?: ScriptureVersion[];
   onVersionSelect?: (version: ScriptureVersion) => void;
-  getOrganizationsForLanguage?: (langId: string) => Promise<OrganizationOption[]>;
   currentLanguage?: string;
 }
 
@@ -118,7 +117,6 @@ export function ScriptureCard({
   isTranslating,
   versionPreferences = [],
   onVersionSelect,
-  getOrganizationsForLanguage,
   currentLanguage = 'en',
 }: ScriptureCardProps) {
   const [isVersionSelectorOpen, setIsVersionSelectorOpen] = useState(false);
@@ -393,15 +391,14 @@ export function ScriptureCard({
         </motion.div>
 
         {/* Version Selector */}
-        {onVersionSelect && getOrganizationsForLanguage && (
+        {onVersionSelect && (
           <VersionSelector
             isOpen={isVersionSelectorOpen}
             onClose={() => setIsVersionSelectorOpen(false)}
             versionPreferences={versionPreferences}
             onVersionSelect={onVersionSelect}
-            onReorder={() => {}}
-            getOrganizationsForLanguage={getOrganizationsForLanguage}
             currentLanguage={currentLanguage}
+            currentReference={passage?.reference}
           />
         )}
 

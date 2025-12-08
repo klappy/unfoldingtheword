@@ -255,7 +255,6 @@ const Index = () => {
                 loadScriptureData(scripture.reference);
               }
             }}
-            getOrganizationsForLanguage={getOrganizationsForLanguage}
             currentLanguage={language || 'en'}
           />
         );
