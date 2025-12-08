@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 interface LanguageSelectorProps {
   languages: LanguageOption[];
   organizations: OrganizationOption[];
-  getOrganizationsForLanguage: (langId: string) => OrganizationOption[];
+  getOrganizationsForLanguage: (langId: string) => Promise<OrganizationOption[]>;
   isLoading: boolean;
   onSelect: (languageId: string, organizationId: string) => void;
   selectedLanguage?: string | null;
@@ -34,22 +34,26 @@ export function LanguageSelector({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [tempLanguage, setTempLanguage] = useState<string | null>(selectedLanguage || null);
   const [tempOrganization, setTempOrganization] = useState<string | null>(selectedOrganization || null);
+  const [availableOrgsForLanguage, setAvailableOrgsForLanguage] = useState<OrganizationOption[]>(organizations);
+  const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
 
-  // Get organizations available for the selected language
-  const availableOrgsForLanguage = useMemo(() => {
-    if (!tempLanguage) return organizations;
-    return getOrganizationsForLanguage(tempLanguage);
-  }, [tempLanguage, getOrganizationsForLanguage, organizations]);
-
-  // Auto-select organization if only one is available
+  // Fetch organizations when language changes and we're on organization step
   useEffect(() => {
-    if (step === 'organization' && availableOrgsForLanguage.length === 1) {
-      setTempOrganization(availableOrgsForLanguage[0].id);
-    } else if (step === 'organization' && !tempOrganization && availableOrgsForLanguage.length > 0) {
-      // Default to first available
-      setTempOrganization(availableOrgsForLanguage[0].id);
+    if (step === 'organization' && tempLanguage) {
+      setIsLoadingOrgs(true);
+      getOrganizationsForLanguage(tempLanguage)
+        .then((orgs) => {
+          setAvailableOrgsForLanguage(orgs);
+          // Auto-select if only one, or default to first
+          if (orgs.length === 1) {
+            setTempOrganization(orgs[0].id);
+          } else if (!tempOrganization && orgs.length > 0) {
+            setTempOrganization(orgs[0].id);
+          }
+        })
+        .finally(() => setIsLoadingOrgs(false));
     }
-  }, [step, availableOrgsForLanguage, tempOrganization]);
+  }, [step, tempLanguage, getOrganizationsForLanguage]);
 
   const filteredLanguages = useMemo(() => {
     if (!searchQuery.trim()) return languages;
@@ -258,6 +262,13 @@ export function LanguageSelector({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
+                {isLoadingOrgs ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                    ))}
+                  </div>
+                ) : (
                 <div className="space-y-3">
                   {availableOrgsForLanguage.map((org, index) => (
                     <motion.button
@@ -304,6 +315,7 @@ export function LanguageSelector({
                     </motion.button>
                   ))}
                 </div>
+                )}
               </motion.div>
 
               {/* Navigation Buttons */}

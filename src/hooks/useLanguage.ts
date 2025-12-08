@@ -16,14 +16,7 @@ export interface OrganizationOption {
   description?: string;
 }
 
-export interface CatalogEntry {
-  languageId: string;
-  languageName: string;
-  nativeName?: string;
-  direction: 'ltr' | 'rtl';
-  organizationId: string;
-  organizationName: string;
-}
+// CatalogEntry interface removed - using direct API calls now
 
 // Fallback languages if API fails
 const FALLBACK_LANGUAGES: LanguageOption[] = [
@@ -45,134 +38,94 @@ export function useLanguage() {
   const [organization, setOrganizationState] = useState<string | null>(null);
   const [availableLanguages, setAvailableLanguages] = useState<LanguageOption[]>([]);
   const [availableOrganizations, setAvailableOrganizations] = useState<OrganizationOption[]>([]);
-  const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([]);
+  
   const [isLoading, setIsLoading] = useState(true);
   const [needsSelection, setNeedsSelection] = useState(false);
 
-  // Fetch catalog from Door43 API
-  const fetchCatalog = useCallback(async () => {
+  // Fetch languages from Door43 API
+  const fetchLanguages = useCallback(async () => {
     try {
-      console.log('[useLanguage] Fetching Door43 catalog...');
-      const response = await fetch('https://api.door43.org/v3/catalog.json');
+      console.log('[useLanguage] Fetching languages from Door43 catalog API...');
+      const response = await fetch('https://git.door43.org/api/v1/catalog/list/languages');
       
       if (!response.ok) {
-        console.error('[useLanguage] Failed to fetch catalog:', response.status);
+        console.error('[useLanguage] Failed to fetch languages:', response.status);
         setAvailableLanguages(FALLBACK_LANGUAGES);
-        setAvailableOrganizations(FALLBACK_ORGANIZATIONS);
         return;
       }
 
-      const catalog = await response.json();
-      const entries: CatalogEntry[] = [];
-      const languageMap = new Map<string, LanguageOption>();
-      const orgMap = new Map<string, OrganizationOption>();
+      const data = await response.json();
+      console.log('[useLanguage] Languages response:', data);
 
-      // Parse the catalog structure: catalog.languages is an array of language objects
-      if (catalog.languages && Array.isArray(catalog.languages)) {
-        for (const lang of catalog.languages) {
-          const langId = lang.identifier || lang.slug;
-          const langName = lang.title || lang.identifier;
-          const nativeName = lang.title || langName;
-          const direction = lang.direction || 'ltr';
+      if (data.data && Array.isArray(data.data)) {
+        const languages: LanguageOption[] = data.data.map((lang: { lc: string; ln: string; ang: string; ld: string }) => ({
+          id: lang.lc,
+          name: lang.ang || lang.ln, // English name or native name
+          nativeName: lang.ln,
+          direction: lang.ld === 'rtl' ? 'rtl' : 'ltr',
+        }));
 
-          // Each language has resources, each resource has a checking entity (organization)
-          if (lang.resources && Array.isArray(lang.resources)) {
-            for (const resource of lang.resources) {
-              // Get owner from the resource's repo URL or checking entity
-              let owner = 'unfoldingWord';
-              
-              if (resource.checking_entity && resource.checking_entity.length > 0) {
-                owner = resource.checking_entity[0];
-              } else if (resource.formats && resource.formats.length > 0) {
-                // Try to extract owner from URL
-                const url = resource.formats[0]?.url || '';
-                const match = url.match(/\/([^\/]+)\/[^\/]+\/releases\//);
-                if (match) {
-                  owner = match[1];
-                }
-              }
-
-              // Only include resources that have Bible-related content
-              const relevantSubjects = ['Bible', 'Translation Notes', 'Translation Words', 'Translation Academy', 'Translation Questions'];
-              if (resource.subject && relevantSubjects.some(s => resource.subject.includes(s))) {
-                entries.push({
-                  languageId: langId,
-                  languageName: langName,
-                  nativeName: nativeName,
-                  direction: direction as 'ltr' | 'rtl',
-                  organizationId: owner,
-                  organizationName: owner,
-                });
-
-                // Track unique languages and organizations
-                if (!languageMap.has(langId)) {
-                  languageMap.set(langId, {
-                    id: langId,
-                    name: langName,
-                    nativeName: nativeName,
-                    direction: direction as 'ltr' | 'rtl',
-                  });
-                }
-
-                if (!orgMap.has(owner)) {
-                  orgMap.set(owner, {
-                    id: owner,
-                    name: owner === 'unfoldingWord' ? 'unfoldingWord' : owner,
-                    description: owner === 'unfoldingWord' ? 'Open-licensed Bible resources' : 'Community translations',
-                  });
-                }
-              }
-            }
-          }
-        }
-      }
-
-      console.log(`[useLanguage] Parsed ${entries.length} catalog entries, ${languageMap.size} languages, ${orgMap.size} organizations`);
-
-      if (languageMap.size > 0) {
-        // Sort languages: English first, then alphabetically
-        const languages = Array.from(languageMap.values()).sort((a, b) => {
+        // Sort: English first, then alphabetically
+        languages.sort((a, b) => {
           if (a.id === 'en') return -1;
           if (b.id === 'en') return 1;
           return a.name.localeCompare(b.name);
         });
+
+        console.log(`[useLanguage] Loaded ${languages.length} languages`);
         setAvailableLanguages(languages);
-        
-        // Sort organizations: unfoldingWord first
-        const orgs = Array.from(orgMap.values()).sort((a, b) => {
+      } else {
+        console.warn('[useLanguage] Unexpected languages response format');
+        setAvailableLanguages(FALLBACK_LANGUAGES);
+      }
+    } catch (error) {
+      console.error('[useLanguage] Failed to fetch languages:', error);
+      setAvailableLanguages(FALLBACK_LANGUAGES);
+    }
+  }, []);
+
+  // Fetch owners for a specific language from Door43 API
+  const fetchOwnersForLanguage = useCallback(async (langId: string) => {
+    try {
+      console.log(`[useLanguage] Fetching owners for language: ${langId}`);
+      const response = await fetch(`https://git.door43.org/api/v1/catalog/list/owners?lang=${langId}`);
+      
+      if (!response.ok) {
+        console.error('[useLanguage] Failed to fetch owners:', response.status);
+        return FALLBACK_ORGANIZATIONS;
+      }
+
+      const data = await response.json();
+      console.log('[useLanguage] Owners response:', data);
+
+      if (data.data && Array.isArray(data.data)) {
+        const orgs: OrganizationOption[] = data.data.map((owner: { username: string; full_name: string }) => ({
+          id: owner.username,
+          name: owner.full_name || owner.username,
+          description: owner.username === 'unfoldingWord' ? 'Open-licensed Bible resources' : 'Community translations',
+        }));
+
+        // Sort: unfoldingWord first
+        orgs.sort((a, b) => {
           if (a.id === 'unfoldingWord') return -1;
           if (b.id === 'unfoldingWord') return 1;
           return a.name.localeCompare(b.name);
         });
-        setAvailableOrganizations(orgs);
-        setCatalogEntries(entries);
-      } else {
-        console.warn('[useLanguage] No entries found in catalog, using fallback');
-        setAvailableLanguages(FALLBACK_LANGUAGES);
-        setAvailableOrganizations(FALLBACK_ORGANIZATIONS);
+
+        console.log(`[useLanguage] Loaded ${orgs.length} owners for ${langId}`);
+        return orgs;
       }
+      return FALLBACK_ORGANIZATIONS;
     } catch (error) {
-      console.error('[useLanguage] Failed to fetch catalog:', error);
-      setAvailableLanguages(FALLBACK_LANGUAGES);
-      setAvailableOrganizations(FALLBACK_ORGANIZATIONS);
+      console.error('[useLanguage] Failed to fetch owners:', error);
+      return FALLBACK_ORGANIZATIONS;
     }
   }, []);
 
-  // Get organizations available for a specific language
-  const getOrganizationsForLanguage = useCallback((langId: string): OrganizationOption[] => {
-    const orgsForLang = new Set<string>();
-    for (const entry of catalogEntries) {
-      if (entry.languageId === langId) {
-        orgsForLang.add(entry.organizationId);
-      }
-    }
-    
-    if (orgsForLang.size === 0) {
-      return availableOrganizations;
-    }
-    
-    return availableOrganizations.filter(org => orgsForLang.has(org.id));
-  }, [catalogEntries, availableOrganizations]);
+  // Get organizations available for a specific language (async fetch)
+  const getOrganizationsForLanguage = useCallback(async (langId: string): Promise<OrganizationOption[]> => {
+    return fetchOwnersForLanguage(langId);
+  }, [fetchOwnersForLanguage]);
 
   // Initialize language and organization from localStorage
   useEffect(() => {
@@ -187,8 +140,8 @@ export function useLanguage() {
       setNeedsSelection(true);
     }
     
-    fetchCatalog().finally(() => setIsLoading(false));
-  }, [fetchCatalog]);
+    fetchLanguages().finally(() => setIsLoading(false));
+  }, [fetchLanguages]);
 
   const setLanguage = useCallback((langId: string) => {
     localStorage.setItem(LANGUAGE_KEY, langId);
@@ -232,7 +185,6 @@ export function useLanguage() {
     availableLanguages,
     availableOrganizations,
     getOrganizationsForLanguage,
-    catalogEntries,
     isLoading,
     needsSelection,
     getCurrentLanguage,
