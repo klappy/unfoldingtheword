@@ -23,16 +23,31 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, isLoading,
   useEffect(() => {
     if (!passage?.book || !passage.targetChapter) return;
 
-    // Small delay to ensure DOM is ready
-    const timer = setTimeout(() => {
+    // Retry scroll until element is available (refs may not be ready immediately)
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    const attemptScroll = () => {
       const targetEl = chapterRefs.current.get(passage.targetChapter!);
       if (targetEl && scrollContainerRef.current) {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return true;
+      }
+      return false;
+    };
+
+    const timer = setInterval(() => {
+      attempts++;
+      if (attemptScroll() || attempts >= maxAttempts) {
+        clearInterval(timer);
       }
     }, 100);
 
-    return () => clearTimeout(timer);
-  }, [passage?.book?.book, passage?.targetChapter]);
+    // Also try immediately
+    attemptScroll();
+
+    return () => clearInterval(timer);
+  }, [passage?.book?.book, passage?.targetChapter, passage?.book?.chapters?.length]);
 
   // Clear selection when book changes
   useEffect(() => {
