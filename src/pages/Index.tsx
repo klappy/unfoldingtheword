@@ -1,12 +1,15 @@
 import { useCallback, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Resource } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
+import { useLanguage } from '@/hooks/useLanguage';
 import { SwipeContainer } from '@/components/SwipeContainer';
 import { ChatCard } from '@/components/ChatCard';
 import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
+import { LanguageSelector } from '@/components/LanguageSelector';
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
@@ -14,6 +17,17 @@ import { useNotes } from '@/hooks/useNotes';
 import { useConversations } from '@/hooks/useConversations';
 
 const Index = () => {
+  const {
+    language,
+    setLanguage,
+    availableLanguages,
+    isLoading: languageLoading,
+    needsSelection,
+    getCurrentLanguage,
+  } = useLanguage();
+
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+
   const {
     currentCard,
     swipeDirection,
@@ -158,6 +172,8 @@ const Index = () => {
             onSendMessage={handleSendMessage}
             onResourceClick={handleResourceClick}
             isLoading={chatLoading}
+            currentLanguage={getCurrentLanguage()}
+            onChangeLanguage={() => setShowLanguageSelector(true)}
           />
         );
       case 'scripture':
@@ -201,7 +217,24 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage]);
+
+  // Show language selector on first launch or when manually triggered
+  if (needsSelection || showLanguageSelector) {
+    return (
+      <AnimatePresence>
+        <LanguageSelector
+          languages={availableLanguages}
+          isLoading={languageLoading}
+          onSelect={(langId) => {
+            setLanguage(langId);
+            setShowLanguageSelector(false);
+          }}
+          selectedLanguage={language}
+        />
+      </AnimatePresence>
+    );
+  }
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
