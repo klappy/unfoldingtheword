@@ -1,15 +1,23 @@
 import { useState, useCallback, useRef } from 'react';
 import { ScripturePassage, Resource, ScriptureBook } from '@/types';
+import { toast } from '@/hooks/use-toast';
 import {
   fetchScripture,
   fetchBook,
+  fetchBookWithFallback,
   fetchTranslationNotes,
   fetchTranslationQuestions,
   fetchTranslationWordLinks,
   fetchTranslationWord,
   searchResources,
   BookData,
+  FallbackInfo,
 } from '@/services/translationHelpsApi';
+
+export interface FallbackState {
+  hasFallback: boolean;
+  fallbackInfo: FallbackInfo | null;
+}
 
 // Parse reference to extract book, chapter, verse
 function parseReference(ref: string): { book: string; chapter: number; verse?: number } | null {
@@ -37,21 +45,23 @@ export function useScriptureData() {
   const [verseFilter, setVerseFilter] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fallbackState, setFallbackState] = useState<FallbackState>({ hasFallback: false, fallbackInfo: null });
   
   // Cache for fetched books
   const bookCache = useRef<Map<string, ScriptureBook>>(new Map());
+  const hasShownFallbackToast = useRef(false);
 
-  // Load book data in background (fast - just book name)
-  const loadBookInBackground = useCallback(async (bookName: string): Promise<ScriptureBook | null> => {
+  // Load book data in background with fallback support
+  const loadBookInBackground = useCallback(async (bookName: string): Promise<{ book: ScriptureBook; fallbackInfo: FallbackInfo | null } | null> => {
     // Check cache first
     if (bookCache.current.has(bookName)) {
       console.log(`[useScriptureData] Book cache hit: ${bookName}`);
-      return bookCache.current.get(bookName)!;
+      return { book: bookCache.current.get(bookName)!, fallbackInfo: null };
     }
 
     console.log(`[useScriptureData] Loading book in background: ${bookName}`);
     try {
-      const fetchedBook = await fetchBook(bookName);
+      const fetchedBook = await fetchBookWithFallback(bookName);
       const bookData: ScriptureBook = {
         book: fetchedBook.book,
         chapters: fetchedBook.chapters,
@@ -59,7 +69,7 @@ export function useScriptureData() {
         metadata: fetchedBook.metadata,
       };
       bookCache.current.set(bookName, bookData);
-      return bookData;
+      return { book: bookData, fallbackInfo: fetchedBook.fallbackInfo };
     } catch (err) {
       console.error(`[useScriptureData] Failed to load book ${bookName}:`, err);
       return null;
@@ -105,12 +115,26 @@ export function useScriptureData() {
         throw new Error('Failed to load book data');
       }
 
+      const { book: loadedBook, fallbackInfo } = bookData;
+
+      // Handle fallback notification
+      if (fallbackInfo?.usedFallback && !hasShownFallbackToast.current) {
+        hasShownFallbackToast.current = true;
+        setFallbackState({ hasFallback: true, fallbackInfo });
+        toast({
+          title: "Using English Resources",
+          description: `Scripture for ${fallbackInfo.requestedLanguage} isn't available yet. Showing English with translation option.`,
+          duration: 5000,
+        });
+      }
+
       console.log('[useScriptureData] Fetched data:', {
-        book: bookData.book,
-        chaptersCount: bookData.chapters.length,
+        book: loadedBook.book,
+        chaptersCount: loadedBook.chapters.length,
         notesCount: notes.length,
         questionsCount: questions.length,
         wordLinksCount: wordLinks.length,
+        usedFallback: fallbackInfo?.usedFallback,
       });
 
       // Build resources array
@@ -184,9 +208,9 @@ export function useScriptureData() {
         reference,
         text: '',
         verses: [],
-        translation: bookData.translation,
-        metadata: bookData.metadata,
-        book: bookData,
+        translation: loadedBook.translation,
+        metadata: loadedBook.metadata,
+        book: loadedBook,
         targetChapter: chapter,
         targetVerse: verse,
       });
@@ -378,6 +402,8 @@ export function useScriptureData() {
     setAllResources([]);
     setVerseFilter(null);
     setError(null);
+    setFallbackState({ hasFallback: false, fallbackInfo: null });
+    hasShownFallbackToast.current = false;
   }, []);
 
   // Clear verse filter and show all resources
@@ -441,6 +467,7 @@ export function useScriptureData() {
     isLoading,
     error,
     verseFilter,
+    fallbackState,
     loadScriptureData,
     loadKeywordResources,
     filterByVerse,

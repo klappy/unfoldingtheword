@@ -4,6 +4,8 @@ import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X } from 'luci
 import { ScripturePassage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FallbackBadge } from '@/components/FallbackBadge';
+import { FallbackState } from '@/hooks/useScriptureData';
 import { cn } from '@/lib/utils';
 
 interface ScriptureCardProps {
@@ -14,9 +16,11 @@ interface ScriptureCardProps {
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  fallbackState?: FallbackState;
+  onTranslateRequest?: () => void;
 }
 
-export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilter, isLoading, error, onRetry }: ScriptureCardProps) {
+export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilter, isLoading, error, onRetry, fallbackState, onTranslateRequest }: ScriptureCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   
@@ -253,9 +257,17 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilte
           animate={{ opacity: 1, y: 0 }}
           className="px-6 pb-3 bg-background/95 backdrop-blur-sm z-10"
         >
-          <div className="flex items-center gap-2 text-primary">
-            <Book className="w-4 h-4" />
-            <span className="text-sm font-medium">{passage.book.book}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-primary">
+              <Book className="w-4 h-4" />
+              <span className="text-sm font-medium">{passage.book.book}</span>
+            </div>
+            {fallbackState?.hasFallback && (
+              <FallbackBadge 
+                onTranslateClick={onTranslateRequest}
+                showTranslateButton={!!onTranslateRequest}
+              />
+            )}
           </div>
           <span className="text-xs text-muted-foreground">{passage.translation}</span>
         </motion.div>

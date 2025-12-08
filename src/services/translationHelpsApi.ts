@@ -63,17 +63,58 @@ function getCurrentOrganization(): string {
   return localStorage.getItem('bible-study-organization') || 'unfoldingWord';
 }
 
-async function callProxy(endpoint: string, params: Record<string, any>) {
-  // Inject language and organization parameters if not already present
-  const language = params.language || getCurrentLanguage();
-  const organization = params.organization || getCurrentOrganization();
-  const paramsWithDefaults = { ...params, language, organization };
+export interface FallbackInfo {
+  usedFallback: boolean;
+  requestedLanguage: string;
+  requestedOrganization: string;
+  actualLanguage: string;
+  actualOrganization: string;
+}
+
+interface ProxyResponse {
+  data: any;
+  fallbackInfo: FallbackInfo;
+}
+
+async function callProxyWithFallback(endpoint: string, params: Record<string, any>): Promise<ProxyResponse> {
+  const requestedLanguage = params.language || getCurrentLanguage();
+  const requestedOrganization = params.organization || getCurrentOrganization();
+  const paramsWithDefaults = { ...params, language: requestedLanguage, organization: requestedOrganization };
   
   console.log(`[translationHelpsApi] Calling ${endpoint} with params:`, paramsWithDefaults);
   
-  const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
+  // Try with requested language/org first
+  let { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
     body: { endpoint, params: paramsWithDefaults },
   });
+
+  let usedFallback = false;
+  let actualLanguage = requestedLanguage;
+  let actualOrganization = requestedOrganization;
+
+  // Check if we got empty/error response and need to fallback to English
+  const isEmpty = !data || data?.error || 
+    (data?.content === '' && !data?.hits?.length) ||
+    (Array.isArray(data) && data.length === 0) ||
+    (data?.total_hits === 0);
+
+  if (isEmpty && requestedLanguage !== 'en') {
+    console.log(`[translationHelpsApi] No content for ${requestedLanguage}, falling back to English/unfoldingWord`);
+    
+    const fallbackParams = { ...params, language: 'en', organization: 'unfoldingWord' };
+    const fallbackResult = await supabase.functions.invoke('translation-helps-proxy', {
+      body: { endpoint, params: fallbackParams },
+    });
+
+    if (!fallbackResult.error && fallbackResult.data && !fallbackResult.data.error) {
+      data = fallbackResult.data;
+      error = null;
+      usedFallback = true;
+      actualLanguage = 'en';
+      actualOrganization = 'unfoldingWord';
+      console.log(`[translationHelpsApi] Fallback successful for ${endpoint}`);
+    }
+  }
 
   if (error) {
     console.error(`[translationHelpsApi] Proxy error for ${endpoint}:`, error);
@@ -86,7 +127,23 @@ async function callProxy(endpoint: string, params: Record<string, any>) {
   }
 
   console.log(`[translationHelpsApi] Response for ${endpoint}:`, data);
-  return data;
+  
+  return {
+    data,
+    fallbackInfo: {
+      usedFallback,
+      requestedLanguage,
+      requestedOrganization,
+      actualLanguage,
+      actualOrganization,
+    }
+  };
+}
+
+// Legacy function for backwards compatibility
+async function callProxy(endpoint: string, params: Record<string, any>) {
+  const result = await callProxyWithFallback(endpoint, params);
+  return result.data;
 }
 
 // Parse YAML frontmatter from markdown content
@@ -522,6 +579,92 @@ export async function fetchBook(bookName: string): Promise<BookData> {
     chapters,
     translation,
     metadata,
+  };
+}
+
+export interface BookDataWithFallback extends BookData {
+  fallbackInfo: FallbackInfo;
+}
+
+// Fetch entire book with fallback support
+export async function fetchBookWithFallback(bookName: string): Promise<BookDataWithFallback> {
+  const totalChapters = BOOK_CHAPTERS[bookName];
+  if (!totalChapters) {
+    throw new Error(`Unknown book: ${bookName}`);
+  }
+
+  const requestedLanguage = getCurrentLanguage();
+  const requestedOrganization = getCurrentOrganization();
+
+  console.log(`[translationHelpsApi] Fetching full book with fallback: ${bookName} (${requestedLanguage}/${requestedOrganization})`);
+
+  // Try first chapter to detect if fallback is needed
+  const firstRef = `${bookName} 1`;
+  const firstResult = await callProxyWithFallback('fetch-scripture', { reference: firstRef });
+  
+  const fallbackInfo = firstResult.fallbackInfo;
+  const actualLanguage = fallbackInfo.actualLanguage;
+  const actualOrganization = fallbackInfo.actualOrganization;
+
+  // If fallback was used, log it
+  if (fallbackInfo.usedFallback) {
+    console.log(`[translationHelpsApi] Book ${bookName} using fallback: ${actualLanguage}/${actualOrganization}`);
+  }
+
+  // Fetch all remaining chapters with the determined language/org
+  const chapters: BookChapter[] = [];
+  const batchSize = 5;
+  
+  for (let i = 1; i <= totalChapters; i += batchSize) {
+    const batch = [];
+    for (let j = i; j < Math.min(i + batchSize, totalChapters + 1); j++) {
+      batch.push(j);
+    }
+    
+    const batchResults = await Promise.all(
+      batch.map(async (chapterNum) => {
+        try {
+          const reference = `${bookName} ${chapterNum}`;
+          // Use the actual language/org determined from first chapter
+          const data = await callProxy('fetch-scripture', { 
+            reference, 
+            language: actualLanguage, 
+            organization: actualOrganization 
+          });
+          const content = data.content || data.text || '';
+          const { verses } = parseScriptureMarkdown(content, reference);
+          return { chapter: chapterNum, verses };
+        } catch (err) {
+          console.error(`[fetchBookWithFallback] Failed to fetch ${bookName} ${chapterNum}:`, err);
+          return { chapter: chapterNum, verses: [] };
+        }
+      })
+    );
+    
+    chapters.push(...batchResults);
+  }
+
+  chapters.sort((a, b) => a.chapter - b.chapter);
+
+  // Get metadata from first chapter
+  let translation = 'unfoldingWord Literal Text';
+  let metadata: ScriptureResponse['metadata'] | undefined;
+
+  if (chapters.length > 0 && chapters[0].verses.length > 0) {
+    const content = firstResult.data.content || '';
+    const parsed = parseScriptureMarkdown(content, firstRef);
+    translation = parsed.translation;
+    metadata = parsed.metadata;
+  }
+
+  console.log(`[translationHelpsApi] Fetched ${bookName} with fallback: ${chapters.length} chapters`);
+
+  return {
+    book: bookName,
+    chapters,
+    translation,
+    metadata,
+    fallbackInfo,
   };
 }
 
