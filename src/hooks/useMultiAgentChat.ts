@@ -129,7 +129,7 @@ export function useMultiAgentChat() {
         return {
           id: `${Date.now()}-${index}`,
           role: 'assistant' as const,
-          content: `**${agent.emoji} ${agent.name}**\n\n${agent.content}`,
+          content: `${agent.emoji} ${agent.content}`,
           agent: agentType,
           timestamp: new Date(),
           resources: resources.length > 0 ? resources : undefined,
