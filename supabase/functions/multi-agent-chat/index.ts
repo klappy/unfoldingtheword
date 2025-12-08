@@ -250,7 +250,52 @@ function parseMarkdownWordLinks(content: string, reference: string): any[] {
   return wordLinks;
 }
 
-// Fetch scripture passage from MCP - pass reference directly, let MCP server handle parsing
+// Detect if the user's message indicates pastoral/emotional support needs
+function detectPastoralIntent(message: string): boolean {
+  const lowerMessage = message.toLowerCase();
+  
+  // Keywords indicating emotional distress or support-seeking
+  const pastoralKeywords = [
+    'lonely', 'depressed', 'depression', 'anxious', 'anxiety', 'scared', 'afraid',
+    'hurting', 'hurt', 'pain', 'suffering', 'struggling', 'lost', 'hopeless',
+    'worried', 'stress', 'stressed', 'grief', 'grieving', 'mourning', 'sad', 'sadness',
+    'broken', 'desperate', 'help me', 'need help', 'pray for', 'prayers',
+    'dying', 'death', 'divorce', 'betrayed', 'abandoned', 'alone', 'suicide',
+    'tempted', 'temptation', 'sin', 'guilt', 'shame', 'forgive', 'forgiveness',
+    'angry', 'anger', 'rage', 'bitter', 'resentment', 'hate', 'hatred',
+    'comfort', 'peace', 'healing', 'hope', 'strength', 'courage',
+    'marriage', 'relationship', 'family', 'children', 'parents',
+    'job', 'money', 'finances', 'health', 'illness', 'sick', 'disease',
+    "can't go on", "don't know what to do", 'overwhelmed', 'exhausted'
+  ];
+  
+  // Check for pastoral keywords
+  for (const keyword of pastoralKeywords) {
+    if (lowerMessage.includes(keyword)) {
+      return true;
+    }
+  }
+  
+  // Patterns indicating personal struggle
+  const pastoralPatterns = [
+    /i('m| am) (feeling|so|very|really)\s/,
+    /my (heart|soul|spirit|life)\s/,
+    /what (should|do) i do/,
+    /help me (understand|cope|deal|get through)/,
+    /going through/,
+    /i need/,
+    /i feel/,
+  ];
+  
+  for (const pattern of pastoralPatterns) {
+    if (pattern.test(lowerMessage)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 async function fetchScripturePassage(reference: string): Promise<string | null> {
   try {
     // Pass the reference directly to the MCP server - it handles all the mapping
@@ -489,9 +534,36 @@ ${wordResources.length > 0 ? `WORD STUDIES:\n${wordResources.slice(0, 5).map(r =
 ${academyResources.length > 0 ? `ACADEMY ARTICLES:\n${academyResources.slice(0, 5).map(r => `- ${r.title}: ${r.content || r.snippet}`).join('\n')}\n` : ''}
 `;
 
-  const systemPrompt = `You are a Bible study assistant. You must ONLY use the resources provided below to answer. Do NOT use your own knowledge.
+  // Detect user intent - pastoral/support needs vs research/study
+  const isPastoralQuery = detectPastoralIntent(userMessage);
+  
+  const roleClarity = `
+YOUR ROLE: You are a Bible translation resource assistant. Your purpose is to:
+- Help users FIND relevant scripture passages and translation resources
+- PARAPHRASE and SUMMARIZE resource content to help users understand
+- Guide users to explore the resources themselves (swipe right to view)
 
-Keep responses VERY SHORT - 2-3 sentences max summarizing what was found. The user can swipe right to see full resources.
+YOU DO NOT:
+- Directly interpret scripture or provide your own theological opinions
+- Act as a pastor, counselor, or spiritual authority
+- Give advice on life decisions beyond pointing to relevant scripture
+
+When asked to interpret scripture, kindly explain that your role is to help find and summarize resources, and encourage the user to study the passages and resources themselves or consult with their faith community.`;
+
+  const pastoralTone = isPastoralQuery ? `
+IMPORTANT - PASTORAL SENSITIVITY:
+The user appears to be seeking comfort or support. Respond with warmth and compassion while still pointing to relevant resources. 
+- Acknowledge their feelings briefly
+- Share a relevant scripture or resource that might bring comfort
+- Remind them that while you can find helpful resources, speaking with a pastor, counselor, or trusted friend may also be valuable
+Keep your response gentle and supportive.` : '';
+
+  const systemPrompt = `${roleClarity}
+${pastoralTone}
+
+You must ONLY use the resources provided below to answer. Do NOT use your own knowledge.
+
+Keep responses SHORT - 2-4 sentences summarizing what was found. The user can swipe right to see full resources.
 
 ${resourceContext}
 
