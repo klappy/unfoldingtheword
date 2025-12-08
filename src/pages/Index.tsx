@@ -248,11 +248,15 @@ const Index = () => {
             onTranslateRequest={handleTranslateAllRequest}
             isTranslating={isTranslating}
             versionPreferences={versionPreferences}
-            onVersionSelect={(version) => {
+            onVersionSelect={async (version) => {
               setActiveVersion(version);
-              // Reload scripture with new version
+              // Clear and reload scripture with new version
               if (scripture?.reference) {
-                loadScriptureData(scripture.reference);
+                const ref = scripture.reference;
+                clearScriptureData(); // Clear first to force skeleton
+                // Small delay to ensure localStorage update propagates
+                await new Promise(resolve => setTimeout(resolve, 50));
+                loadScriptureData(ref);
               }
             }}
             currentLanguage={language || 'en'}
