@@ -3,14 +3,16 @@ import { motion } from 'framer-motion';
 import { PenLine, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Note } from '@/types';
 import { cn } from '@/lib/utils';
+import { TranslationStrings } from '@/i18n/translations';
 
 interface NotesCardProps {
   notes: Note[];
   onAddNote: (content: string) => void;
   onDeleteNote: (id: string) => void;
+  t: (key: keyof TranslationStrings) => string;
 }
 
-export function NotesCard({ notes, onAddNote, onDeleteNote }: NotesCardProps) {
+export function NotesCard({ notes, onAddNote, onDeleteNote, t }: NotesCardProps) {
   const [newNote, setNewNote] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -32,7 +34,7 @@ export function NotesCard({ notes, onAddNote, onDeleteNote }: NotesCardProps) {
       <div className="px-6 pb-4">
         <div className="flex items-center gap-2 text-foreground">
           <PenLine className="w-4 h-4 text-emerald-400" />
-          <span className="text-sm font-medium">Personal Notes</span>
+          <span className="text-sm font-medium">{t('notes.title')}</span>
         </div>
       </div>
 
@@ -42,8 +44,7 @@ export function NotesCard({ notes, onAddNote, onDeleteNote }: NotesCardProps) {
           {notes.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-sm">
-                Your notes will appear here.<br />
-                Select text from other cards to add.
+                {t('notes.empty.description')}
               </p>
             </div>
           )}
@@ -90,7 +91,7 @@ export function NotesCard({ notes, onAddNote, onDeleteNote }: NotesCardProps) {
             <textarea
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
-              placeholder="Add a note..."
+              placeholder={t('notes.placeholder')}
               rows={2}
               className="w-full bg-transparent text-foreground placeholder:text-muted-foreground 
                        resize-none outline-none px-3 py-2 text-sm"
@@ -106,7 +107,7 @@ export function NotesCard({ notes, onAddNote, onDeleteNote }: NotesCardProps) {
                     : 'bg-muted text-muted-foreground'
                 )}
               >
-                Save Note
+                {t('notes.save')}
               </button>
             </div>
           </div>
@@ -117,10 +118,10 @@ export function NotesCard({ notes, onAddNote, onDeleteNote }: NotesCardProps) {
       <div className="absolute bottom-20 left-0 right-0 flex justify-between px-6 text-muted-foreground/40">
         <div className="flex items-center gap-1 text-xs">
           <ChevronLeft className="w-4 h-4" />
-          <span>Resources</span>
+          <span>{t('nav.resources')}</span>
         </div>
         <div className="flex items-center gap-1 text-xs">
-          <span>Chat</span>
+          <span>{t('nav.chat')}</span>
           <ChevronRight className="w-4 h-4" />
         </div>
       </div>
