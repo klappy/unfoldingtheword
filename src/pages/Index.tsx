@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Resource } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useI18n } from '@/hooks/useI18n';
 import { SwipeContainer } from '@/components/SwipeContainer';
 import { ChatCard } from '@/components/ChatCard';
 import { ScriptureCard } from '@/components/ScriptureCard';
@@ -54,6 +55,9 @@ const Index = () => {
     const lang = availableLanguages.find(l => l.id === language);
     return lang?.name || language;
   }, [availableLanguages, language]);
+
+  // UI localization
+  const { t, isLoading: i18nLoading, hasStaticTranslations, translateUiStrings } = useI18n(language || 'en');
 
   const {
     isTranslating,
@@ -210,6 +214,7 @@ const Index = () => {
             items={conversations}
             onSelectItem={handleHistorySelect}
             onNewConversation={handleNewConversation}
+            t={t}
           />
         );
       case 'chat':
@@ -221,6 +226,10 @@ const Index = () => {
             isLoading={chatLoading}
             currentLanguage={getCurrentLanguage()}
             onChangeLanguage={() => setShowLanguageSelector(true)}
+            t={t}
+            hasStaticTranslations={hasStaticTranslations}
+            onTranslateUi={translateUiStrings}
+            isTranslatingUi={i18nLoading}
           />
         );
       case 'scripture':
@@ -262,6 +271,7 @@ const Index = () => {
             notes={notes}
             onAddNote={(content) => handleAddToNotes(content)}
             onDeleteNote={handleDeleteNote}
+            t={t}
           />
         );
       default:

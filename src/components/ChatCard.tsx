@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Sparkles, Globe } from 'lucide-react';
+import { Send, Sparkles, Globe, Languages, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
+import { TranslationStrings } from '@/i18n/translations';
 
 interface ChatCardProps {
   messages: Message[];
@@ -12,9 +13,13 @@ interface ChatCardProps {
   isLoading?: boolean;
   currentLanguage?: { id: string; name: string; nativeName?: string } | null;
   onChangeLanguage?: () => void;
+  t: (key: keyof TranslationStrings) => string;
+  hasStaticTranslations?: boolean;
+  onTranslateUi?: () => void;
+  isTranslatingUi?: boolean;
 }
 
-export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, currentLanguage, onChangeLanguage }: ChatCardProps) {
+export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, currentLanguage, onChangeLanguage, t, hasStaticTranslations, onTranslateUi, isTranslatingUi }: ChatCardProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -47,19 +52,41 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
     return (
       <div className="flex flex-col h-full pt-4 relative">
         {/* Language button - top right */}
-        {currentLanguage && onChangeLanguage && (
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            onClick={onChangeLanguage}
-            className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full 
-                       bg-muted/50 hover:bg-muted text-muted-foreground text-xs transition-colors"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>{currentLanguage.nativeName || currentLanguage.name}</span>
-          </motion.button>
-        )}
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          {/* Translate UI button - show when no static translations */}
+          {!hasStaticTranslations && onTranslateUi && (
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              onClick={onTranslateUi}
+              disabled={isTranslatingUi}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+                         bg-primary/20 hover:bg-primary/30 text-primary text-xs transition-colors disabled:opacity-50"
+            >
+              {isTranslatingUi ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Languages className="w-3.5 h-3.5" />
+              )}
+              <span>{t('chat.translateUi')}</span>
+            </motion.button>
+          )}
+          
+          {currentLanguage && onChangeLanguage && (
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              onClick={onChangeLanguage}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+                         bg-muted/50 hover:bg-muted text-muted-foreground text-xs transition-colors"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>{currentLanguage.nativeName || currentLanguage.name}</span>
+            </motion.button>
+          )}
+        </div>
         
         <div className="flex-1 flex flex-col items-center justify-center px-4">
           <motion.div
@@ -71,10 +98,10 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
               <Sparkles className="w-8 h-8 text-primary" />
             </div>
             <h2 className="text-xl font-medium text-foreground mb-2">
-              Begin Your Study
+              {t('chat.welcome.title')}
             </h2>
             <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-              Ask about any passage, topic, or word. Swipe left to explore scripture and resources.
+              {t('chat.welcome.subtitle')}
             </p>
           </motion.div>
 
@@ -91,7 +118,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                     handleSubmit(e);
                   }
                 }}
-                placeholder="Ask about scripture..."
+                placeholder={t('chat.placeholder')}
                 rows={1}
                 className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground 
                            resize-none outline-none px-3 py-2 text-sm max-h-32"
@@ -240,7 +267,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                   handleSubmit(e);
                 }
               }}
-              placeholder="Ask about scripture..."
+              placeholder={t('chat.placeholder')}
               rows={1}
               className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground 
                          resize-none outline-none px-3 py-2 text-sm max-h-32"

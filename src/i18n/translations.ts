@@ -10,6 +10,7 @@ export interface TranslationStrings {
   'chat.welcome.subtitle': string;
   'chat.welcome.hint': string;
   'chat.changeLanguage': string;
+  'chat.translateUi': string;
   
   // Scripture
   'scripture.title': string;
@@ -44,12 +45,18 @@ export interface TranslationStrings {
   'notes.add': string;
   'notes.delete': string;
   'notes.placeholder': string;
+  'notes.save': string;
   
   // History
   'history.title': string;
   'history.empty.title': string;
   'history.empty.description': string;
   'history.new': string;
+  'history.startHint': string;
+  
+  // Navigation
+  'nav.chat': string;
+  'nav.resources': string;
   
   // Common
   'common.loading': string;
@@ -86,10 +93,11 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.placeholder': 'Ask about any scripture passage...',
     'chat.send': 'Send',
     'chat.loading': 'Thinking...',
-    'chat.welcome.title': 'Bible Translation Assistant',
-    'chat.welcome.subtitle': 'Ask about any scripture passage to get started',
+    'chat.welcome.title': 'Begin Your Study',
+    'chat.welcome.subtitle': 'Ask about any passage, topic, or word. Swipe left to explore scripture and resources.',
     'chat.welcome.hint': 'Try: "Romans 3" or "What does justification mean?"',
     'chat.changeLanguage': 'Change language',
+    'chat.translateUi': 'Translate UI',
     
     'scripture.title': 'Scripture',
     'scripture.empty.title': 'Scripture Passage',
@@ -115,17 +123,22 @@ export const translations: Record<string, TranslationStrings> = {
     'resources.filtered': 'Filtered to',
     'resources.clearFilter': 'Clear filter',
     
-    'notes.title': 'My Notes',
+    'notes.title': 'Personal Notes',
     'notes.empty.title': 'Personal Notes',
-    'notes.empty.description': 'Select text from scripture or resources to add notes',
+    'notes.empty.description': 'Your notes will appear here. Select text from other cards to add.',
     'notes.add': 'Add note',
     'notes.delete': 'Delete',
-    'notes.placeholder': 'Write a note...',
+    'notes.placeholder': 'Add a note...',
+    'notes.save': 'Save Note',
     
     'history.title': 'History',
     'history.empty.title': 'No Conversations Yet',
     'history.empty.description': 'Your conversation history will appear here',
-    'history.new': 'New Conversation',
+    'history.new': 'New Chat',
+    'history.startHint': 'Start a new chat to begin',
+    
+    'nav.chat': 'Chat',
+    'nav.resources': 'Resources',
     
     'common.loading': 'Loading...',
     'common.error': 'Error',
@@ -158,10 +171,11 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.placeholder': 'Pregunta sobre cualquier pasaje bíblico...',
     'chat.send': 'Enviar',
     'chat.loading': 'Pensando...',
-    'chat.welcome.title': 'Asistente de Traducción Bíblica',
-    'chat.welcome.subtitle': 'Pregunta sobre cualquier pasaje de las Escrituras para comenzar',
+    'chat.welcome.title': 'Comienza Tu Estudio',
+    'chat.welcome.subtitle': 'Pregunta sobre cualquier pasaje, tema o palabra. Desliza a la izquierda para explorar las Escrituras y los recursos.',
     'chat.welcome.hint': 'Intenta: "Romanos 3" o "¿Qué significa justificación?"',
     'chat.changeLanguage': 'Cambiar idioma',
+    'chat.translateUi': 'Traducir interfaz',
     
     'scripture.title': 'Escritura',
     'scripture.empty.title': 'Pasaje Bíblico',
@@ -187,17 +201,22 @@ export const translations: Record<string, TranslationStrings> = {
     'resources.filtered': 'Filtrado a',
     'resources.clearFilter': 'Quitar filtro',
     
-    'notes.title': 'Mis Notas',
+    'notes.title': 'Notas Personales',
     'notes.empty.title': 'Notas Personales',
-    'notes.empty.description': 'Selecciona texto de las Escrituras o recursos para agregar notas',
+    'notes.empty.description': 'Tus notas aparecerán aquí. Selecciona texto de otras tarjetas para agregar.',
     'notes.add': 'Agregar nota',
     'notes.delete': 'Eliminar',
-    'notes.placeholder': 'Escribe una nota...',
+    'notes.placeholder': 'Agregar una nota...',
+    'notes.save': 'Guardar Nota',
     
     'history.title': 'Historial',
     'history.empty.title': 'Sin Conversaciones Aún',
     'history.empty.description': 'Tu historial de conversaciones aparecerá aquí',
-    'history.new': 'Nueva Conversación',
+    'history.new': 'Nuevo Chat',
+    'history.startHint': 'Inicia un nuevo chat para comenzar',
+    
+    'nav.chat': 'Chat',
+    'nav.resources': 'Recursos',
     
     'common.loading': 'Cargando...',
     'common.error': 'Error',

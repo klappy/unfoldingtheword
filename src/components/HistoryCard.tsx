@@ -1,27 +1,29 @@
 import { History, MessageSquare, Book, Plus } from 'lucide-react';
 import { HistoryItem } from '@/types';
+import { TranslationStrings } from '@/i18n/translations';
 
 interface HistoryCardProps {
   items: HistoryItem[];
   onSelectItem: (item: HistoryItem) => void;
   onNewConversation: () => void;
+  t: (key: keyof TranslationStrings) => string;
 }
 
-export function HistoryCard({ items, onSelectItem, onNewConversation }: HistoryCardProps) {
+export function HistoryCard({ items, onSelectItem, onNewConversation, t }: HistoryCardProps) {
   return (
     <div className="h-full flex flex-col bg-card">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         <div className="flex items-center gap-2 text-foreground">
           <History className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium">History</span>
+          <span className="text-sm font-medium">{t('history.title')}</span>
         </div>
         <button
           onClick={onNewConversation}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium transition-colors"
         >
           <Plus className="w-3 h-3" />
-          New Chat
+          {t('history.new')}
         </button>
       </div>
 
@@ -31,10 +33,10 @@ export function HistoryCard({ items, onSelectItem, onNewConversation }: HistoryC
           <div className="text-center py-12">
             <MessageSquare className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">
-              Your conversation history will appear here
+              {t('history.empty.description')}
             </p>
             <p className="text-muted-foreground/60 text-xs mt-1">
-              Start a new chat to begin
+              {t('history.startHint')}
             </p>
           </div>
         ) : (
