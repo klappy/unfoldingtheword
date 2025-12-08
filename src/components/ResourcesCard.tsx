@@ -10,6 +10,7 @@ import { fetchTranslationWord, fetchTranslationAcademy } from '@/services/transl
 interface ResourcesCardProps {
   resources: Resource[];
   onAddToNotes: (text: string) => void;
+  onSearch?: (query: string) => void;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -52,9 +53,10 @@ interface ExpandableResourceProps {
   resource: Resource;
   index: number;
   onAddToNotes: (text: string) => void;
+  onSearch?: (query: string) => void;
 }
 
-function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourceProps) {
+function ExpandableResource({ resource, index, onAddToNotes, onSearch }: ExpandableResourceProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [isLoadingFull, setIsLoadingFull] = useState(false);
@@ -167,7 +169,21 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
                     h2: ({ children }) => <span className="text-sm font-medium text-foreground">{children}</span>,
                     h3: ({ children }) => <span className="text-sm font-medium text-foreground">{children}</span>,
                     blockquote: ({ children }) => <span className="italic text-muted-foreground">{children}</span>,
-                    a: ({ children }) => <span className="text-primary">{children}</span>,
+                    a: ({ href, children }) => {
+                      const handleClick = (e: React.MouseEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Extract search term from link text or href
+                        const searchTerm = typeof children === 'string' ? children : 
+                          (href?.split('/').pop()?.replace(/\.md$/, '').replace(/-/g, ' ') || 'topic');
+                        onSearch?.(searchTerm);
+                      };
+                      return (
+                        <button onClick={handleClick} className="text-primary underline hover:text-primary/80 inline">
+                          {children}
+                        </button>
+                      );
+                    },
                   }}
                 >
                   {contentPreview}
@@ -221,11 +237,21 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
                         {children}
                       </blockquote>
                     ),
-                    a: ({ href, children }) => (
-                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
-                        {children}
-                      </a>
-                    ),
+                    a: ({ href, children }) => {
+                      const handleClick = (e: React.MouseEvent) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Extract search term from link text or href
+                        const searchTerm = typeof children === 'string' ? children : 
+                          (href?.split('/').pop()?.replace(/\.md$/, '').replace(/-/g, ' ') || 'topic');
+                        onSearch?.(searchTerm);
+                      };
+                      return (
+                        <button onClick={handleClick} className="text-primary underline hover:text-primary/80 inline text-left">
+                          {children}
+                        </button>
+                      );
+                    },
                   }}
                 >
                   {isLoadingFull ? 'Loading full article...' : displayContent}
@@ -239,7 +265,7 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
   );
 }
 
-export function ResourcesCard({ resources, onAddToNotes, isLoading, error, onRetry }: ResourcesCardProps) {
+export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, error, onRetry }: ResourcesCardProps) {
   // Group resources by type
   const groupedResources = resources.reduce((acc, resource) => {
     if (!acc[resource.type]) acc[resource.type] = [];
@@ -372,6 +398,7 @@ export function ResourcesCard({ resources, onAddToNotes, isLoading, error, onRet
               resource={resource}
               index={index}
               onAddToNotes={onAddToNotes}
+              onSearch={onSearch}
             />
           ))}
         </div>
