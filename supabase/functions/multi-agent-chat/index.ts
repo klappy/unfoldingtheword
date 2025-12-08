@@ -212,14 +212,14 @@ Always search for resources - the user needs to see real data from the translati
   return { resources, scriptureText, scriptureReference, searchQuery };
 }
 
-// Generate response based on fetched resources
-async function generateResponseFromResources(
+// Generate a single consolidated response based on fetched resources
+async function generateConsolidatedResponse(
   userMessage: string,
   resources: any[],
   scriptureText: string | null,
   responseLanguage: string,
   conversationHistory: any[]
-): Promise<{ agents: any[] }> {
+): Promise<{ content: string, resourceCounts: { notes: number, questions: number, words: number, academy: number } }> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) {
     throw new Error("LOVABLE_API_KEY is not configured");
@@ -234,24 +234,26 @@ async function generateResponseFromResources(
   const questionResources = resources.filter(r => r.resourceType === 'tq');
   const wordResources = resources.filter(r => r.resourceType === 'tw');
   const academyResources = resources.filter(r => r.resourceType === 'ta');
+  
+  const totalResources = resources.length;
 
   const resourceContext = `
 AVAILABLE RESOURCES FROM MCP SERVER (use ONLY these to answer):
 
 ${scriptureText ? `SCRIPTURE TEXT:\n${scriptureText}\n` : ''}
 
-${noteResources.length > 0 ? `TRANSLATION NOTES:\n${noteResources.map(r => `- ${r.title || r.reference}: ${r.content || r.snippet || r.text}`).join('\n')}\n` : ''}
+${noteResources.length > 0 ? `TRANSLATION NOTES:\n${noteResources.slice(0, 5).map(r => `- ${r.title || r.reference}: ${r.content || r.snippet || r.text}`).join('\n')}\n` : ''}
 
-${questionResources.length > 0 ? `TRANSLATION QUESTIONS:\n${questionResources.map(r => `- ${r.title || r.reference}: ${r.content || r.snippet || r.text}`).join('\n')}\n` : ''}
+${questionResources.length > 0 ? `TRANSLATION QUESTIONS:\n${questionResources.slice(0, 5).map(r => `- ${r.title || r.reference}: ${r.content || r.snippet || r.text}`).join('\n')}\n` : ''}
 
-${wordResources.length > 0 ? `WORD STUDIES:\n${wordResources.map(r => `- ${r.title || r.term}: ${r.content || r.snippet || r.definition}`).join('\n')}\n` : ''}
+${wordResources.length > 0 ? `WORD STUDIES:\n${wordResources.slice(0, 5).map(r => `- ${r.title || r.term}: ${r.content || r.snippet || r.definition}`).join('\n')}\n` : ''}
 
-${academyResources.length > 0 ? `ACADEMY ARTICLES:\n${academyResources.map(r => `- ${r.title}: ${r.content || r.snippet}`).join('\n')}\n` : ''}
+${academyResources.length > 0 ? `ACADEMY ARTICLES:\n${academyResources.slice(0, 5).map(r => `- ${r.title}: ${r.content || r.snippet}`).join('\n')}\n` : ''}
 `;
 
   const systemPrompt = `You are a Bible study assistant. You must ONLY use the resources provided below to answer. Do NOT use your own knowledge.
 
-Keep responses VERY SHORT - like text messages (2-3 sentences max). Point users to "swipe right" to see full resources.
+Keep responses VERY SHORT - 2-3 sentences max summarizing what was found. The user can swipe right to see full resources.
 
 ${resourceContext}
 
@@ -281,58 +283,22 @@ If no relevant resources are found, say so honestly and suggest what to search f
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || "I couldn't find relevant resources for your question.";
+  let content = data.choices?.[0]?.message?.content || "I couldn't find relevant resources for your question.";
 
-  // Determine which agent type to show based on resources found
-  const agents = [];
-  
-  if (resources.length > 0 || scriptureText) {
-    agents.push({
-      agent: 'scripture',
-      name: 'Scripture Scholar',
-      emoji: '📖',
-      content
-    });
+  // If no resources found, provide default message
+  if (totalResources === 0 && !scriptureText) {
+    content = "I couldn't find specific resources for your question. Try asking about a specific Bible passage or topic.";
   }
 
-  if (noteResources.length > 0) {
-    agents.push({
-      agent: 'notes',
-      name: 'Translation Notes Expert',
-      emoji: '📝',
-      content: `Found ${noteResources.length} translation note(s). Swipe to resources to explore.`
-    });
-  }
-
-  if (wordResources.length > 0) {
-    agents.push({
-      agent: 'words',
-      name: 'Word Studies Expert', 
-      emoji: '📚',
-      content: `Found ${wordResources.length} word study(ies). Swipe to resources for definitions.`
-    });
-  }
-
-  if (questionResources.length > 0) {
-    agents.push({
-      agent: 'questions',
-      name: 'Study Questions Guide',
-      emoji: '❓',
-      content: `Found ${questionResources.length} study question(s). Swipe to resources to explore.`
-    });
-  }
-
-  // If no agents, add a default response
-  if (agents.length === 0) {
-    agents.push({
-      agent: 'scripture',
-      name: 'Scripture Scholar',
-      emoji: '📖',
-      content: "I couldn't find specific resources for your question. Try asking about a specific Bible passage or topic."
-    });
-  }
-
-  return { agents };
+  return { 
+    content,
+    resourceCounts: {
+      notes: noteResources.length,
+      questions: questionResources.length,
+      words: wordResources.length,
+      academy: academyResources.length
+    }
+  };
 }
 
 serve(async (req) => {
@@ -356,8 +322,8 @@ serve(async (req) => {
 
     console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}`);
 
-    // Step 2: Generate response based on fetched resources
-    const { agents } = await generateResponseFromResources(
+    // Step 2: Generate consolidated response
+    const { content, resourceCounts } = await generateConsolidatedResponse(
       message,
       resources,
       scriptureText,
@@ -365,16 +331,17 @@ serve(async (req) => {
       conversationHistory
     );
 
-    // Build the response
+    // Build the response with a single consolidated message
     const response = {
       scripture_reference: scriptureReference,
       search_query: searchQuery || message,
-      agents,
-      orchestrator_note: '',
-      mcp_resources: resources // Include raw resources for client-side display
+      content,
+      resource_counts: resourceCounts,
+      total_resources: resources.length,
+      mcp_resources: resources
     };
 
-    console.log("Sending response with agents:", agents.map(r => r.agent));
+    console.log(`Sending consolidated response with ${resources.length} total resources`);
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

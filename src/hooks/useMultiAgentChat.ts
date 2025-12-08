@@ -1,19 +1,18 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Message, AgentType, ResourceLink } from '@/types';
-
-interface AgentResponse {
-  agent: string;
-  name: string;
-  emoji: string;
-  content: string;
-}
+import { Message, ResourceLink } from '@/types';
 
 interface ChatResponse {
   scripture_reference: string | null;
   search_query: string | null;
-  agents: AgentResponse[];
-  orchestrator_note: string;
+  content: string;
+  resource_counts: {
+    notes: number;
+    questions: number;
+    words: number;
+    academy: number;
+  };
+  total_resources: number;
   error?: string;
 }
 
@@ -74,76 +73,65 @@ export function useMultiAgentChat() {
         onScriptureReference(response.scripture_reference);
       }
 
-      // Create messages from each agent
-      const agentMessages: Message[] = response.agents.map((agent, index) => {
-        const agentType = agent.agent as AgentType;
-        
-        // Build resource links based on agent type and available references
-        const resources: ResourceLink[] = [];
-        const searchContext = response.scripture_reference || response.search_query || '';
-        
-        if (response.scripture_reference) {
-          resources.push({
-            type: 'scripture',
-            reference: response.scripture_reference,
-            title: `${response.scripture_reference}`,
-          });
-        }
+      // Build resource links for the consolidated response
+      const resources: ResourceLink[] = [];
+      const searchContext = response.scripture_reference || response.search_query || '';
+      
+      if (response.scripture_reference) {
+        resources.push({
+          type: 'scripture',
+          reference: response.scripture_reference,
+          title: `📖 ${response.scripture_reference}`,
+        });
+      }
 
-        // Add resource links for each agent type - works for both scripture refs and keyword searches
-        if (agent.agent === 'notes' && searchContext) {
-          resources.push({
-            type: 'note',
-            reference: searchContext,
-            title: response.scripture_reference ? 'View Translation Notes' : `Notes on "${searchContext}"`,
-            preview: agent.content.slice(0, 150),
-          });
-        }
+      if (response.resource_counts.notes > 0) {
+        resources.push({
+          type: 'note',
+          reference: searchContext,
+          title: `📝 ${response.resource_counts.notes} Translation Notes`,
+        });
+      }
 
-        if (agent.agent === 'questions' && searchContext) {
-          resources.push({
-            type: 'question',
-            reference: searchContext,
-            title: response.scripture_reference ? 'Study Questions' : `Questions about "${searchContext}"`,
-            preview: agent.content.slice(0, 150),
-          });
-        }
+      if (response.resource_counts.questions > 0) {
+        resources.push({
+          type: 'question',
+          reference: searchContext,
+          title: `❓ ${response.resource_counts.questions} Study Questions`,
+        });
+      }
 
-        if (agent.agent === 'words' && searchContext) {
-          resources.push({
-            type: 'word',
-            reference: searchContext,
-            title: response.scripture_reference ? 'Word Studies' : `"${searchContext}" Word Study`,
-            preview: agent.content.slice(0, 150),
-          });
-        }
+      if (response.resource_counts.words > 0) {
+        resources.push({
+          type: 'word',
+          reference: searchContext,
+          title: `📚 ${response.resource_counts.words} Word Studies`,
+        });
+      }
 
-        if (agent.agent === 'scripture' && searchContext && !response.scripture_reference) {
-          // For keyword searches without a specific scripture ref, add an academy-style resource
-          resources.push({
-            type: 'academy',
-            reference: searchContext,
-            title: `Learn about "${searchContext}"`,
-            preview: agent.content.slice(0, 150),
-          });
-        }
+      if (response.resource_counts.academy > 0) {
+        resources.push({
+          type: 'academy',
+          reference: searchContext,
+          title: `🎓 ${response.resource_counts.academy} Academy Articles`,
+        });
+      }
 
-        return {
-          id: `${Date.now()}-${index}`,
-          role: 'assistant' as const,
-          content: `${agent.emoji} ${agent.content}`,
-          agent: agentType,
-          timestamp: new Date(),
-          resources: resources.length > 0 ? resources : undefined,
-        };
-      });
+      // Create single consolidated message
+      const assistantMessage: Message = {
+        id: `${Date.now()}-response`,
+        role: 'assistant',
+        content: response.content,
+        timestamp: new Date(),
+        resources: resources.length > 0 ? resources : undefined,
+      };
 
-      setMessages(prev => [...prev, ...agentMessages]);
+      setMessages(prev => [...prev, assistantMessage]);
       
       return {
         scriptureReference: response.scripture_reference,
         searchQuery: response.search_query,
-        newMessages: agentMessages,
+        newMessages: [assistantMessage],
       };
     } catch (err) {
       console.error('Chat error:', err);
