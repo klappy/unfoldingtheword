@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, memo, useState } from 'react';
+import { useEffect, useRef, useCallback, memo, useState, useLayoutEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X, ChevronDown } from 'lucide-react';
 import { ScripturePassage, ScriptureChapter, ScriptureVerse } from '@/types';
@@ -120,7 +120,9 @@ export function ScriptureCard({
   currentLanguage = 'en',
 }: ScriptureCardProps) {
   const [isVersionSelectorOpen, setIsVersionSelectorOpen] = useState(false);
+  const [isContentReady, setIsContentReady] = useState(false);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const passageIdRef = useRef<string | null>(null);
   
   // Use lazy chapter loading
   const totalChapters = passage?.book?.chapters?.length || 0;
@@ -128,6 +130,32 @@ export function ScriptureCard({
     totalChapters,
     passage?.targetChapter
   );
+
+  // Track when passage changes and reset content ready state
+  useLayoutEffect(() => {
+    const newPassageId = passage?.reference || null;
+    if (newPassageId !== passageIdRef.current) {
+      passageIdRef.current = newPassageId;
+      // Reset content ready when loading new passage
+      if (newPassageId && passage?.book?.chapters?.length) {
+        // Use double RAF to ensure paint has occurred
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setIsContentReady(true);
+          });
+        });
+      } else {
+        setIsContentReady(false);
+      }
+    }
+  }, [passage?.reference, passage?.book?.chapters?.length]);
+
+  // Reset content ready when starting to load
+  useEffect(() => {
+    if (isLoading) {
+      setIsContentReady(false);
+    }
+  }, [isLoading]);
   
   // Derive selected verse from verseFilter prop
   const selectedVerse = (() => {
@@ -246,8 +274,9 @@ export function ScriptureCard({
     </div>
   );
 
-  // Show skeleton when loading without existing data
-  if (isLoading && !passage) {
+  // Show skeleton when loading OR when content isn't ready yet
+  const showSkeleton = isLoading || (passage?.book?.chapters?.length && !isContentReady);
+  if (showSkeleton && !error) {
     return <ScriptureSkeleton />;
   }
 
