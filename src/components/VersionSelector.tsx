@@ -45,11 +45,14 @@ export function VersionSelector({
     book: string
   ): Promise<boolean> => {
     try {
+      // Normalize book name to English for API calls (e.g., "Rut" -> "Ruth")
+      const normalizedBook = normalizeBookName(book);
+      
       const { data } = await supabase.functions.invoke('translation-helps-proxy', {
         body: {
           endpoint: 'fetch-scripture',
           params: {
-            reference: `${book} 1:1`,
+            reference: `${normalizedBook} 1:1`,
             language: lang,
             owner: 'unfoldingWord',
             resource: resource,
@@ -58,16 +61,56 @@ export function VersionSelector({
       });
       
       // Check if we got actual scripture content (not an error)
-      if (data?.error || data?.originalStatus === 404) {
+      if (data?.error || data?.originalStatus === 404 || data?.originalStatus === 400 || data?.originalStatus === 500) {
         return false;
       }
       
-      // Check if the returned language matches what we requested
-      const returnedLang = data?.metadata?.language || data?.language;
-      return returnedLang === lang;
+      // If we got content back, consider it available
+      // The API returns content regardless of exact language match
+      return !!data?.content || !!data?.markdown;
     } catch {
       return false;
     }
+  };
+  
+  // Normalize localized book names to English for API calls
+  const normalizeBookName = (book: string): string => {
+    const bookAliases: Record<string, string> = {
+      // Spanish
+      'rut': 'Ruth',
+      'génesis': 'Genesis',
+      'éxodo': 'Exodus',
+      'salmos': 'Psalms',
+      'proverbios': 'Proverbs',
+      'mateo': 'Matthew',
+      'marcos': 'Mark',
+      'lucas': 'Luke',
+      'juan': 'John',
+      'hechos': 'Acts',
+      'romanos': 'Romans',
+      'apocalipsis': 'Revelation',
+      // Portuguese
+      'gênesis': 'Genesis',
+      'êxodo': 'Exodus',
+      'salmo': 'Psalms',
+      'provérbios': 'Proverbs',
+      'mateus': 'Matthew',
+      'joão': 'John',
+      'atos': 'Acts',
+      // French
+      'genèse': 'Genesis',
+      'exode': 'Exodus',
+      'psaumes': 'Psalms',
+      'proverbes': 'Proverbs',
+      'matthieu': 'Matthew',
+      'marc': 'Mark',
+      'luc': 'Luke',
+      'jean': 'John',
+      'actes': 'Acts',
+      'romains': 'Romans',
+    };
+    
+    return bookAliases[book.toLowerCase()] || book;
   };
 
   // Fetch available scripture resources when opened
