@@ -40,28 +40,70 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading }
     }
   };
 
+  // Empty state with centered input
+  if (messages.length === 0) {
+    return (
+      <div className="flex flex-col h-full pt-4">
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-6"
+          >
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6 glow-primary">
+              <Sparkles className="w-8 h-8 text-primary" />
+            </div>
+            <h2 className="text-xl font-medium text-foreground mb-2">
+              Begin Your Study
+            </h2>
+            <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+              Ask about any passage, topic, or word. Swipe left to explore scripture and resources.
+            </p>
+          </motion.div>
+
+          {/* Input directly below intro text */}
+          <form onSubmit={handleSubmit} className="w-full max-w-md">
+            <div className="glass-card rounded-2xl p-2 flex items-end gap-2">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+                placeholder="Ask about scripture..."
+                rows={1}
+                className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground 
+                           resize-none outline-none px-3 py-2 text-sm max-h-32"
+                style={{ minHeight: '40px' }}
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className={cn(
+                  'p-2 rounded-xl transition-all duration-200',
+                  input.trim() && !isLoading
+                    ? 'bg-primary text-primary-foreground glow-primary'
+                    : 'bg-muted text-muted-foreground'
+                )}
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full pt-4">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 fade-edges">
         <div className="max-w-2xl mx-auto space-y-6 pt-4">
-          {messages.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-center py-16"
-            >
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6 glow-primary">
-                <Sparkles className="w-8 h-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-medium text-foreground mb-2">
-                Begin Your Study
-              </h2>
-              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                Ask about any passage, topic, or word. Swipe left to explore scripture and resources.
-              </p>
-            </motion.div>
-          )}
 
           {messages.map((message, index) => (
             <motion.div
