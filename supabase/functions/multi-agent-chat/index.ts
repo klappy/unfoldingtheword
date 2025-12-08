@@ -46,20 +46,18 @@ const mcpTools = [
   }
 ];
 
-// Fetch resources from MCP server
-async function fetchMcpResources(query: string, resourceTypes: string[] = ['tn', 'tq', 'tw', 'ta']): Promise<any[]> {
+// Fetch resources from MCP server using SEARCH endpoint (for keyword searches)
+async function fetchMcpResourcesSearch(query: string, resourceTypes: string[] = ['tn', 'tq', 'tw', 'ta']): Promise<any[]> {
   const results: any[] = [];
   
   for (const resourceType of resourceTypes) {
     try {
-      // Use the correct API path format - /api/search with query parameter
       const url = `${MCP_BASE_URL}/api/search?query=${encodeURIComponent(query)}&resource=${resourceType}`;
-      console.log(`Fetching MCP resources: ${url}`);
+      console.log(`Searching MCP resources: ${url}`);
       
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        // MCP server returns hits array, not results
         if (data.hits && Array.isArray(data.hits)) {
           results.push(...data.hits.map((r: any) => ({ ...r, resourceType })));
         }
@@ -67,11 +65,189 @@ async function fetchMcpResources(query: string, resourceTypes: string[] = ['tn',
         console.log(`MCP search returned ${response.status} for ${resourceType}`);
       }
     } catch (error) {
-      console.error(`Error fetching ${resourceType} resources:`, error);
+      console.error(`Error searching ${resourceType} resources:`, error);
     }
   }
   
   return results;
+}
+
+// Fetch verse-specific resources from MCP server using FETCH endpoints (for scripture references)
+async function fetchVerseResources(reference: string): Promise<any[]> {
+  const results: any[] = [];
+  
+  // Fetch translation notes
+  try {
+    const notesUrl = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(reference)}`;
+    console.log(`Fetching translation notes: ${notesUrl}`);
+    const notesResponse = await fetch(notesUrl);
+    if (notesResponse.ok) {
+      const contentType = notesResponse.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await notesResponse.json();
+        if (Array.isArray(data)) {
+          results.push(...data.map((r: any) => ({ ...r, resourceType: 'tn' })));
+        }
+      } else {
+        const text = await notesResponse.text();
+        if (text && text.trim()) {
+          // Parse markdown notes
+          const notes = parseMarkdownNotes(text, reference);
+          results.push(...notes.map((n: any) => ({ ...n, resourceType: 'tn' })));
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching translation notes:', error);
+  }
+
+  // Fetch translation questions
+  try {
+    const questionsUrl = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(reference)}`;
+    console.log(`Fetching translation questions: ${questionsUrl}`);
+    const questionsResponse = await fetch(questionsUrl);
+    if (questionsResponse.ok) {
+      const contentType = questionsResponse.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await questionsResponse.json();
+        if (Array.isArray(data)) {
+          results.push(...data.map((r: any) => ({ ...r, resourceType: 'tq' })));
+        }
+      } else {
+        const text = await questionsResponse.text();
+        if (text && text.trim()) {
+          const questions = parseMarkdownQuestions(text, reference);
+          results.push(...questions.map((q: any) => ({ ...q, resourceType: 'tq' })));
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching translation questions:', error);
+  }
+
+  // Fetch word links
+  try {
+    const wordLinksUrl = `${MCP_BASE_URL}/api/fetch-translation-word-links?reference=${encodeURIComponent(reference)}`;
+    console.log(`Fetching word links: ${wordLinksUrl}`);
+    const wordLinksResponse = await fetch(wordLinksUrl);
+    if (wordLinksResponse.ok) {
+      const contentType = wordLinksResponse.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await wordLinksResponse.json();
+        if (Array.isArray(data)) {
+          results.push(...data.map((r: any) => ({ ...r, resourceType: 'tw' })));
+        }
+      } else {
+        const text = await wordLinksResponse.text();
+        if (text && text.trim()) {
+          const wordLinks = parseMarkdownWordLinks(text, reference);
+          results.push(...wordLinks.map((w: any) => ({ ...w, resourceType: 'tw' })));
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching word links:', error);
+  }
+
+  console.log(`Fetched ${results.length} verse-specific resources for ${reference}`);
+  return results;
+}
+
+// Parse markdown notes into structured array
+function parseMarkdownNotes(content: string, reference: string): any[] {
+  const notes: any[] = [];
+  // Split by note blocks (usually separated by blank lines or headers)
+  const lines = content.split('\n');
+  let currentNote: any = null;
+  
+  for (const line of lines) {
+    // Check for note header pattern: # Note or ## Reference
+    if (line.startsWith('#')) {
+      if (currentNote && currentNote.content) {
+        notes.push(currentNote);
+      }
+      currentNote = { 
+        reference: reference,
+        title: line.replace(/^#+\s*/, '').trim(),
+        content: ''
+      };
+    } else if (currentNote) {
+      currentNote.content += line + '\n';
+    }
+  }
+  
+  if (currentNote && currentNote.content) {
+    notes.push(currentNote);
+  }
+  
+  // If no structured notes found, treat whole content as one note
+  if (notes.length === 0 && content.trim()) {
+    notes.push({
+      reference: reference,
+      title: 'Translation Note',
+      content: content.trim()
+    });
+  }
+  
+  return notes;
+}
+
+// Parse markdown questions
+function parseMarkdownQuestions(content: string, reference: string): any[] {
+  const questions: any[] = [];
+  const lines = content.split('\n');
+  let currentQuestion: any = null;
+  
+  for (const line of lines) {
+    if (line.startsWith('#') || line.match(/^\d+\./)) {
+      if (currentQuestion && currentQuestion.question) {
+        questions.push(currentQuestion);
+      }
+      currentQuestion = {
+        reference: reference,
+        question: line.replace(/^#+\s*|\d+\.\s*/, '').trim(),
+        response: ''
+      };
+    } else if (currentQuestion) {
+      currentQuestion.response += line + '\n';
+    }
+  }
+  
+  if (currentQuestion && currentQuestion.question) {
+    questions.push(currentQuestion);
+  }
+  
+  return questions;
+}
+
+// Parse markdown word links
+function parseMarkdownWordLinks(content: string, reference: string): any[] {
+  const wordLinks: any[] = [];
+  const lines = content.split('\n');
+  
+  for (const line of lines) {
+    // Match patterns like: **word** - definition or [word](link)
+    const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/);
+    const boldMatch = line.match(/\*\*([^*]+)\*\*/);
+    
+    if (linkMatch) {
+      wordLinks.push({
+        reference: reference,
+        word: linkMatch[1],
+        articleId: linkMatch[2].split('/').pop() || linkMatch[1],
+        content: line
+      });
+    } else if (boldMatch) {
+      wordLinks.push({
+        reference: reference,
+        word: boldMatch[1],
+        articleId: boldMatch[1].toLowerCase().replace(/\s+/g, '-'),
+        content: line
+      });
+    }
+  }
+  
+  return wordLinks;
 }
 
 // Fetch scripture passage from MCP - pass reference directly, let MCP server handle parsing
@@ -123,9 +299,9 @@ async function fetchDirectResources(reference: string): Promise<{
 }> {
   console.log(`Direct fetch for scripture reference: ${reference}`);
   
-  // Fetch resources and scripture in parallel
+  // Fetch verse-specific resources and scripture in parallel
   const [resources, scriptureText] = await Promise.all([
-    fetchMcpResources(reference, ['tn', 'tq', 'tw', 'ta']),
+    fetchVerseResources(reference),
     fetchScripturePassage(reference)
   ]);
   
@@ -149,7 +325,7 @@ async function processToolCalls(toolCalls: any[]): Promise<{ resources: any[], s
     console.log(`Processing tool call: ${functionName}`, args);
     
     if (functionName === 'search_resources') {
-      const results = await fetchMcpResources(args.query, args.resource_types);
+      const results = await fetchMcpResourcesSearch(args.query, args.resource_types);
       resources.push(...results);
     } else if (functionName === 'get_scripture_passage') {
       scriptureText = await fetchScripturePassage(args.reference);
@@ -237,7 +413,7 @@ The user is searching for a topic or keyword. Use search_resources to find relev
   } else {
     // Fallback: do a basic search with the user's message
     console.log("No tool calls, falling back to direct search");
-    resources = await fetchMcpResources(userMessage);
+    resources = await fetchMcpResourcesSearch(userMessage);
     searchQuery = userMessage;
   }
 
