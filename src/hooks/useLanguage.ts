@@ -9,6 +9,7 @@ export interface LanguageOption {
   name: string;
   nativeName?: string;
   direction?: 'ltr' | 'rtl';
+  isGateway?: boolean;
 }
 
 export interface OrganizationOption {
@@ -28,14 +29,14 @@ export interface ScriptureVersion {
 
 // CatalogEntry interface removed - using direct API calls now
 
-// Fallback languages if API fails
+// Fallback languages if API fails (all gateway languages)
 const FALLBACK_LANGUAGES: LanguageOption[] = [
-  { id: 'en', name: 'English', nativeName: 'English', direction: 'ltr' },
-  { id: 'es-419', name: 'Spanish (Latin America)', nativeName: 'Español', direction: 'ltr' },
-  { id: 'fr', name: 'French', nativeName: 'Français', direction: 'ltr' },
-  { id: 'pt-br', name: 'Portuguese (Brazil)', nativeName: 'Português', direction: 'ltr' },
-  { id: 'hi', name: 'Hindi', nativeName: 'हिन्दी', direction: 'ltr' },
-  { id: 'ar', name: 'Arabic', nativeName: 'العربية', direction: 'rtl' },
+  { id: 'en', name: 'English', nativeName: 'English', direction: 'ltr', isGateway: true },
+  { id: 'es-419', name: 'Spanish (Latin America)', nativeName: 'Español', direction: 'ltr', isGateway: true },
+  { id: 'fr', name: 'French', nativeName: 'Français', direction: 'ltr', isGateway: true },
+  { id: 'pt-br', name: 'Portuguese (Brazil)', nativeName: 'Português', direction: 'ltr', isGateway: true },
+  { id: 'hi', name: 'Hindi', nativeName: 'हिन्दी', direction: 'ltr', isGateway: true },
+  { id: 'ar', name: 'Arabic', nativeName: 'العربية', direction: 'rtl', isGateway: true },
 ];
 
 const FALLBACK_ORGANIZATIONS: OrganizationOption[] = [
@@ -69,22 +70,28 @@ export function useLanguage() {
       console.log('[useLanguage] Languages response:', data);
 
       if (data.data && Array.isArray(data.data)) {
-        const languages: LanguageOption[] = data.data.map((lang: { lc: string; ln: string; ang: string; ld: string }) => ({
+        const allLanguages: LanguageOption[] = data.data.map((lang: { lc: string; ln: string; ang: string; ld: string; gw: boolean }) => ({
           id: lang.lc,
           name: lang.ang || lang.ln, // English name or native name
           nativeName: lang.ln,
           direction: lang.ld === 'rtl' ? 'rtl' : 'ltr',
+          isGateway: lang.gw === true,
         }));
 
-        // Sort: English first, then alphabetically
-        languages.sort((a, b) => {
+        // Filter to only gateway languages
+        const gatewayLanguages = allLanguages.filter(lang => lang.isGateway);
+        
+        // Sort: English first, es-419 second, then alphabetically
+        gatewayLanguages.sort((a, b) => {
           if (a.id === 'en') return -1;
           if (b.id === 'en') return 1;
+          if (a.id === 'es-419') return -1;
+          if (b.id === 'es-419') return 1;
           return a.name.localeCompare(b.name);
         });
 
-        console.log(`[useLanguage] Loaded ${languages.length} languages`);
-        setAvailableLanguages(languages);
+        console.log(`[useLanguage] Loaded ${gatewayLanguages.length} gateway languages (filtered from ${allLanguages.length} total)`);
+        setAvailableLanguages(gatewayLanguages);
       } else {
         console.warn('[useLanguage] Unexpected languages response format');
         setAvailableLanguages(FALLBACK_LANGUAGES);
