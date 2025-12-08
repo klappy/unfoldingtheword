@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Sparkles } from 'lucide-react';
+import { Send, Sparkles, Globe } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
@@ -10,9 +10,11 @@ interface ChatCardProps {
   onSendMessage: (content: string) => void;
   onResourceClick: (resource: ResourceLink) => void;
   isLoading?: boolean;
+  currentLanguage?: { id: string; name: string; nativeName?: string } | null;
+  onChangeLanguage?: () => void;
 }
 
-export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading }: ChatCardProps) {
+export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, currentLanguage, onChangeLanguage }: ChatCardProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -43,7 +45,22 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading }
   // Empty state with centered input
   if (messages.length === 0) {
     return (
-      <div className="flex flex-col h-full pt-4">
+      <div className="flex flex-col h-full pt-4 relative">
+        {/* Language button - top right */}
+        {currentLanguage && onChangeLanguage && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            onClick={onChangeLanguage}
+            className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+                       bg-muted/50 hover:bg-muted text-muted-foreground text-xs transition-colors"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>{currentLanguage.nativeName || currentLanguage.name}</span>
+          </motion.button>
+        )}
+        
         <div className="flex-1 flex flex-col items-center justify-center px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}

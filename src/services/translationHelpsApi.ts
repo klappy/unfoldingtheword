@@ -53,11 +53,20 @@ export interface TranslationAcademy {
   content: string;
 }
 
+// Get the current language from localStorage
+function getCurrentLanguage(): string {
+  return localStorage.getItem('bible-study-language') || 'en';
+}
+
 async function callProxy(endpoint: string, params: Record<string, any>) {
-  console.log(`[translationHelpsApi] Calling ${endpoint} with params:`, params);
+  // Inject language parameter if not already present
+  const language = params.language || getCurrentLanguage();
+  const paramsWithLanguage = { ...params, language };
+  
+  console.log(`[translationHelpsApi] Calling ${endpoint} with params:`, paramsWithLanguage);
   
   const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
-    body: { endpoint, params },
+    body: { endpoint, params: paramsWithLanguage },
   });
 
   if (error) {
