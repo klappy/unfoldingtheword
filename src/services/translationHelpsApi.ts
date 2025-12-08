@@ -81,6 +81,15 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
     translation = ultMatch[1];
     let verseText = ultMatch[2].trim();
     
+    // Clean up common markdown artifacts
+    // Replace backslash or forward slash used as line breaks with actual line breaks
+    verseText = verseText
+      .replace(/\s*[\\\/]\s*\n/g, '\n') // slash at end of line
+      .replace(/\n\s*[\\\/]\s*/g, '\n') // slash at start of line
+      .replace(/\s+[\\\/]\s+/g, ' ') // slash as inline separator - replace with space
+      .replace(/\\$/gm, '') // trailing backslashes
+      .replace(/\s{2,}/g, ' '); // multiple spaces to single
+    
     // Try to parse individual verses by looking for verse number patterns
     // Pattern: number at start of line or after newline, followed by text
     const versePattern = /(?:^|\n)(\d+)\s+([^\n]+(?:\n(?!\d+\s)[^\n]*)*)/g;
@@ -89,8 +98,8 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
     while ((match = versePattern.exec(verseText)) !== null) {
       const verseNum = parseInt(match[1], 10);
       let text = match[2].trim();
-      // Preserve paragraph breaks within verse text
-      text = text.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ');
+      // Preserve paragraph breaks within verse text, collapse single newlines
+      text = text.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ').trim();
       verses.push({ number: verseNum, text });
     }
     
@@ -100,14 +109,14 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
       if (verseMatch) {
         const startVerse = parseInt(verseMatch[1], 10);
         // Clean up the text - preserve paragraph structure
-        verseText = verseText.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ');
+        verseText = verseText.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ').trim();
         verses.push({ number: startVerse, text: verseText });
       } else {
         // Chapter only - try to split by sentence/paragraph
         const paragraphs = verseText.split(/\n\n+/);
         let verseNum = 1;
         for (const para of paragraphs) {
-          const cleanPara = para.trim().replace(/\n/g, ' ');
+          const cleanPara = para.trim().replace(/\n/g, ' ').trim();
           if (cleanPara) {
             verses.push({ number: verseNum++, text: cleanPara, isParagraphStart: true });
           }
