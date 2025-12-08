@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { SwipeContainer } from '@/components/SwipeContainer';
 import { ChatCard } from '@/components/ChatCard';
@@ -6,7 +6,7 @@ import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryPanel } from '@/components/HistoryPanel';
-import { ResourceLink, HistoryItem, Message } from '@/types';
+import { ResourceLink, HistoryItem, Message, Resource } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
@@ -37,6 +37,42 @@ const Index = () => {
     saveMessage,
     loadConversationMessages,
   } = useConversations();
+
+  // Aggregate resources from chat messages when no scripture-sourced resources exist
+  const aggregatedResources = useMemo((): Resource[] => {
+    // If we have scripture-sourced resources, use those
+    if (resources.length > 0) {
+      return resources;
+    }
+    
+    // Otherwise, build resources from chat message ResourceLinks
+    const resourcesFromChat: Resource[] = [];
+    const seenRefs = new Set<string>();
+    
+    for (const message of messages) {
+      if (message.resources) {
+        for (const link of message.resources) {
+          const key = `${link.type}-${link.reference}`;
+          if (!seenRefs.has(key)) {
+            seenRefs.add(key);
+            resourcesFromChat.push({
+              id: key,
+              type: link.type === 'scripture' ? 'translation-note' : 
+                    link.type === 'note' ? 'translation-note' :
+                    link.type === 'question' ? 'translation-question' :
+                    link.type === 'word' ? 'translation-word' :
+                    'academy-article',
+              title: link.title,
+              content: link.preview || '',
+              reference: link.reference,
+            });
+          }
+        }
+      }
+    }
+    
+    return resourcesFromChat;
+  }, [resources, messages]);
 
   const handleSendMessage = useCallback(async (content: string) => {
     // Create conversation on first message if needed
@@ -189,7 +225,7 @@ const Index = () => {
       case 'resources':
         return (
           <ResourcesCard
-            resources={resources}
+            resources={aggregatedResources}
             onAddToNotes={(text) => handleAddToNotes(text)}
             isLoading={scriptureLoading}
             error={scriptureError}
