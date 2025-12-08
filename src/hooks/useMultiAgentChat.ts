@@ -81,7 +81,7 @@ export function useMultiAgentChat() {
         resources.push({
           type: 'scripture',
           reference: response.scripture_reference,
-          title: `📖 ${response.scripture_reference}`,
+          title: response.scripture_reference,
         });
       }
 
@@ -89,7 +89,7 @@ export function useMultiAgentChat() {
         resources.push({
           type: 'note',
           reference: searchContext,
-          title: `📝 ${response.resource_counts.notes} Translation Notes`,
+          title: 'Translation Notes',
         });
       }
 
@@ -97,7 +97,7 @@ export function useMultiAgentChat() {
         resources.push({
           type: 'question',
           reference: searchContext,
-          title: `❓ ${response.resource_counts.questions} Study Questions`,
+          title: 'Study Questions',
         });
       }
 
@@ -105,7 +105,7 @@ export function useMultiAgentChat() {
         resources.push({
           type: 'word',
           reference: searchContext,
-          title: `📚 ${response.resource_counts.words} Word Studies`,
+          title: 'Word Studies',
         });
       }
 
@@ -113,15 +113,21 @@ export function useMultiAgentChat() {
         resources.push({
           type: 'academy',
           reference: searchContext,
-          title: `🎓 ${response.resource_counts.academy} Academy Articles`,
+          title: 'Academy Articles',
         });
       }
+
+      // Build content with total count
+      const totalCount = response.total_resources;
+      const contentWithCount = totalCount > 0 
+        ? `${response.content}\n\n*${totalCount} resources found — swipe right to explore.*`
+        : response.content;
 
       // Create single consolidated message
       const assistantMessage: Message = {
         id: `${Date.now()}-response`,
         role: 'assistant',
-        content: response.content,
+        content: contentWithCount,
         timestamp: new Date(),
         resources: resources.length > 0 ? resources : undefined,
       };
