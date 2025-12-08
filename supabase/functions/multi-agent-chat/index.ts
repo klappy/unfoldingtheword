@@ -100,6 +100,43 @@ async function fetchScripturePassage(reference: string): Promise<string | null> 
   return null;
 }
 
+// Detect if input is a scripture reference (book, chapter, verse patterns)
+function isScriptureReference(input: string): boolean {
+  const trimmed = input.trim();
+  
+  // Common book name patterns (including numbered books, abbreviations)
+  // Matches: "John", "1 John", "Genesis 1", "Rom 8:28", "1 Cor 13:4-7", etc.
+  const scripturePattern = /^(\d?\s*[A-Za-z]+)\s*(\d+)?(\s*:\s*\d+(-\d+)?)?$/i;
+  
+  // Also match full book names without chapter/verse
+  const bookOnlyPattern = /^(\d?\s*)?(genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|samuel|kings|chronicles|ezra|nehemiah|esther|job|psalms?|proverbs|ecclesiastes|song\s*of\s*solomon|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|obadiah|jonah|micah|nahum|habakkuk|zephaniah|haggai|zechariah|malachi|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|titus|philemon|hebrews|james|peter|jude|revelation)(\s+\d+)?(\s*:\s*\d+(-\d+)?)?$/i;
+  
+  return scripturePattern.test(trimmed) || bookOnlyPattern.test(trimmed);
+}
+
+// Direct scripture/resource fetch without AI (for scripture references)
+async function fetchDirectResources(reference: string): Promise<{
+  resources: any[],
+  scriptureText: string | null,
+  scriptureReference: string,
+  searchQuery: string | null
+}> {
+  console.log(`Direct fetch for scripture reference: ${reference}`);
+  
+  // Fetch resources and scripture in parallel
+  const [resources, scriptureText] = await Promise.all([
+    fetchMcpResources(reference, ['tn', 'tq', 'tw', 'ta']),
+    fetchScripturePassage(reference)
+  ]);
+  
+  return {
+    resources,
+    scriptureText,
+    scriptureReference: reference,
+    searchQuery: null // Not a search, just a direct reference
+  };
+}
+
 // Process tool calls from AI response
 async function processToolCalls(toolCalls: any[]): Promise<{ resources: any[], scriptureText: string | null }> {
   const resources: any[] = [];
@@ -122,7 +159,7 @@ async function processToolCalls(toolCalls: any[]): Promise<{ resources: any[], s
   return { resources, scriptureText };
 }
 
-// Call Lovable AI with tool calling for resource fetching
+// Call Lovable AI with tool calling for keyword/topic searches
 async function callAIWithTools(userMessage: string, conversationHistory: any[], scriptureContext?: string): Promise<{
   resources: any[],
   scriptureText: string | null,
@@ -134,20 +171,15 @@ async function callAIWithTools(userMessage: string, conversationHistory: any[], 
     throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  const systemPrompt = `You are a Bible study assistant. Your job is to find relevant resources to answer user questions.
+  const systemPrompt = `You are a Bible study assistant. Your job is to find relevant resources to answer user questions about topics and keywords.
 
 IMPORTANT: You must ALWAYS use the provided tools to search for resources before answering. Never answer from your own knowledge - only from MCP resources.
 
 Available tools:
 - search_resources: Search for translation notes, questions, word studies, and academy articles
-- get_scripture_passage: Get the text of a scripture passage
+- get_scripture_passage: Get the text of a scripture passage (only if user mentions one)
 
-For every question:
-1. First identify if there's a scripture reference mentioned
-2. Use search_resources to find relevant translation resources
-3. If a scripture is referenced, also use get_scripture_passage to get the text
-
-Always search for resources - the user needs to see real data from the translation helps database.`;
+The user is searching for a topic or keyword. Use search_resources to find relevant translation resources.`;
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -313,16 +345,32 @@ serve(async (req) => {
     console.log("Scripture context:", scriptureContext);
     console.log("Response language:", responseLanguage);
 
-    // Step 1: Use AI with tools to fetch relevant MCP resources
-    const { resources, scriptureText, scriptureReference, searchQuery } = await callAIWithTools(
-      message,
-      conversationHistory,
-      scriptureContext
-    );
+    let resources: any[];
+    let scriptureText: string | null;
+    let scriptureReference: string | null;
+    let searchQuery: string | null;
+
+    // Check if input is a scripture reference - if so, direct fetch without AI
+    if (isScriptureReference(message)) {
+      console.log("Detected scripture reference, using direct fetch");
+      const result = await fetchDirectResources(message);
+      resources = result.resources;
+      scriptureText = result.scriptureText;
+      scriptureReference = result.scriptureReference;
+      searchQuery = null;
+    } else {
+      // Use AI with tools for keyword/topic searches
+      console.log("Using AI search for keyword/topic");
+      const result = await callAIWithTools(message, conversationHistory, scriptureContext);
+      resources = result.resources;
+      scriptureText = result.scriptureText;
+      scriptureReference = result.scriptureReference;
+      searchQuery = result.searchQuery;
+    }
 
     console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}`);
 
-    // Step 2: Generate consolidated response
+    // Generate consolidated response
     const { content, resourceCounts } = await generateConsolidatedResponse(
       message,
       resources,
