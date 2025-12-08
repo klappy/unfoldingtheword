@@ -220,8 +220,11 @@ export function useLanguage() {
 
   // Reorder version preferences (move to top)
   const setActiveVersion = useCallback((version: ScriptureVersion) => {
+    // Filter out matching version (by language, org, AND resource)
     const filtered = versionPreferences.filter(
-      v => !(v.language === version.language && v.organization === version.organization)
+      v => !(v.language === version.language && 
+             v.organization === version.organization && 
+             v.resource === version.resource)
     );
     const newPrefs = [version, ...filtered];
     setVersionPreferences(newPrefs);
