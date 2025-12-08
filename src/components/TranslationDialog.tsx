@@ -7,6 +7,7 @@ interface TranslationDialogProps {
   isTranslating: boolean;
   contentType: string;
   targetLanguage: string;
+  itemCount?: number;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -16,10 +17,13 @@ export function TranslationDialog({
   isTranslating,
   contentType,
   targetLanguage,
+  itemCount = 1,
   onConfirm,
   onCancel,
 }: TranslationDialogProps) {
   if (!isOpen) return null;
+
+  const isBatch = itemCount > 1;
 
   return (
     <AnimatePresence>
@@ -41,7 +45,7 @@ export function TranslationDialog({
                 <Languages className="w-5 h-5 text-primary" />
               </div>
               <h3 className="text-lg font-semibold text-foreground">
-                Translate Content?
+                {isBatch ? 'Translate All Content?' : 'Translate Content?'}
               </h3>
             </div>
             <button
@@ -54,8 +58,18 @@ export function TranslationDialog({
           </div>
 
           <p className="text-sm text-muted-foreground mb-6">
-            This {contentType} is only available in English. Would you like to use AI to translate it to{' '}
-            <span className="font-medium text-foreground">{targetLanguage}</span>?
+            {isBatch ? (
+              <>
+                <span className="font-medium text-foreground">{itemCount} items</span> are only available in English. 
+                Would you like to use AI to translate them all to{' '}
+                <span className="font-medium text-foreground">{targetLanguage}</span>?
+              </>
+            ) : (
+              <>
+                This {contentType} is only available in English. Would you like to use AI to translate it to{' '}
+                <span className="font-medium text-foreground">{targetLanguage}</span>?
+              </>
+            )}
           </p>
 
           <div className="flex gap-3">
@@ -80,7 +94,7 @@ export function TranslationDialog({
               ) : (
                 <>
                   <Languages className="w-4 h-4 mr-2" />
-                  Translate
+                  {isBatch ? 'Translate All' : 'Translate'}
                 </>
               )}
             </Button>

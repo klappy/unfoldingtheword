@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Resource } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
@@ -10,11 +10,13 @@ import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { TranslationDialog } from '@/components/TranslationDialog';
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
 import { useNotes } from '@/hooks/useNotes';
 import { useConversations } from '@/hooks/useConversations';
+import { useTranslation, TranslationItem } from '@/hooks/useTranslation';
 
 const Index = () => {
   const {
@@ -46,6 +48,47 @@ const Index = () => {
   const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
+
+  // Get target language display name
+  const targetLanguageName = useMemo(() => {
+    const lang = availableLanguages.find(l => l.id === language);
+    return lang?.name || language;
+  }, [availableLanguages, language]);
+
+  const {
+    isTranslating,
+    pendingBatch,
+    requestBatchTranslation,
+    cancelTranslation,
+    confirmTranslation,
+    getTranslatedContent,
+  } = useTranslation(targetLanguageName);
+
+  // Build batch translation items from fallback content
+  const buildBatchItems = useCallback((): TranslationItem[] => {
+    const items: TranslationItem[] = [];
+    
+    // Add scripture if it used fallback
+    if (fallbackState?.hasFallback && scripture?.book) {
+      const scriptureText = scripture.book.chapters
+        .map(ch => ch.verses.map(v => `${v.number} ${v.text}`).join(' '))
+        .join('\n\n');
+      items.push({
+        id: 'scripture',
+        content: scriptureText.substring(0, 10000), // Limit to avoid too large requests
+        contentType: 'scripture',
+      });
+    }
+    
+    return items;
+  }, [fallbackState, scripture]);
+
+  const handleTranslateAllRequest = useCallback(() => {
+    const items = buildBatchItems();
+    if (items.length > 0) {
+      requestBatchTranslation(items);
+    }
+  }, [buildBatchItems, requestBatchTranslation]);
   const { 
     conversations, 
     currentConversationId, 
@@ -190,6 +233,8 @@ const Index = () => {
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
             fallbackState={fallbackState}
+            onTranslateRequest={handleTranslateAllRequest}
+            isTranslating={isTranslating}
           />
         );
       case 'resources':
@@ -243,6 +288,8 @@ const Index = () => {
     );
   }
 
+  const batchItemCount = pendingBatch?.length || 0;
+
   return (
     <div className="h-full w-full overflow-hidden bg-background">
       <SwipeContainer
@@ -255,6 +302,16 @@ const Index = () => {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         renderCard={renderCard}
+      />
+      
+      <TranslationDialog
+        isOpen={!!pendingBatch && batchItemCount > 0}
+        isTranslating={isTranslating}
+        contentType="content"
+        targetLanguage={targetLanguageName}
+        itemCount={batchItemCount}
+        onConfirm={confirmTranslation}
+        onCancel={cancelTranslation}
       />
     </div>
   );
