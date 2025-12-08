@@ -432,7 +432,7 @@ export function useScriptureData() {
 
       console.log('[useScriptureData] Built keyword resources:', newResources.length);
       setResources(newResources);
-      setScripture(null);
+      // Note: Scripture is intentionally preserved so users can view search results alongside existing scripture
     } catch (err) {
       console.error('[useScriptureData] Error searching keyword:', err);
       setError(err instanceof Error ? err.message : 'Failed to search');
