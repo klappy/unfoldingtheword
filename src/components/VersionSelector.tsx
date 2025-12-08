@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Globe, BookOpen } from 'lucide-react';
+import { Check, Globe, BookOpen, AlertCircle } from 'lucide-react';
 import { ScriptureVersion } from '@/hooks/useLanguage';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +23,10 @@ const SCRIPTURE_RESOURCES = [
   { id: 'udb', name: 'Unlocked Dynamic Bible', description: 'Legacy dynamic translation' },
 ];
 
+interface ResourceAvailability extends ScriptureVersion {
+  isAvailable: boolean;
+}
+
 export function VersionSelector({
   isOpen,
   onClose,
@@ -32,8 +35,40 @@ export function VersionSelector({
   currentLanguage,
   currentReference,
 }: VersionSelectorProps) {
-  const [availableResources, setAvailableResources] = useState<ScriptureVersion[]>([]);
+  const [availableResources, setAvailableResources] = useState<ResourceAvailability[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check if a specific resource is available by making a test request
+  const checkResourceAvailability = async (
+    lang: string, 
+    resource: string, 
+    book: string
+  ): Promise<boolean> => {
+    try {
+      const { data } = await supabase.functions.invoke('translation-helps-proxy', {
+        body: {
+          endpoint: 'fetch-scripture',
+          params: {
+            reference: `${book} 1:1`,
+            language: lang,
+            owner: 'unfoldingWord',
+            resource: resource,
+          },
+        },
+      });
+      
+      // Check if we got actual scripture content (not an error)
+      if (data?.error || data?.originalStatus === 404) {
+        return false;
+      }
+      
+      // Check if the returned language matches what we requested
+      const returnedLang = data?.metadata?.language || data?.language;
+      return returnedLang === lang;
+    } catch {
+      return false;
+    }
+  };
 
   // Fetch available scripture resources when opened
   useEffect(() => {
@@ -45,36 +80,49 @@ export function VersionSelector({
         // Get the book from current reference for availability check
         const book = currentReference?.split(' ')[0] || 'John';
         
-        // Check which resources are available for current language
-        const availableForLanguage: ScriptureVersion[] = [];
+        console.log('[VersionSelector] Checking resources for:', { currentLanguage, book });
         
-        for (const resource of SCRIPTURE_RESOURCES) {
-          // Try to verify if this resource exists for the language
-          availableForLanguage.push({
+        // Check availability for each resource in the primary language
+        const primaryChecks = SCRIPTURE_RESOURCES.map(async (resource) => {
+          const isAvailable = await checkResourceAvailability(currentLanguage, resource.id, book);
+          console.log(`[VersionSelector] ${currentLanguage}/${resource.id}: ${isAvailable ? 'available' : 'not available'}`);
+          return {
             language: currentLanguage,
             organization: 'unfoldingWord',
             resource: resource.id,
             displayName: resource.name,
             description: resource.description,
             isFallback: false,
-          });
-        }
+            isAvailable,
+          } as ResourceAvailability;
+        });
         
-        // Always add English fallback resources if not English
-        if (currentLanguage !== 'en') {
-          for (const resource of SCRIPTURE_RESOURCES) {
-            availableForLanguage.push({
-              language: 'en',
-              organization: 'unfoldingWord',
-              resource: resource.id,
-              displayName: `${resource.name} (English)`,
-              description: resource.description,
-              isFallback: true,
-            });
-          }
-        }
+        // Check English fallback resources if not English
+        const fallbackChecks = currentLanguage !== 'en' 
+          ? SCRIPTURE_RESOURCES.map(async (resource) => {
+              const isAvailable = await checkResourceAvailability('en', resource.id, book);
+              return {
+                language: 'en',
+                organization: 'unfoldingWord',
+                resource: resource.id,
+                displayName: `${resource.name} (English)`,
+                description: resource.description,
+                isFallback: true,
+                isAvailable,
+              } as ResourceAvailability;
+            })
+          : [];
         
-        setAvailableResources(availableForLanguage);
+        const [primaryResults, fallbackResults] = await Promise.all([
+          Promise.all(primaryChecks),
+          Promise.all(fallbackChecks),
+        ]);
+        
+        // Combine and set - filter to only show available resources
+        const allResources = [...primaryResults, ...fallbackResults];
+        console.log('[VersionSelector] Available resources:', allResources.filter(r => r.isAvailable).map(r => `${r.language}/${r.resource}`));
+        
+        setAvailableResources(allResources);
       } catch (error) {
         console.error('[VersionSelector] Failed to load resources:', error);
       } finally {
@@ -97,9 +145,10 @@ export function VersionSelector({
            active?.resource === version.resource;
   };
 
-  // Group versions by language
-  const primaryResources = availableResources.filter(v => !v.isFallback);
-  const fallbackResources = availableResources.filter(v => v.isFallback);
+  // Group versions by language - only show available resources
+  const primaryResources = availableResources.filter(v => !v.isFallback && v.isAvailable);
+  const fallbackResources = availableResources.filter(v => v.isFallback && v.isAvailable);
+  const unavailablePrimary = availableResources.filter(v => !v.isFallback && !v.isAvailable);
 
   return (
     <AnimatePresence>
@@ -144,7 +193,7 @@ export function VersionSelector({
               ) : (
                 <div className="space-y-6">
                   {/* Primary language resources */}
-                  {primaryResources.length > 0 && (
+                  {primaryResources.length > 0 ? (
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <BookOpen className="w-4 h-4 text-primary" />
@@ -183,7 +232,22 @@ export function VersionSelector({
                         ))}
                       </div>
                     </div>
-                  )}
+                  ) : unavailablePrimary.length > 0 ? (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          {currentLanguage.toUpperCase()} Resources
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          (none available)
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground py-2">
+                        No scripture resources found for this language. Using English fallback below.
+                      </p>
+                    </div>
+                  ) : null}
 
                   {/* Fallback (English) resources */}
                   {fallbackResources.length > 0 && (
