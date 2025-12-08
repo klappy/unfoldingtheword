@@ -60,13 +60,15 @@ const Index = () => {
       content,
       scripture?.reference,
       async (scriptureRef) => {
+        console.log('[Index] onScriptureReference callback triggered:', scriptureRef);
         try {
           await loadScriptureData(scriptureRef);
+          console.log('[Index] Scripture data loaded successfully');
           if (convId) {
             await updateConversation(convId, { scriptureReference: scriptureRef });
           }
         } catch (error) {
-          console.error('Failed to load scripture:', error);
+          console.error('[Index] Failed to load scripture:', error);
         }
       }
     );
