@@ -199,10 +199,30 @@ export function useLanguage() {
 
   const getCurrentLanguage = useCallback((): LanguageOption | null => {
     if (!language) return null;
-    return availableLanguages.find(l => l.id === language) || { 
+    const found = availableLanguages.find(l => l.id === language);
+    if (found) return found;
+    
+    // Fallback with human-readable names for common language codes
+    const languageNames: Record<string, { name: string; nativeName: string }> = {
+      'en': { name: 'English', nativeName: 'English' },
+      'es-419': { name: 'Spanish (Latin America)', nativeName: 'Español' },
+      'es': { name: 'Spanish', nativeName: 'Español' },
+      'fr': { name: 'French', nativeName: 'Français' },
+      'pt-br': { name: 'Portuguese (Brazil)', nativeName: 'Português' },
+      'pt': { name: 'Portuguese', nativeName: 'Português' },
+      'hi': { name: 'Hindi', nativeName: 'हिन्दी' },
+      'ar': { name: 'Arabic', nativeName: 'العربية' },
+      'id': { name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
+      'zh': { name: 'Chinese', nativeName: '中文' },
+      'ru': { name: 'Russian', nativeName: 'Русский' },
+    };
+    
+    const fallback = languageNames[language];
+    return { 
       id: language, 
-      name: language,
-      direction: 'ltr' 
+      name: fallback?.name || language,
+      nativeName: fallback?.nativeName || language,
+      direction: language === 'ar' ? 'rtl' : 'ltr' 
     };
   }, [language, availableLanguages]);
 
