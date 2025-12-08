@@ -283,33 +283,51 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, er
   // Track which section is in view
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container) return;
+    if (!container || availableTypes.length === 0) return;
 
     const handleScroll = () => {
-      const containerTop = container.scrollTop;
+      const containerRect = container.getBoundingClientRect();
       let currentType: string | null = null;
+      let closestDistance = Infinity;
 
       for (const type of availableTypes) {
         const section = sectionRefs.current[type];
         if (section) {
-          const sectionTop = section.offsetTop - container.offsetTop;
-          if (sectionTop <= containerTop + 100) {
+          const sectionRect = section.getBoundingClientRect();
+          // Distance from section top to container top
+          const distance = sectionRect.top - containerRect.top;
+          
+          // Find the section closest to (but not below) the top of the container
+          if (distance <= 50 && Math.abs(distance) < closestDistance) {
+            closestDistance = Math.abs(distance);
             currentType = type;
           }
         }
       }
 
-      setActiveType(currentType || availableTypes[0] || null);
+      // If nothing is close to the top, use the first visible section
+      if (!currentType) {
+        for (const type of availableTypes) {
+          const section = sectionRefs.current[type];
+          if (section) {
+            const sectionRect = section.getBoundingClientRect();
+            if (sectionRect.top < containerRect.bottom && sectionRect.bottom > containerRect.top) {
+              currentType = type;
+              break;
+            }
+          }
+        }
+      }
+
+      setActiveType(currentType || availableTypes[0]);
     };
 
     // Set initial active type
-    if (availableTypes.length > 0) {
-      setActiveType(availableTypes[0]);
-    }
+    setActiveType(availableTypes[0]);
 
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [availableTypes]);
+  }, [availableTypes.join(',')]);
 
   const scrollToType = (type: string) => {
     const sectionEl = sectionRefs.current[type];
