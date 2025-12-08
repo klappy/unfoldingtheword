@@ -33,6 +33,8 @@ function parseReference(ref: string): { book: string; chapter: number; verse?: n
 export function useScriptureData() {
   const [scripture, setScripture] = useState<ScripturePassage | null>(null);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [allResources, setAllResources] = useState<Resource[]>([]); // Store all resources for filtering
+  const [verseFilter, setVerseFilter] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -175,7 +177,9 @@ export function useScriptureData() {
       }
 
       console.log('[useScriptureData] Built resources:', newResources.length);
+      setAllResources(newResources);
       setResources(newResources);
+      setVerseFilter(null);
     } catch (err) {
       console.error('[useScriptureData] Error loading scripture data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -350,16 +354,81 @@ export function useScriptureData() {
   const clearData = useCallback(() => {
     setScripture(null);
     setResources([]);
+    setAllResources([]);
+    setVerseFilter(null);
     setError(null);
   }, []);
+
+  // Filter resources by verse reference
+  const filterByVerse = useCallback((verseReference: string) => {
+    console.log('[useScriptureData] Filtering resources for:', verseReference);
+    
+    // Parse the reference to get chapter and optional verse
+    const parsed = parseReference(verseReference);
+    if (!parsed) {
+      // Clear filter if can't parse
+      setVerseFilter(null);
+      setResources(allResources);
+      return;
+    }
+
+    setVerseFilter(verseReference);
+
+    // If no verse specified, show all resources for that chapter
+    if (!parsed.verse) {
+      const chapterPrefix = `${parsed.book} ${parsed.chapter}:`;
+      const chapterOnly = `${parsed.book} ${parsed.chapter}`;
+      const filtered = allResources.filter(r => 
+        r.reference?.startsWith(chapterPrefix) || 
+        r.reference === chapterOnly ||
+        r.reference?.includes(`${parsed.book} ${parsed.chapter}`)
+      );
+      console.log('[useScriptureData] Filtered to chapter:', filtered.length, 'resources');
+      setResources(filtered.length > 0 ? filtered : allResources);
+      return;
+    }
+
+    // Filter to specific verse
+    const versePatterns = [
+      `${parsed.book} ${parsed.chapter}:${parsed.verse}`,
+      `${parsed.book} ${parsed.chapter}:${parsed.verse}-`,
+      `-${parsed.verse}`,
+    ];
+
+    const filtered = allResources.filter(r => {
+      if (!r.reference) return false;
+      
+      // Check exact match
+      if (r.reference === `${parsed.book} ${parsed.chapter}:${parsed.verse}`) return true;
+      
+      // Check if verse is in a range (e.g., "John 3:16-18" includes verse 17)
+      const rangeMatch = r.reference.match(/(\d+):(\d+)-(\d+)$/);
+      if (rangeMatch) {
+        const startVerse = parseInt(rangeMatch[2], 10);
+        const endVerse = parseInt(rangeMatch[3], 10);
+        if (parsed.verse >= startVerse && parsed.verse <= endVerse) return true;
+      }
+      
+      // Check single verse match
+      const singleMatch = r.reference.match(/(\d+):(\d+)$/);
+      if (singleMatch && parseInt(singleMatch[2], 10) === parsed.verse) return true;
+      
+      return false;
+    });
+
+    console.log('[useScriptureData] Filtered to verse:', filtered.length, 'resources');
+    setResources(filtered.length > 0 ? filtered : allResources);
+  }, [allResources]);
 
   return {
     scripture,
     resources,
     isLoading,
     error,
+    verseFilter,
     loadScriptureData,
     loadKeywordResources,
+    filterByVerse,
     clearData,
   };
 }
