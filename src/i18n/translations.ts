@@ -253,6 +253,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.subtitle': 'Pergunte sobre qualquer passagem das Escrituras para começar',
     'chat.welcome.hint': 'Tente: "Romanos 3" ou "O que significa justificação?"',
     'chat.changeLanguage': 'Mudar idioma',
+    'chat.translateUi': 'Traduzir interface',
     
     'scripture.title': 'Escritura',
     'scripture.empty.title': 'Passagem Bíblica',
@@ -284,11 +285,16 @@ export const translations: Record<string, TranslationStrings> = {
     'notes.add': 'Adicionar nota',
     'notes.delete': 'Excluir',
     'notes.placeholder': 'Escreva uma nota...',
+    'notes.save': 'Salvar Nota',
     
     'history.title': 'Histórico',
     'history.empty.title': 'Sem Conversas Ainda',
     'history.empty.description': 'Seu histórico de conversas aparecerá aqui',
     'history.new': 'Nova Conversa',
+    'history.startHint': 'Inicie uma nova conversa para começar',
+    
+    'nav.chat': 'Chat',
+    'nav.resources': 'Recursos',
     
     'common.loading': 'Carregando...',
     'common.error': 'Erro',
@@ -325,6 +331,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.subtitle': 'Posez une question sur un passage des Écritures pour commencer',
     'chat.welcome.hint': 'Essayez : "Romains 3" ou "Que signifie justification ?"',
     'chat.changeLanguage': 'Changer de langue',
+    'chat.translateUi': 'Traduire l\'interface',
     
     'scripture.title': 'Écriture',
     'scripture.empty.title': 'Passage Biblique',
@@ -356,11 +363,16 @@ export const translations: Record<string, TranslationStrings> = {
     'notes.add': 'Ajouter une note',
     'notes.delete': 'Supprimer',
     'notes.placeholder': 'Écrivez une note...',
+    'notes.save': 'Enregistrer la Note',
     
     'history.title': 'Historique',
     'history.empty.title': 'Pas encore de conversations',
     'history.empty.description': 'Votre historique de conversations apparaîtra ici',
     'history.new': 'Nouvelle Conversation',
+    'history.startHint': 'Commencez une nouvelle conversation',
+    
+    'nav.chat': 'Chat',
+    'nav.resources': 'Ressources',
     
     'common.loading': 'Chargement...',
     'common.error': 'Erreur',
@@ -397,6 +409,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.subtitle': 'शुरू करने के लिए किसी भी पवित्रशास्त्र के अंश के बारे में पूछें',
     'chat.welcome.hint': 'कोशिश करें: "रोमियों 3" या "धर्मीकरण का क्या अर्थ है?"',
     'chat.changeLanguage': 'भाषा बदलें',
+    'chat.translateUi': 'इंटरफ़ेस अनुवाद करें',
     
     'scripture.title': 'पवित्रशास्त्र',
     'scripture.empty.title': 'बाइबिल अंश',
@@ -428,11 +441,16 @@ export const translations: Record<string, TranslationStrings> = {
     'notes.add': 'नोट जोड़ें',
     'notes.delete': 'हटाएं',
     'notes.placeholder': 'एक नोट लिखें...',
+    'notes.save': 'नोट सहेजें',
     
     'history.title': 'इतिहास',
     'history.empty.title': 'अभी तक कोई बातचीत नहीं',
     'history.empty.description': 'आपका बातचीत इतिहास यहाँ दिखाई देगा',
     'history.new': 'नई बातचीत',
+    'history.startHint': 'शुरू करने के लिए नई बातचीत शुरू करें',
+    
+    'nav.chat': 'चैट',
+    'nav.resources': 'संसाधन',
     
     'common.loading': 'लोड हो रहा है...',
     'common.error': 'त्रुटि',
@@ -469,6 +487,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.subtitle': 'Tanyakan tentang bagian Kitab Suci mana pun untuk memulai',
     'chat.welcome.hint': 'Coba: "Roma 3" atau "Apa arti pembenaran?"',
     'chat.changeLanguage': 'Ubah bahasa',
+    'chat.translateUi': 'Terjemahkan antarmuka',
     
     'scripture.title': 'Kitab Suci',
     'scripture.empty.title': 'Bagian Alkitab',
@@ -500,11 +519,16 @@ export const translations: Record<string, TranslationStrings> = {
     'notes.add': 'Tambah catatan',
     'notes.delete': 'Hapus',
     'notes.placeholder': 'Tulis catatan...',
+    'notes.save': 'Simpan Catatan',
     
     'history.title': 'Riwayat',
     'history.empty.title': 'Belum Ada Percakapan',
     'history.empty.description': 'Riwayat percakapan Anda akan muncul di sini',
     'history.new': 'Percakapan Baru',
+    'history.startHint': 'Mulai percakapan baru untuk memulai',
+    
+    'nav.chat': 'Obrolan',
+    'nav.resources': 'Sumber Daya',
     
     'common.loading': 'Memuat...',
     'common.error': 'Kesalahan',
@@ -541,6 +565,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.subtitle': 'اسأل عن أي مقطع من الكتاب المقدس للبدء',
     'chat.welcome.hint': 'جرّب: "رومية 3" أو "ما معنى التبرير؟"',
     'chat.changeLanguage': 'تغيير اللغة',
+    'chat.translateUi': 'ترجمة الواجهة',
     
     'scripture.title': 'الكتاب المقدس',
     'scripture.empty.title': 'مقطع كتابي',
@@ -572,11 +597,16 @@ export const translations: Record<string, TranslationStrings> = {
     'notes.add': 'إضافة ملاحظة',
     'notes.delete': 'حذف',
     'notes.placeholder': 'اكتب ملاحظة...',
+    'notes.save': 'حفظ الملاحظة',
     
     'history.title': 'السجل',
     'history.empty.title': 'لا توجد محادثات بعد',
     'history.empty.description': 'سيظهر سجل محادثاتك هنا',
     'history.new': 'محادثة جديدة',
+    'history.startHint': 'ابدأ محادثة جديدة للبدء',
+    
+    'nav.chat': 'الدردشة',
+    'nav.resources': 'الموارد',
     
     'common.loading': 'جارٍ التحميل...',
     'common.error': 'خطأ',
