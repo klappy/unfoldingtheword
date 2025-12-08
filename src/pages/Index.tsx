@@ -46,12 +46,20 @@ const Index = () => {
       convId = await createConversation(title, content);
     }
 
+    // Create user message object
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    };
+
     // Save user message
     if (convId) {
-      await saveMessage(convId, { role: 'user', content });
+      await saveMessage(convId, userMessage);
     }
 
-    // Send to multi-agent chat
+    // Send to multi-agent chat and get the new messages
     const result = await sendMessage(
       content,
       scripture?.reference,
@@ -73,18 +81,10 @@ const Index = () => {
       }
     );
 
-    // Save assistant messages
-    if (convId && result) {
-      // Get the last few messages that are assistant messages
-      const recentMessages = messages.slice(-10);
-      for (const msg of recentMessages) {
-        if (msg.role === 'assistant') {
-          await saveMessage(convId, { 
-            role: 'assistant', 
-            content: msg.content,
-            agent: msg.agent 
-          });
-        }
+    // Save assistant messages that were just created
+    if (convId && result?.newMessages) {
+      for (const msg of result.newMessages) {
+        await saveMessage(convId, msg);
       }
     }
 
@@ -95,7 +95,7 @@ const Index = () => {
         description: 'Swipe right to view scripture and resources',
       });
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, toast, currentConversationId, createConversation, saveMessage, updateConversation, messages]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, toast, currentConversationId, createConversation, saveMessage, updateConversation]);
 
   const handleResourceClick = useCallback((resource: ResourceLink) => {
     if (resource.type === 'scripture') {
