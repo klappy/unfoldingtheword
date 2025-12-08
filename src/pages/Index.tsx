@@ -201,6 +201,10 @@ const Index = () => {
           <ResourcesCard
             resources={resources}
             onAddToNotes={(text) => handleAddToNotes(text)}
+            onSearch={(query) => {
+              navigateToCard('chat');
+              handleSendMessage(query);
+            }}
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
