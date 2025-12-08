@@ -17,8 +17,8 @@ serve(async (req) => {
     
     console.log(`[translation-helps-proxy] Endpoint: ${endpoint}, Params:`, params);
 
-    // Map endpoint names to actual API paths - all use fetch- prefix
-const endpointMap: Record<string, string> = {
+    // Map endpoint names to actual API paths
+    const endpointMap: Record<string, string> = {
       'fetch-scripture': 'fetch-scripture',
       'scripture': 'fetch-scripture',
       'translation-notes': 'fetch-translation-notes',
@@ -37,7 +37,7 @@ const endpointMap: Record<string, string> = {
       'fetch-translation-academy': 'fetch-translation-academy',
       'academy': 'fetch-translation-academy',
       'search': 'search',
-      'simple-languages': 'simple-languages',
+      'catalog-languages': 'catalog-languages',
       'get-available-books': 'get-available-books',
     };
 

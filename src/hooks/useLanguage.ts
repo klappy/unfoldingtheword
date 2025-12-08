@@ -2,12 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 const LANGUAGE_KEY = 'bible-study-language';
+const ORGANIZATION_KEY = 'bible-study-organization';
 
 export interface LanguageOption {
   id: string;
   name: string;
   nativeName?: string;
   direction?: 'ltr' | 'rtl';
+}
+
+export interface OrganizationOption {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 // Fallback languages if API fails
@@ -20,8 +27,15 @@ const FALLBACK_LANGUAGES: LanguageOption[] = [
   { id: 'ar', name: 'Arabic', nativeName: 'العربية', direction: 'rtl' },
 ];
 
+// Common organizations that provide Bible resources
+const AVAILABLE_ORGANIZATIONS: OrganizationOption[] = [
+  { id: 'unfoldingWord', name: 'unfoldingWord', description: 'Open-licensed Bible resources' },
+  { id: 'Door43-Catalog', name: 'Door43 Catalog', description: 'Community translations' },
+];
+
 export function useLanguage() {
   const [language, setLanguageState] = useState<string | null>(null);
+  const [organization, setOrganizationState] = useState<string | null>(null);
   const [availableLanguages, setAvailableLanguages] = useState<LanguageOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [needsSelection, setNeedsSelection] = useState(false);
@@ -30,7 +44,7 @@ export function useLanguage() {
   const fetchLanguages = useCallback(async () => {
     try {
       const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
-        body: { endpoint: 'simple-languages', params: {} },
+        body: { endpoint: 'catalog-languages', params: {} },
       });
 
       if (error) {
@@ -44,18 +58,23 @@ export function useLanguage() {
       
       if (Array.isArray(data)) {
         languages = data.map((lang: any) => ({
-          id: lang.id || lang.code || lang.languageId,
-          name: lang.name || lang.englishName || lang.id,
-          nativeName: lang.nativeName || lang.localName || lang.name,
-          direction: lang.direction || 'ltr',
+          id: lang.id || lang.code || lang.languageId || lang.lc,
+          name: lang.name || lang.englishName || lang.ln || lang.id,
+          nativeName: lang.nativeName || lang.localName || lang.ln || lang.name,
+          direction: lang.direction || lang.ld || 'ltr',
         }));
       } else if (data?.languages) {
         languages = data.languages.map((lang: any) => ({
-          id: lang.id || lang.code || lang.languageId,
-          name: lang.name || lang.englishName || lang.id,
-          nativeName: lang.nativeName || lang.localName || lang.name,
-          direction: lang.direction || 'ltr',
+          id: lang.id || lang.code || lang.languageId || lang.lc,
+          name: lang.name || lang.englishName || lang.ln || lang.id,
+          nativeName: lang.nativeName || lang.localName || lang.ln || lang.name,
+          direction: lang.direction || lang.ld || 'ltr',
         }));
+      } else if (data?.content) {
+        // Might be markdown/text - use fallback
+        console.warn('[useLanguage] Got text response instead of JSON, using fallback');
+        setAvailableLanguages(FALLBACK_LANGUAGES);
+        return;
       }
 
       if (languages.length > 0) {
@@ -76,11 +95,14 @@ export function useLanguage() {
     }
   }, []);
 
-  // Initialize language from localStorage
+  // Initialize language and organization from localStorage
   useEffect(() => {
     const savedLanguage = localStorage.getItem(LANGUAGE_KEY);
-    if (savedLanguage) {
+    const savedOrganization = localStorage.getItem(ORGANIZATION_KEY);
+    
+    if (savedLanguage && savedOrganization) {
       setLanguageState(savedLanguage);
+      setOrganizationState(savedOrganization);
       setNeedsSelection(false);
     } else {
       setNeedsSelection(true);
@@ -92,8 +114,18 @@ export function useLanguage() {
   const setLanguage = useCallback((langId: string) => {
     localStorage.setItem(LANGUAGE_KEY, langId);
     setLanguageState(langId);
-    setNeedsSelection(false);
   }, []);
+
+  const setOrganization = useCallback((orgId: string) => {
+    localStorage.setItem(ORGANIZATION_KEY, orgId);
+    setOrganizationState(orgId);
+  }, []);
+
+  const completeSelection = useCallback((langId: string, orgId: string) => {
+    setLanguage(langId);
+    setOrganization(orgId);
+    setNeedsSelection(false);
+  }, [setLanguage, setOrganization]);
 
   const getCurrentLanguage = useCallback((): LanguageOption | null => {
     if (!language) return null;
@@ -104,12 +136,25 @@ export function useLanguage() {
     };
   }, [language, availableLanguages]);
 
+  const getCurrentOrganization = useCallback((): OrganizationOption | null => {
+    if (!organization) return null;
+    return AVAILABLE_ORGANIZATIONS.find(o => o.id === organization) || {
+      id: organization,
+      name: organization,
+    };
+  }, [organization]);
+
   return {
     language,
+    organization,
     setLanguage,
+    setOrganization,
+    completeSelection,
     availableLanguages,
+    availableOrganizations: AVAILABLE_ORGANIZATIONS,
     isLoading,
     needsSelection,
     getCurrentLanguage,
+    getCurrentOrganization,
   };
 }

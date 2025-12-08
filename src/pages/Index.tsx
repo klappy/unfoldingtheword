@@ -19,11 +19,13 @@ import { useConversations } from '@/hooks/useConversations';
 const Index = () => {
   const {
     language,
-    setLanguage,
+    organization,
     availableLanguages,
+    availableOrganizations,
     isLoading: languageLoading,
     needsSelection,
     getCurrentLanguage,
+    completeSelection,
   } = useLanguage();
 
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
@@ -225,12 +227,14 @@ const Index = () => {
       <AnimatePresence>
         <LanguageSelector
           languages={availableLanguages}
+          organizations={availableOrganizations}
           isLoading={languageLoading}
-          onSelect={(langId) => {
-            setLanguage(langId);
+          onSelect={(langId, orgId) => {
+            completeSelection(langId, orgId);
             setShowLanguageSelector(false);
           }}
           selectedLanguage={language}
+          selectedOrganization={organization}
         />
       </AnimatePresence>
     );
