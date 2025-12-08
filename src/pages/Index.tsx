@@ -18,7 +18,10 @@ const Index = () => {
   const {
     currentCard,
     swipeDirection,
+    dragOffset,
+    isDragging,
     handleTouchStart,
+    handleTouchMove,
     handleTouchEnd,
     navigateToCard,
     cardOrder,
@@ -224,7 +227,10 @@ const Index = () => {
         currentCard={currentCard}
         cardOrder={cardOrder}
         swipeDirection={swipeDirection}
+        dragOffset={dragOffset}
+        isDragging={isDragging}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {renderCurrentCard()}
