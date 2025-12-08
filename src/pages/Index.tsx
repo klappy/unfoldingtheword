@@ -6,7 +6,7 @@ import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
-import { ResourceLink, HistoryItem, Message } from '@/types';
+import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
@@ -164,8 +164,8 @@ const Index = () => {
     }
   }, [loadScriptureData, toast]);
 
-  const renderCurrentCard = () => {
-    switch (currentCard) {
+  const renderCard = useCallback((card: CardType) => {
+    switch (card) {
       case 'history':
         return (
           <HistoryCard
@@ -219,7 +219,7 @@ const Index = () => {
       default:
         return null;
     }
-  };
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, scriptureLoading, scriptureError, loadScriptureData, handleLoadFullChapter, resources, navigateToCard, notes, handleDeleteNote]);
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
@@ -232,9 +232,8 @@ const Index = () => {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-      >
-        {renderCurrentCard()}
-      </SwipeContainer>
+        renderCard={renderCard}
+      />
     </div>
   );
 };
