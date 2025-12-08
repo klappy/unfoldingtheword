@@ -322,6 +322,13 @@ export async function fetchScripture(reference: string): Promise<ScriptureRespon
   try {
     const data = await callProxy('fetch-scripture', { reference });
     const content = data.content || data.text || '';
+    
+    // Log full raw content to understand structure
+    console.log('[translationHelpsApi] Raw scripture content:');
+    console.log('=== START RAW CONTENT ===');
+    console.log(content.substring(0, 3000));
+    console.log('=== END RAW CONTENT (first 3000 chars) ===');
+    
     const { verses, translation } = parseScriptureMarkdown(content, reference);
 
     return {
