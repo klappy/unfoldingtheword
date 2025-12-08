@@ -130,17 +130,37 @@ function parseScriptureMarkdown(content: string, reference: string): {
     // Split into segments by verse numbers
     // Pattern: Look for numbers at the start or after paragraph breaks
     const versePattern = /(?:^|\s)(\d+)\s+/g;
-    const matches: { index: number; verseNum: number }[] = [];
+    const potentialMatches: { index: number; verseNum: number }[] = [];
     let match;
     
     while ((match = versePattern.exec(ultContent)) !== null) {
-      matches.push({ index: match.index, verseNum: parseInt(match[1], 10) });
+      potentialMatches.push({ index: match.index, verseNum: parseInt(match[1], 10) });
+    }
+    
+    // Filter to only valid verse numbers - they must be in ascending order
+    // with reasonable gaps (to handle verse ranges like "16-18")
+    const validMatches: { index: number; verseNum: number }[] = [];
+    let lastVerseNum = 0;
+    
+    for (const pm of potentialMatches) {
+      // Valid verse number must be:
+      // 1. Greater than the last verse
+      // 2. Not more than ~10 verses ahead (to handle ranges, but catch random numbers like "70")
+      const isValidSequence = pm.verseNum > lastVerseNum && pm.verseNum <= lastVerseNum + 10;
+      
+      // Special case: first verse can be 1 or start of a passage
+      const isFirstVerse = validMatches.length === 0 && pm.verseNum >= 1 && pm.verseNum <= 50;
+      
+      if (isValidSequence || isFirstVerse) {
+        validMatches.push(pm);
+        lastVerseNum = pm.verseNum;
+      }
     }
     
     // Extract text for each verse
-    for (let i = 0; i < matches.length; i++) {
-      const current = matches[i];
-      const next = matches[i + 1];
+    for (let i = 0; i < validMatches.length; i++) {
+      const current = validMatches[i];
+      const next = validMatches[i + 1];
       
       // Get the start position after the verse number
       const verseNumStr = current.verseNum.toString();
