@@ -470,8 +470,8 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, isLoading, er
                 key={type} 
                 ref={el => { sectionRefs.current[type] = el; }}
               >
-                {/* Section header */}
-                <div className="flex items-center gap-2 mb-3 px-1">
+                {/* Sticky section header */}
+                <div className="sticky top-0 z-10 flex items-center gap-2 py-2 px-1 bg-background/95 backdrop-blur-sm -mx-1">
                   <Icon className={cn('w-4 h-4', colorClass)} />
                   <h3 className={cn('text-sm font-medium', colorClass)}>
                     {label}s
