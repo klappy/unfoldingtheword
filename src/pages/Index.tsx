@@ -25,7 +25,7 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData } = useScriptureData();
+  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
   const { 
@@ -143,13 +143,14 @@ const Index = () => {
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
+    clearScriptureData();
     setCurrentConversationId(null);
     closeHistory();
     toast({
       title: 'New conversation',
       description: 'Starting fresh',
     });
-  }, [clearMessages, setCurrentConversationId, closeHistory, toast]);
+  }, [clearMessages, clearScriptureData, setCurrentConversationId, closeHistory, toast]);
 
   const handleLoadFullChapter = useCallback(async (chapterRef: string) => {
     try {
