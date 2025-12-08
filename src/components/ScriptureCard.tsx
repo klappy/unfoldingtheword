@@ -29,35 +29,38 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilte
     }
     return null;
   })();
-  // Scroll to target chapter/verse when passage changes
+  // Scroll to target chapter/verse when passage data is fully loaded
   useEffect(() => {
-    if (!passage?.book || !passage.targetChapter) return;
-
-    // Retry scroll until element is available (refs may not be ready immediately)
-    let attempts = 0;
-    const maxAttempts = 20;
+    // Only scroll when we have complete book data with chapters
+    if (!passage?.book?.chapters?.length || !passage.targetChapter) return;
     
-    const attemptScroll = () => {
+    console.log('[ScriptureCard] Book loaded, scrolling to chapter:', passage.targetChapter);
+
+    // Use requestAnimationFrame to ensure DOM is painted
+    const scrollToTarget = () => {
       const targetEl = chapterRefs.current.get(passage.targetChapter!);
       if (targetEl && scrollContainerRef.current) {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        console.log('[ScriptureCard] Scrolled to chapter', passage.targetChapter);
         return true;
       }
       return false;
     };
 
-    const timer = setInterval(() => {
-      attempts++;
-      if (attemptScroll() || attempts >= maxAttempts) {
-        clearInterval(timer);
+    // First attempt after paint
+    requestAnimationFrame(() => {
+      if (!scrollToTarget()) {
+        // Retry a few times if refs aren't ready
+        let attempts = 0;
+        const timer = setInterval(() => {
+          attempts++;
+          if (scrollToTarget() || attempts >= 10) {
+            clearInterval(timer);
+          }
+        }, 50);
       }
-    }, 100);
-
-    // Also try immediately
-    attemptScroll();
-
-    return () => clearInterval(timer);
-  }, [passage?.book?.book, passage?.targetChapter, passage?.book?.chapters?.length]);
+    });
+  }, [passage?.book?.chapters?.length, passage?.targetChapter, passage?.reference]);
 
   const handleTextSelection = () => {
     const selection = window.getSelection();
