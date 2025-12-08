@@ -216,7 +216,7 @@ export function useScriptureData() {
       setResources(newResources);
       setVerseFilter(null);
 
-      // Set scripture LAST after all data is ready - this triggers the scroll
+      // Set scripture and loading state together to prevent flash
       setScripture({
         reference,
         text: '',
@@ -227,21 +227,22 @@ export function useScriptureData() {
         targetChapter: chapter,
         targetVerse: verse,
       });
+      setIsLoading(false);
 
     } catch (err) {
       console.error('[useScriptureData] Error loading scripture data:', err);
       
-      // Auto-retry on failure
+      // Auto-retry on failure - keep loading state true during retries
       if (retryCount < maxRetries) {
         console.log(`[useScriptureData] Auto-retrying in ${(retryCount + 1) * 1000}ms...`);
         setTimeout(() => {
           loadScriptureData(reference, retryCount + 1);
         }, (retryCount + 1) * 1000);
-        return;
+        return; // Don't set isLoading to false - we're still loading
       }
       
+      // Only set error and stop loading when retries exhausted
       setError(err instanceof Error ? err.message : 'Failed to load data');
-    } finally {
       setIsLoading(false);
     }
   }, [loadBookInBackground, scripture?.book?.book]);
