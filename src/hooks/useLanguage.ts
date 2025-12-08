@@ -20,7 +20,9 @@ export interface OrganizationOption {
 export interface ScriptureVersion {
   language: string;
   organization: string;
+  resource?: string; // e.g., 'ult', 'ust', 'ulb', 'udb'
   displayName: string;
+  description?: string;
   isFallback?: boolean;
 }
 
