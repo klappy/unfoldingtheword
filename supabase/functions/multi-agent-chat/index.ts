@@ -74,20 +74,11 @@ async function fetchMcpResources(query: string, resourceTypes: string[] = ['tn',
   return results;
 }
 
-// Fetch scripture passage from MCP
+// Fetch scripture passage from MCP - pass reference directly, let MCP server handle parsing
 async function fetchScripturePassage(reference: string): Promise<string | null> {
   try {
-    // Parse reference to get book, chapter, verse
-    const match = reference.match(/^(\d?\s*[A-Za-z]+)\s*(\d+)(?::(\d+)(?:-(\d+))?)?$/);
-    if (!match) return null;
-    
-    const book = match[1].trim();
-    const chapter = match[2];
-    const startVerse = match[3];
-    const endVerse = match[4];
-    
-    // Use the correct API path format
-    const url = `${MCP_BASE_URL}/api/fetch-scripture?book=${encodeURIComponent(book)}&chapter=${chapter}${startVerse ? `&startVerse=${startVerse}` : ''}${endVerse ? `&endVerse=${endVerse}` : ''}`;
+    // Pass the reference directly to the MCP server - it handles all the mapping
+    const url = `${MCP_BASE_URL}/api/fetch-scripture?reference=${encodeURIComponent(reference)}`;
     console.log(`Fetching scripture: ${url}`);
     
     const response = await fetch(url);
