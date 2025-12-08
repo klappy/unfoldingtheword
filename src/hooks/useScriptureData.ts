@@ -56,6 +56,7 @@ export function useScriptureData() {
           text: scriptureData.text,
           verses: scriptureData.verses,
           translation: scriptureData.translation,
+          metadata: scriptureData.metadata,
         });
       }
 
