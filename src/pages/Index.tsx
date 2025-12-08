@@ -5,7 +5,7 @@ import { ChatCard } from '@/components/ChatCard';
 import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
-import { HistoryPanel } from '@/components/HistoryPanel';
+import { HistoryCard } from '@/components/HistoryCard';
 import { ResourceLink, HistoryItem, Message } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useScriptureData } from '@/hooks/useScriptureData';
@@ -17,11 +17,9 @@ const Index = () => {
   const { toast } = useToast();
   const {
     currentCard,
-    showHistory,
     handleTouchStart,
     handleTouchEnd,
     navigateToCard,
-    closeHistory,
     cardOrder,
   } = useSwipeNavigation();
 
@@ -38,18 +36,13 @@ const Index = () => {
     loadConversationMessages,
   } = useConversations();
 
-  // Use resources from useScriptureData (now handles both scripture refs and keyword searches)
-  // The aggregatedResources useMemo is no longer needed since loadKeywordResources populates resources directly
-
   const handleSendMessage = useCallback(async (content: string) => {
-    // Create conversation on first message if needed
     let convId = currentConversationId;
     if (!convId) {
       const title = content.length > 40 ? content.substring(0, 40) + '...' : content;
       convId = await createConversation(title, content);
     }
 
-    // Create user message object
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -57,20 +50,16 @@ const Index = () => {
       timestamp: new Date(),
     };
 
-    // Save user message
     if (convId) {
       await saveMessage(convId, userMessage);
     }
 
-    // Send to multi-agent chat and get the new messages
     const result = await sendMessage(
       content,
       scripture?.reference,
       async (scriptureRef) => {
-        // Load scripture when AI identifies a reference
         try {
           await loadScriptureData(scriptureRef);
-          // Update conversation with scripture reference
           if (convId) {
             await updateConversation(convId, { scriptureReference: scriptureRef });
           }
@@ -84,21 +73,18 @@ const Index = () => {
       }
     );
 
-    // Save assistant messages that were just created
     if (convId && result?.newMessages) {
       for (const msg of result.newMessages) {
         await saveMessage(convId, msg);
       }
     }
 
-    // If AI found a scripture reference, notify user
     if (result?.scriptureReference) {
       toast({
         title: 'Resources updated',
         description: 'Swipe right to view scripture and resources',
       });
     } else if (result?.searchQuery) {
-      // For keyword searches, load resources from search API
       await loadKeywordResources(result.searchQuery);
       toast({
         title: 'Resources found',
@@ -134,33 +120,33 @@ const Index = () => {
   }, [deleteNote]);
 
   const handleHistorySelect = useCallback(async (item: HistoryItem) => {
-    closeHistory();
     toast({
       title: 'Loading conversation',
       description: item.title,
     });
     
-    // Load conversation messages
     const loadedMessages = await loadConversationMessages(item.id);
     setMessages(loadedMessages);
     setCurrentConversationId(item.id);
     
-    // Load scripture if available
     if (item.scriptureReference) {
       await loadScriptureData(item.scriptureReference);
     }
-  }, [closeHistory, toast, loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData]);
+    
+    // Navigate to chat after selecting
+    navigateToCard('chat');
+  }, [toast, loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard]);
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
     clearScriptureData();
     setCurrentConversationId(null);
-    closeHistory();
+    navigateToCard('chat');
     toast({
       title: 'New conversation',
       description: 'Starting fresh',
     });
-  }, [clearMessages, clearScriptureData, setCurrentConversationId, closeHistory, toast]);
+  }, [clearMessages, clearScriptureData, setCurrentConversationId, navigateToCard, toast]);
 
   const handleLoadFullChapter = useCallback(async (chapterRef: string) => {
     try {
@@ -176,6 +162,14 @@ const Index = () => {
 
   const renderCurrentCard = () => {
     switch (currentCard) {
+      case 'history':
+        return (
+          <HistoryCard
+            items={conversations}
+            onSelectItem={handleHistorySelect}
+            onNewConversation={handleNewConversation}
+          />
+        );
       case 'chat':
         return (
           <ChatCard
@@ -225,7 +219,6 @@ const Index = () => {
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
-      {/* Main swipeable content */}
       <SwipeContainer
         currentCard={currentCard}
         cardOrder={cardOrder}
@@ -234,15 +227,6 @@ const Index = () => {
       >
         {renderCurrentCard()}
       </SwipeContainer>
-
-      {/* History panel (swipe down) */}
-      <HistoryPanel
-        isOpen={showHistory}
-        items={conversations}
-        onClose={closeHistory}
-        onSelectItem={handleHistorySelect}
-        onNewConversation={handleNewConversation}
-      />
     </div>
   );
 };
