@@ -53,13 +53,31 @@ export interface TranslationAcademy {
   content: string;
 }
 
-// Get the current language from localStorage
+// Get the current language from version preferences or fallback to primary
 function getCurrentLanguage(): string {
+  const prefsJson = localStorage.getItem('bible-study-version-preferences');
+  if (prefsJson) {
+    try {
+      const prefs = JSON.parse(prefsJson);
+      if (prefs.length > 0) {
+        return prefs[0].language;
+      }
+    } catch {}
+  }
   return localStorage.getItem('bible-study-language') || 'en';
 }
 
-// Get the current organization from localStorage
+// Get the current organization from version preferences or fallback to primary
 function getCurrentOrganization(): string {
+  const prefsJson = localStorage.getItem('bible-study-version-preferences');
+  if (prefsJson) {
+    try {
+      const prefs = JSON.parse(prefsJson);
+      if (prefs.length > 0) {
+        return prefs[0].organization;
+      }
+    } catch {}
+  }
   return localStorage.getItem('bible-study-organization') || 'unfoldingWord';
 }
 

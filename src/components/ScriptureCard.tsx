@@ -1,11 +1,13 @@
-import { useEffect, useRef, useCallback, memo } from 'react';
+import { useEffect, useRef, useCallback, memo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X, ChevronDown } from 'lucide-react';
 import { ScripturePassage, ScriptureChapter, ScriptureVerse } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FallbackBadge } from '@/components/FallbackBadge';
 import { FallbackState } from '@/hooks/useScriptureData';
+import { VersionSelector } from '@/components/VersionSelector';
+import { ScriptureVersion, OrganizationOption } from '@/hooks/useLanguage';
 import { cn } from '@/lib/utils';
 import { useVisibleChapters } from '@/hooks/useVisibleChapters';
 
@@ -20,6 +22,11 @@ interface ScriptureCardProps {
   fallbackState?: FallbackState;
   onTranslateRequest?: () => void;
   isTranslating?: boolean;
+  // Version selector props
+  versionPreferences?: ScriptureVersion[];
+  onVersionSelect?: (version: ScriptureVersion) => void;
+  getOrganizationsForLanguage?: (langId: string) => Promise<OrganizationOption[]>;
+  currentLanguage?: string;
 }
 
 // Memoized chapter component to prevent unnecessary re-renders
@@ -98,7 +105,23 @@ const ChapterPlaceholder = memo(function ChapterPlaceholder({ chapter }: { chapt
   );
 });
 
-export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilter, isLoading, error, onRetry, fallbackState, onTranslateRequest, isTranslating }: ScriptureCardProps) {
+export function ScriptureCard({ 
+  passage, 
+  onAddToNotes, 
+  onVerseSelect, 
+  verseFilter, 
+  isLoading, 
+  error, 
+  onRetry, 
+  fallbackState, 
+  onTranslateRequest, 
+  isTranslating,
+  versionPreferences = [],
+  onVersionSelect,
+  getOrganizationsForLanguage,
+  currentLanguage = 'en',
+}: ScriptureCardProps) {
+  const [isVersionSelectorOpen, setIsVersionSelectorOpen] = useState(false);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   
   // Use lazy chapter loading
@@ -335,27 +358,52 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilte
           </motion.div>
         )}
 
-        {/* Header - sticky with background */}
+        {/* Header - sticky with background, tappable to open version selector */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="px-6 pb-3 bg-background/95 backdrop-blur-sm z-10"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-primary">
-              <Book className="w-4 h-4" />
-              <span className="text-sm font-medium">{passage.book.book}</span>
+          <button
+            onClick={() => onVersionSelect && setIsVersionSelectorOpen(true)}
+            className={cn(
+              "flex items-center justify-between w-full text-left",
+              onVersionSelect && "hover:bg-primary/5 -mx-2 px-2 py-1 rounded-lg transition-colors"
+            )}
+            disabled={!onVersionSelect}
+          >
+            <div>
+              <div className="flex items-center gap-2 text-primary">
+                <Book className="w-4 h-4" />
+                <span className="text-sm font-medium">{passage.book.book}</span>
+                {onVersionSelect && <ChevronDown className="w-3 h-3 text-primary/60" />}
+              </div>
+              <span className="text-xs text-muted-foreground">{passage.translation}</span>
             </div>
             {fallbackState?.hasFallback && (
-              <FallbackBadge 
-                onTranslateClick={onTranslateRequest}
-                showTranslateButton={!!onTranslateRequest}
-                isTranslating={isTranslating}
-              />
+              <div onClick={(e) => e.stopPropagation()}>
+                <FallbackBadge 
+                  onTranslateClick={onTranslateRequest}
+                  showTranslateButton={!!onTranslateRequest}
+                  isTranslating={isTranslating}
+                />
+              </div>
             )}
-          </div>
-          <span className="text-xs text-muted-foreground">{passage.translation}</span>
+          </button>
         </motion.div>
+
+        {/* Version Selector */}
+        {onVersionSelect && getOrganizationsForLanguage && (
+          <VersionSelector
+            isOpen={isVersionSelectorOpen}
+            onClose={() => setIsVersionSelectorOpen(false)}
+            versionPreferences={versionPreferences}
+            onVersionSelect={onVersionSelect}
+            onReorder={() => {}}
+            getOrganizationsForLanguage={getOrganizationsForLanguage}
+            currentLanguage={currentLanguage}
+          />
+        )}
 
         {/* Scripture content - full book with chapters (lazy loaded) */}
         <div 

@@ -30,6 +30,8 @@ const Index = () => {
     needsSelection,
     getCurrentLanguage,
     completeSelection,
+    versionPreferences,
+    setActiveVersion,
   } = useLanguage();
 
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
@@ -245,6 +247,16 @@ const Index = () => {
             fallbackState={fallbackState}
             onTranslateRequest={handleTranslateAllRequest}
             isTranslating={isTranslating}
+            versionPreferences={versionPreferences}
+            onVersionSelect={(version) => {
+              setActiveVersion(version);
+              // Reload scripture with new version
+              if (scripture?.reference) {
+                loadScriptureData(scripture.reference);
+              }
+            }}
+            getOrganizationsForLanguage={getOrganizationsForLanguage}
+            currentLanguage={language || 'en'}
           />
         );
       case 'resources':
@@ -277,7 +289,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, versionPreferences, setActiveVersion, getOrganizationsForLanguage, language]);
 
   // Show language selector on first launch or when manually triggered
   if (needsSelection || showLanguageSelector) {
