@@ -22,6 +22,10 @@ export function useMultiAgentChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const setMessagesExternal = useCallback((newMessages: Message[]) => {
+    setMessages(newMessages);
+  }, []);
+
   const sendMessage = useCallback(async (
     content: string, 
     scriptureContext?: string,
@@ -153,5 +157,6 @@ export function useMultiAgentChat() {
     error,
     sendMessage,
     clearMessages,
+    setMessages: setMessagesExternal,
   };
 }
