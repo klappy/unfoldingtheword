@@ -92,6 +92,14 @@ export function useScriptureData() {
     }
 
     const { book, chapter, verse } = parsed;
+    
+    // Clear scripture if loading a different book (show skeleton for new book)
+    // Keep existing scripture if same book (just scrolling to new chapter)
+    const currentBook = scripture?.book?.book;
+    if (currentBook && currentBook.toLowerCase() !== book.toLowerCase()) {
+      console.log('[useScriptureData] Different book, clearing for skeleton');
+      setScripture(null);
+    }
 
     try {
       // Start ALL fetches in parallel - book AND resources
@@ -231,7 +239,7 @@ export function useScriptureData() {
     } finally {
       setIsLoading(false);
     }
-  }, [loadBookInBackground]);
+  }, [loadBookInBackground, scripture?.book?.book]);
 
   // Search for resources by keyword (for non-scripture queries)
   const loadKeywordResources = useCallback(async (keyword: string) => {

@@ -1,12 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X } from 'lucide-react';
-import { ScripturePassage } from '@/types';
+import { ScripturePassage, ScriptureChapter, ScriptureVerse } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FallbackBadge } from '@/components/FallbackBadge';
 import { FallbackState } from '@/hooks/useScriptureData';
 import { cn } from '@/lib/utils';
+import { useVisibleChapters } from '@/hooks/useVisibleChapters';
 
 interface ScriptureCardProps {
   passage: ScripturePassage | null;
@@ -21,9 +22,91 @@ interface ScriptureCardProps {
   isTranslating?: boolean;
 }
 
+// Memoized chapter component to prevent unnecessary re-renders
+const ChapterContent = memo(function ChapterContent({
+  chapter,
+  bookName,
+  selectedVerse,
+  onVerseClick
+}: {
+  chapter: ScriptureChapter;
+  bookName: string;
+  selectedVerse: { chapter: number; verse: number } | null;
+  onVerseClick: (chapter: number, verseNum: number, e: React.MouseEvent) => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="scripture-text text-lg"
+    >
+      {chapter.verses.map((verse, index) => {
+        const isSelected = selectedVerse?.chapter === chapter.chapter && selectedVerse?.verse === verse.number;
+        
+        // First verse of chapter gets the drop cap
+        if (index === 0) {
+          return (
+            <span 
+              key={`${chapter.chapter}-${verse.number}-${index}`}
+              onClick={(e) => onVerseClick(chapter.chapter, verse.number, e)}
+              className={cn(
+                "cursor-pointer transition-all rounded-sm",
+                isSelected && "bg-primary/20 ring-1 ring-primary/30"
+              )}
+            >
+              <span className="drop-cap-chapter">{chapter.chapter}</span>
+              <sup className="scripture-verse">{verse.number}</sup>
+              {verse.text}
+              {verse.isParagraphEnd && index < chapter.verses.length - 1 && (
+                <span className="block h-4" />
+              )}
+              {!verse.isParagraphEnd && ' '}
+            </span>
+          );
+        }
+
+        return (
+          <span 
+            key={`${chapter.chapter}-${verse.number}-${index}`}
+            onClick={(e) => onVerseClick(chapter.chapter, verse.number, e)}
+            className={cn(
+              "cursor-pointer transition-all rounded-sm hover:bg-primary/5",
+              isSelected && "bg-primary/20 ring-1 ring-primary/30"
+            )}
+          >
+            <sup className="scripture-verse">{verse.number}</sup>
+            {verse.text}
+            {verse.isParagraphEnd && index < chapter.verses.length - 1 && (
+              <span className="block h-4" />
+            )}
+            {!verse.isParagraphEnd && ' '}
+          </span>
+        );
+      })}
+    </motion.div>
+  );
+});
+
+// Chapter placeholder for unloaded chapters
+const ChapterPlaceholder = memo(function ChapterPlaceholder({ chapter }: { chapter: number }) {
+  return (
+    <div className="py-8 text-center">
+      <Skeleton className="w-12 h-12 mx-auto rounded" />
+      <Skeleton className="w-32 h-4 mx-auto mt-4" />
+    </div>
+  );
+});
+
 export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilter, isLoading, error, onRetry, fallbackState, onTranslateRequest, isTranslating }: ScriptureCardProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  
+  // Use lazy chapter loading
+  const totalChapters = passage?.book?.chapters?.length || 0;
+  const { containerRef, registerSentinel, shouldRenderChapter, visibleRange } = useVisibleChapters(
+    totalChapters,
+    passage?.targetChapter
+  );
   
   // Derive selected verse from verseFilter prop
   const selectedVerse = (() => {
@@ -45,7 +128,7 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilte
     // Use requestAnimationFrame to ensure DOM is painted
     const scrollToTarget = () => {
       const targetEl = chapterRefs.current.get(passage.targetChapter!);
-      if (targetEl && scrollContainerRef.current) {
+      if (targetEl && containerRef.current) {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         console.log('[ScriptureCard] Scrolled to chapter', passage.targetChapter);
         return true;
@@ -274,75 +357,43 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilte
           <span className="text-xs text-muted-foreground">{passage.translation}</span>
         </motion.div>
 
-        {/* Scripture content - full book with chapters */}
+        {/* Scripture content - full book with chapters (lazy loaded) */}
         <div 
-          ref={scrollContainerRef}
+          ref={containerRef}
           className="flex-1 overflow-y-auto px-6 pb-24 fade-edges"
           onMouseUp={handleTextSelection}
           onTouchEnd={handleTextSelection}
         >
           <div className="max-w-xl mx-auto pt-2">
-            {passage.book.chapters.map((chapter) => (
-              <div
-                key={chapter.chapter}
-                ref={(el) => {
-                  if (el) chapterRefs.current.set(chapter.chapter, el);
-                }}
-                className="chapter-section"
-                id={`chapter-${chapter.chapter}`}
-              >
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(chapter.chapter * 0.02, 0.5) }}
-                  className="scripture-text text-lg"
-                >
-                  {chapter.verses.map((verse, index) => {
-                    const isSelected = selectedVerse?.chapter === chapter.chapter && selectedVerse?.verse === verse.number;
-                    
-                    // First verse of chapter gets the drop cap
-                    if (index === 0) {
-                      return (
-                        <span 
-                          key={`${chapter.chapter}-${verse.number}-${index}`}
-                          onClick={(e) => handleVerseClick(chapter.chapter, verse.number, e)}
-                          className={cn(
-                            "cursor-pointer transition-all rounded-sm",
-                            isSelected && "bg-primary/20 ring-1 ring-primary/30"
-                          )}
-                        >
-                          <span className="drop-cap-chapter">{chapter.chapter}</span>
-                          <sup className="scripture-verse">{verse.number}</sup>
-                          {verse.text}
-                          {verse.isParagraphEnd && index < chapter.verses.length - 1 && (
-                            <span className="block h-4" />
-                          )}
-                          {!verse.isParagraphEnd && ' '}
-                        </span>
-                      );
+            {passage.book.chapters.map((chapter) => {
+              const shouldRender = shouldRenderChapter(chapter.chapter);
+              
+              return (
+                <div
+                  key={chapter.chapter}
+                  ref={(el) => {
+                    if (el) {
+                      chapterRefs.current.set(chapter.chapter, el);
+                      registerSentinel(chapter.chapter, el);
                     }
-
-                    return (
-                      <span 
-                        key={`${chapter.chapter}-${verse.number}-${index}`}
-                        onClick={(e) => handleVerseClick(chapter.chapter, verse.number, e)}
-                        className={cn(
-                          "cursor-pointer transition-all rounded-sm hover:bg-primary/5",
-                          isSelected && "bg-primary/20 ring-1 ring-primary/30"
-                        )}
-                      >
-                        <sup className="scripture-verse">{verse.number}</sup>
-                        {verse.text}
-                        {verse.isParagraphEnd && index < chapter.verses.length - 1 && (
-                          <span className="block h-4" />
-                        )}
-                        {!verse.isParagraphEnd && ' '}
-                      </span>
-                    );
-                  })}
-                </motion.div>
-              </div>
-            ))}
+                  }}
+                  className="chapter-section"
+                  id={`chapter-${chapter.chapter}`}
+                  data-chapter={chapter.chapter}
+                >
+                  {shouldRender ? (
+                    <ChapterContent
+                      chapter={chapter}
+                      bookName={passage.book!.book}
+                      selectedVerse={selectedVerse}
+                      onVerseClick={handleVerseClick}
+                    />
+                  ) : (
+                    <ChapterPlaceholder chapter={chapter.chapter} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
