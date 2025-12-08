@@ -41,6 +41,31 @@ export function useScriptureData() {
   // Cache for fetched books
   const bookCache = useRef<Map<string, ScriptureBook>>(new Map());
 
+  // Load book data in background (fast - just book name)
+  const loadBookInBackground = useCallback(async (bookName: string): Promise<ScriptureBook | null> => {
+    // Check cache first
+    if (bookCache.current.has(bookName)) {
+      console.log(`[useScriptureData] Book cache hit: ${bookName}`);
+      return bookCache.current.get(bookName)!;
+    }
+
+    console.log(`[useScriptureData] Loading book in background: ${bookName}`);
+    try {
+      const fetchedBook = await fetchBook(bookName);
+      const bookData: ScriptureBook = {
+        book: fetchedBook.book,
+        chapters: fetchedBook.chapters,
+        translation: fetchedBook.translation,
+        metadata: fetchedBook.metadata,
+      };
+      bookCache.current.set(bookName, bookData);
+      return bookData;
+    } catch (err) {
+      console.error(`[useScriptureData] Failed to load book ${bookName}:`, err);
+      return null;
+    }
+  }, []);
+
   const loadScriptureData = useCallback(async (reference: string, retryCount = 0) => {
     const maxRetries = 3;
     setIsLoading(true);
@@ -59,11 +84,9 @@ export function useScriptureData() {
     const { book, chapter, verse } = parsed;
 
     try {
-      // Check cache first
-      let bookData: ScriptureBook | undefined = bookCache.current.get(book);
-      
-      // Fetch resources in parallel while potentially fetching book
-      const resourcesPromise = Promise.all([
+      // Start ALL fetches in parallel - book AND resources
+      const [bookData, notes, questions, wordLinks] = await Promise.all([
+        loadBookInBackground(book),
         fetchTranslationNotes(reference).catch(err => {
           console.error('[useScriptureData] Notes fetch failed:', err);
           return [];
@@ -78,23 +101,9 @@ export function useScriptureData() {
         }),
       ]);
 
-      // Fetch full book if not cached
       if (!bookData) {
-        console.log(`[useScriptureData] Fetching full book: ${book}`);
-        const fetchedBook = await fetchBook(book);
-        bookData = {
-          book: fetchedBook.book,
-          chapters: fetchedBook.chapters,
-          translation: fetchedBook.translation,
-          metadata: fetchedBook.metadata,
-        };
-        bookCache.current.set(book, bookData);
-      } else {
-        console.log(`[useScriptureData] Using cached book: ${book}`);
+        throw new Error('Failed to load book data');
       }
-
-      // Wait for resources
-      const [notes, questions, wordLinks] = await resourcesPromise;
 
       console.log('[useScriptureData] Fetched data:', {
         book: bookData.book,
@@ -102,18 +111,6 @@ export function useScriptureData() {
         notesCount: notes.length,
         questionsCount: questions.length,
         wordLinksCount: wordLinks.length,
-      });
-
-      // Set scripture with book data and target position
-      setScripture({
-        reference,
-        text: '', // Not needed for book display
-        verses: [], // Use book.chapters instead
-        translation: bookData.translation,
-        metadata: bookData.metadata,
-        book: bookData,
-        targetChapter: chapter,
-        targetVerse: verse,
       });
 
       // Build resources array
@@ -181,6 +178,19 @@ export function useScriptureData() {
       setAllResources(newResources);
       setResources(newResources);
       setVerseFilter(null);
+
+      // Set scripture LAST after all data is ready - this triggers the scroll
+      setScripture({
+        reference,
+        text: '',
+        verses: [],
+        translation: bookData.translation,
+        metadata: bookData.metadata,
+        book: bookData,
+        targetChapter: chapter,
+        targetVerse: verse,
+      });
+
     } catch (err) {
       console.error('[useScriptureData] Error loading scripture data:', err);
       
@@ -197,7 +207,7 @@ export function useScriptureData() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadBookInBackground]);
 
   // Search for resources by keyword (for non-scripture queries)
   const loadKeywordResources = useCallback(async (keyword: string) => {
