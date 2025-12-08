@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Book, ChevronLeft, ChevronRight, Loader2, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { ScripturePassage } from '@/types';
@@ -9,16 +9,26 @@ interface ScriptureCardProps {
   passage: ScripturePassage | null;
   onAddToNotes: (text: string) => void;
   onVerseSelect?: (reference: string) => void;
+  verseFilter?: string | null;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
 }
 
-export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, isLoading, error, onRetry }: ScriptureCardProps) {
+export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, verseFilter, isLoading, error, onRetry }: ScriptureCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const [selectedVerse, setSelectedVerse] = useState<{ chapter: number; verse: number } | null>(null);
-
+  
+  // Derive selected verse from verseFilter prop
+  const selectedVerse = (() => {
+    if (!verseFilter) return null;
+    // Parse "Book Chapter:Verse" format
+    const match = verseFilter.match(/^(.+)\s+(\d+):(\d+)$/);
+    if (match) {
+      return { chapter: parseInt(match[2]), verse: parseInt(match[3]) };
+    }
+    return null;
+  })();
   // Scroll to target chapter/verse when passage changes
   useEffect(() => {
     if (!passage?.book || !passage.targetChapter) return;
@@ -49,11 +59,6 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, isLoading,
     return () => clearInterval(timer);
   }, [passage?.book?.book, passage?.targetChapter, passage?.book?.chapters?.length]);
 
-  // Clear selection when book changes
-  useEffect(() => {
-    setSelectedVerse(null);
-  }, [passage?.book?.book]);
-
   const handleTextSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) {
@@ -74,20 +79,16 @@ export function ScriptureCard({ passage, onAddToNotes, onVerseSelect, isLoading,
     const bookName = passage?.book?.book || '';
     const reference = `${bookName} ${chapter}:${verseNum}`;
     
-    // Toggle selection
+    // Toggle selection - if clicking same verse, clear it
     if (selectedVerse?.chapter === chapter && selectedVerse?.verse === verseNum) {
-      setSelectedVerse(null);
-      // Clear the verse scope - call with just the book
       onVerseSelect?.(`${bookName} ${chapter}`);
     } else {
-      setSelectedVerse({ chapter, verse: verseNum });
       onVerseSelect?.(reference);
     }
   };
 
   const clearVerseSelection = () => {
     if (selectedVerse && passage?.book?.book) {
-      setSelectedVerse(null);
       onVerseSelect?.(`${passage.book.book} ${selectedVerse.chapter}`);
     }
   };
