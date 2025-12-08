@@ -10,7 +10,7 @@ import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
-import { LanguageSelector } from '@/components/LanguageSelector';
+import { LanguageSelectionChat } from '@/components/LanguageSelectionChat';
 import { TranslationDialog } from '@/components/TranslationDialog';
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
@@ -298,23 +298,20 @@ const Index = () => {
     }
   }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, versionPreferences, setActiveVersion, getOrganizationsForLanguage, language]);
 
-  // Show language selector on first launch or when manually triggered
+  // Show chat-based language selection on first launch or when manually triggered
   if (needsSelection || showLanguageSelector) {
     return (
-      <AnimatePresence>
-        <LanguageSelector
+      <div className="h-full w-full bg-background">
+        <LanguageSelectionChat
           languages={availableLanguages}
-          organizations={availableOrganizations}
           getOrganizationsForLanguage={getOrganizationsForLanguage}
           isLoading={languageLoading}
-          onSelect={(langId, orgId) => {
+          onComplete={(langId, orgId) => {
             completeSelection(langId, orgId);
             setShowLanguageSelector(false);
           }}
-          selectedLanguage={language}
-          selectedOrganization={organization}
         />
-      </AnimatePresence>
+      </div>
     );
   }
 
