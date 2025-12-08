@@ -41,11 +41,12 @@ export function useScriptureData() {
   // Cache for fetched books
   const bookCache = useRef<Map<string, ScriptureBook>>(new Map());
 
-  const loadScriptureData = useCallback(async (reference: string) => {
+  const loadScriptureData = useCallback(async (reference: string, retryCount = 0) => {
+    const maxRetries = 3;
     setIsLoading(true);
     setError(null);
 
-    console.log('[useScriptureData] Loading data for:', reference);
+    console.log('[useScriptureData] Loading data for:', reference, retryCount > 0 ? `(retry ${retryCount})` : '');
 
     const parsed = parseReference(reference);
     if (!parsed) {
@@ -182,6 +183,16 @@ export function useScriptureData() {
       setVerseFilter(null);
     } catch (err) {
       console.error('[useScriptureData] Error loading scripture data:', err);
+      
+      // Auto-retry on failure
+      if (retryCount < maxRetries) {
+        console.log(`[useScriptureData] Auto-retrying in ${(retryCount + 1) * 1000}ms...`);
+        setTimeout(() => {
+          loadScriptureData(reference, retryCount + 1);
+        }, (retryCount + 1) * 1000);
+        return;
+      }
+      
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setIsLoading(false);

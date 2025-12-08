@@ -175,15 +175,20 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
                       const handleClick = (e: React.MouseEvent) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Extract search term from link text or href
                         const searchTerm = typeof children === 'string' ? children : 
                           (href?.split('/').pop()?.replace(/\.md$/, '').replace(/-/g, ' ') || 'topic');
                         onSearch?.(searchTerm);
                       };
                       return (
-                        <button onClick={handleClick} className="text-primary underline hover:text-primary/80 inline">
+                        <span 
+                          role="button"
+                          tabIndex={0}
+                          onClick={handleClick} 
+                          onKeyDown={(e) => e.key === 'Enter' && handleClick(e as any)}
+                          className="text-primary underline hover:text-primary/80 inline cursor-pointer"
+                        >
                           {children}
-                        </button>
+                        </span>
                       );
                     },
                   }}
@@ -243,15 +248,20 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
                       const handleClick = (e: React.MouseEvent) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Extract search term from link text or href
                         const searchTerm = typeof children === 'string' ? children : 
                           (href?.split('/').pop()?.replace(/\.md$/, '').replace(/-/g, ' ') || 'topic');
                         onSearch?.(searchTerm);
                       };
                       return (
-                        <button onClick={handleClick} className="text-primary underline hover:text-primary/80 inline text-left">
+                        <span 
+                          role="button"
+                          tabIndex={0}
+                          onClick={handleClick}
+                          onKeyDown={(e) => e.key === 'Enter' && handleClick(e as any)}
+                          className="text-primary underline hover:text-primary/80 inline text-left cursor-pointer"
+                        >
                           {children}
-                        </button>
+                        </span>
                       );
                     },
                   }}
