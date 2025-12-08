@@ -144,10 +144,18 @@
   .scripture-text {
     @apply text-foreground/90 leading-relaxed;
     font-variant-ligatures: common-ligatures;
+    line-height: 1.8;
   }
 
   .scripture-verse {
-    @apply text-primary/70 text-xs font-medium align-super mr-1;
+    @apply text-primary/70 font-semibold mr-1;
+    font-size: 0.65em;
+    vertical-align: super;
+    line-height: 0;
+  }
+  
+  .scripture-paragraph {
+    @apply mb-4;
   }
 
   /* AI message styling */

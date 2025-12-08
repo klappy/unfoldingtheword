@@ -149,12 +149,16 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
           transition={{ delay: 0.1 }}
           className="scripture-text text-lg max-w-xl mx-auto pt-2"
         >
-          {passage.verses.map((verse) => (
-            <span key={verse.number} className="inline">
-              <sup className="scripture-verse">{verse.number}</sup>
-              {verse.text}{' '}
-            </span>
-          ))}
+          {passage.verses.map((verse, index) => {
+            const showParagraphBreak = (verse as any).isParagraphStart && index > 0;
+            return (
+              <span key={verse.number}>
+                {showParagraphBreak && <span className="block h-4" />}
+                <span className="scripture-verse">{verse.number}</span>
+                {verse.text}{' '}
+              </span>
+            );
+          })}
         </motion.div>
 
         {/* Load full chapter button */}

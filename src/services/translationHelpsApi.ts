@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface ScriptureVerse {
   number: number;
   text: string;
+  isParagraphStart?: boolean;
 }
 
 export interface ScriptureResponse {
@@ -72,40 +73,46 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
   const verses: ScriptureVerse[] = [];
   let translation = 'unfoldingWord Literal Text';
   
-  // Extract translation from markdown
-  const ultMatch = content.match(/\*\*ULT v\d+ \(([^)]+)\)\*\*\s*\n\n([^*]+?)(?=\n\n\*\*|$)/s);
+  // Try to find verse markers in the content (e.g., "1 In the beginning..." or numbered lines)
+  // First, extract the main text content
+  const ultMatch = content.match(/\*\*ULT v\d+ \(([^)]+)\)\*\*\s*\n\n([\s\S]+?)(?=\n\n\*\*|$)/s);
+  
   if (ultMatch) {
     translation = ultMatch[1];
-    const verseText = ultMatch[2].trim();
+    let verseText = ultMatch[2].trim();
     
-    // Parse verses - try to split by verse numbers if present
-    const verseMatch = reference.match(/:(\d+)(?:-(\d+))?$/);
-    if (verseMatch) {
-      const startVerse = parseInt(verseMatch[1], 10);
-      const endVerse = verseMatch[2] ? parseInt(verseMatch[2], 10) : startVerse;
-      
-      // Split text by sentence boundaries for multi-verse passages
-      const sentences = verseText.split(/(?<=[.!?])\s+/);
-      const verseCount = endVerse - startVerse + 1;
-      
-      if (sentences.length >= verseCount) {
-        // Distribute sentences across verses
-        const sentencesPerVerse = Math.ceil(sentences.length / verseCount);
-        for (let i = 0; i < verseCount; i++) {
-          const start = i * sentencesPerVerse;
-          const end = Math.min(start + sentencesPerVerse, sentences.length);
-          const text = sentences.slice(start, end).join(' ');
-          if (text.trim()) {
-            verses.push({ number: startVerse + i, text: text.trim() });
+    // Try to parse individual verses by looking for verse number patterns
+    // Pattern: number at start of line or after newline, followed by text
+    const versePattern = /(?:^|\n)(\d+)\s+([^\n]+(?:\n(?!\d+\s)[^\n]*)*)/g;
+    let match;
+    
+    while ((match = versePattern.exec(verseText)) !== null) {
+      const verseNum = parseInt(match[1], 10);
+      let text = match[2].trim();
+      // Preserve paragraph breaks within verse text
+      text = text.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ');
+      verses.push({ number: verseNum, text });
+    }
+    
+    // If no verse patterns found, try splitting by reference from URL
+    if (verses.length === 0) {
+      const verseMatch = reference.match(/:(\d+)(?:-(\d+))?$/);
+      if (verseMatch) {
+        const startVerse = parseInt(verseMatch[1], 10);
+        // Clean up the text - preserve paragraph structure
+        verseText = verseText.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ');
+        verses.push({ number: startVerse, text: verseText });
+      } else {
+        // Chapter only - try to split by sentence/paragraph
+        const paragraphs = verseText.split(/\n\n+/);
+        let verseNum = 1;
+        for (const para of paragraphs) {
+          const cleanPara = para.trim().replace(/\n/g, ' ');
+          if (cleanPara) {
+            verses.push({ number: verseNum++, text: cleanPara, isParagraphStart: true });
           }
         }
-      } else {
-        // Single sentence or fewer sentences than verses
-        verses.push({ number: startVerse, text: verseText });
       }
-    } else {
-      // No verse number in reference, treat as single verse
-      verses.push({ number: 1, text: verseText });
     }
   }
   
@@ -113,14 +120,26 @@ function parseScriptureMarkdown(content: string, reference: string): { verses: S
   if (verses.length === 0) {
     const headerMatch = content.match(/# [^\n]+\n\n([\s\S]+)/);
     if (headerMatch) {
-      const textContent = headerMatch[1]
+      let textContent = headerMatch[1]
         .replace(/---[\s\S]*?---/g, '') // Remove frontmatter
-        .replace(/\*\*[^*]+\*\*/g, '') // Remove bold markers
-        .replace(/\n{2,}/g, '\n')
-        .trim();
+        .replace(/\*\*[^*]+\*\*/g, ''); // Remove bold markers
       
-      if (textContent) {
-        verses.push({ number: 1, text: textContent.substring(0, 500) });
+      // Try to parse verses from extracted content
+      const versePattern = /(?:^|\n)(\d+)\s+([^\n]+(?:\n(?!\d+\s)[^\n]*)*)/g;
+      let match;
+      
+      while ((match = versePattern.exec(textContent)) !== null) {
+        const verseNum = parseInt(match[1], 10);
+        let text = match[2].trim().replace(/\n(?!\n)/g, ' ');
+        verses.push({ number: verseNum, text });
+      }
+      
+      // Still no verses? Use the whole text
+      if (verses.length === 0) {
+        textContent = textContent.trim();
+        if (textContent) {
+          verses.push({ number: 1, text: textContent });
+        }
       }
     }
   }
