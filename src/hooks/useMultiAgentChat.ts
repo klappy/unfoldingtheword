@@ -85,14 +85,16 @@ export function useMultiAgentChat() {
       let assistantContent = "";
       const assistantMessageId = `${Date.now()}-response`;
 
-      // Create initial assistant message placeholder
+      // Create initial assistant message placeholder with streaming flag
       const initialAssistantMessage: Message = {
         id: assistantMessageId,
         role: 'assistant',
         content: '',
         timestamp: new Date(),
+        isStreaming: true, // Mark as streaming
       };
       setMessages(prev => [...prev, initialAssistantMessage]);
+      setIsLoading(false); // Stop showing separate loading indicator
 
       while (true) {
         const { done, value } = await reader.read();
@@ -122,10 +124,10 @@ export function useMultiAgentChat() {
               }
             } else if (parsed.type === 'content') {
               assistantContent += parsed.content;
-              // Update the assistant message with streaming content
+              // Update the assistant message with streaming content (keep isStreaming true)
               setMessages(prev => prev.map(m => 
                 m.id === assistantMessageId 
-                  ? { ...m, content: assistantContent }
+                  ? { ...m, content: assistantContent, isStreaming: true }
                   : m
               ));
             } else if (parsed.type === 'error') {
@@ -192,10 +194,10 @@ export function useMultiAgentChat() {
         ? `${assistantContent}\n\n*${totalCount} resources found — swipe right to explore.*`
         : assistantContent;
 
-      // Update final message with resources
+      // Update final message with resources and clear streaming flag
       setMessages(prev => prev.map(m => 
         m.id === assistantMessageId 
-          ? { ...m, content: finalContent, resources: resources.length > 0 ? resources : undefined }
+          ? { ...m, content: finalContent, resources: resources.length > 0 ? resources : undefined, isStreaming: false }
           : m
       ));
       

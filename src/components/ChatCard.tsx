@@ -209,6 +209,15 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                   >
                     {message.content}
                   </ReactMarkdown>
+                  
+                  {/* Inline streaming indicator */}
+                  {message.isStreaming && (
+                    <span className="inline-flex gap-1 ml-1 align-middle">
+                      <span className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse-subtle" />
+                      <span className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse-subtle" style={{ animationDelay: '0.2s' }} />
+                      <span className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse-subtle" style={{ animationDelay: '0.4s' }} />
+                    </span>
+                  )}
                 </div>
 
                 {message.resources && message.resources.length > 0 && (
@@ -233,7 +242,8 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
             </motion.div>
           ))}
 
-          {isLoading && (
+          {/* Only show separate loading bubble before streaming starts (initial loading) */}
+          {isLoading && !messages.some(m => m.isStreaming) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

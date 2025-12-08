@@ -5,6 +5,7 @@ export interface Message {
   agent?: AgentType;
   timestamp: Date;
   resources?: ResourceLink[];
+  isStreaming?: boolean; // True while content is still being streamed
 }
 
 export type AgentType = 'scripture' | 'notes' | 'questions' | 'academy' | 'words' | 'main';
