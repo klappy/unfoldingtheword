@@ -17,6 +17,8 @@ interface ResourcesCardProps {
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  scrollToType?: Resource['type'] | null;
+  onScrollComplete?: () => void;
 }
 
 const resourceIcons = {
@@ -278,7 +280,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
   );
 }
 
-export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry }: ResourcesCardProps) {
+export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry, scrollToType, onScrollComplete }: ResourcesCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeType, setActiveType] = useState<string | null>(null);
@@ -342,7 +344,30 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
     return () => container.removeEventListener('scroll', handleScroll);
   }, [availableTypes.join(',')]);
 
-  const scrollToType = (type: string) => {
+  // Scroll to specific resource type when triggered from chat links
+  useEffect(() => {
+    if (!scrollToType || !scrollContainerRef.current) return;
+    
+    // Wait for resources to be available
+    if (resources.length === 0) return;
+    
+    const sectionEl = sectionRefs.current[scrollToType];
+    const containerEl = scrollContainerRef.current;
+    
+    if (sectionEl && containerEl) {
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        const offsetTop = sectionEl.offsetTop - containerEl.offsetTop - 8;
+        containerEl.scrollTo({ top: offsetTop, behavior: 'smooth' });
+        onScrollComplete?.();
+      });
+    } else {
+      // If section not found, still complete to reset state
+      onScrollComplete?.();
+    }
+  }, [scrollToType, resources.length, onScrollComplete]);
+
+  const scrollToSection = (type: string) => {
     const sectionEl = sectionRefs.current[type];
     const containerEl = scrollContainerRef.current;
     if (sectionEl && containerEl) {
@@ -509,7 +534,7 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
             return (
               <button 
                 key={type}
-                onClick={() => scrollToType(type)}
+                onClick={() => scrollToSection(type)}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border transition-all hover:scale-105 active:scale-95',
                   resourceColors[type],
