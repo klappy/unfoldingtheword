@@ -4,34 +4,22 @@ import { CardType } from '@/types';
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.3;
 
-const CARD_ORDER: CardType[] = ['chat', 'scripture', 'resources', 'notes'];
+// History is now the first card, to the left of chat
+const CARD_ORDER: CardType[] = ['history', 'chat', 'scripture', 'resources', 'notes'];
 
 export function useSwipeNavigation() {
   const [currentCard, setCurrentCard] = useState<CardType>('chat');
-  const [showHistory, setShowHistory] = useState(false);
   const [showChat, setShowChat] = useState(true);
   
   const startPos = useRef({ x: 0, y: 0 });
   const startTime = useRef(0);
   const isDragging = useRef(false);
-  const scrollContainerRef = useRef<HTMLElement | null>(null);
-
-  // Check if the scroll container is at the top
-  const isScrolledToTop = useCallback(() => {
-    if (!scrollContainerRef.current) return true;
-    return scrollContainerRef.current.scrollTop <= 5;
-  }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     const point = 'touches' in e ? e.touches[0] : e;
     startPos.current = { x: point.clientX, y: point.clientY };
     startTime.current = Date.now();
     isDragging.current = true;
-
-    // Find the scrollable container
-    const target = e.target as HTMLElement;
-    const scrollable = target.closest('.overflow-y-auto') as HTMLElement;
-    scrollContainerRef.current = scrollable;
   }, []);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -40,15 +28,11 @@ export function useSwipeNavigation() {
 
     const point = 'changedTouches' in e ? e.changedTouches[0] : e;
     const deltaX = point.clientX - startPos.current.x;
-    const deltaY = point.clientY - startPos.current.y;
     const deltaTime = Date.now() - startTime.current;
     
     const velocityX = Math.abs(deltaX) / deltaTime;
-    const velocityY = Math.abs(deltaY) / deltaTime;
 
-    const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
-
-    if (isHorizontal && (Math.abs(deltaX) > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD)) {
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD) {
       // Horizontal swipe - navigate cards
       const currentIndex = CARD_ORDER.indexOf(currentCard);
       if (deltaX < 0) {
@@ -60,27 +44,11 @@ export function useSwipeNavigation() {
         const prevIndex = (currentIndex - 1 + CARD_ORDER.length) % CARD_ORDER.length;
         setCurrentCard(CARD_ORDER[prevIndex]);
       }
-      setShowHistory(false);
-    } else if (!isHorizontal && (Math.abs(deltaY) > SWIPE_THRESHOLD || velocityY > VELOCITY_THRESHOLD)) {
-      // Vertical swipe - only trigger history when scrolled to top
-      if (deltaY < 0) {
-        // Swipe up - show chat input focus
-        setShowChat(true);
-        setShowHistory(false);
-      } else if (deltaY > 0 && isScrolledToTop()) {
-        // Swipe down - show history ONLY when at top of scroll
-        setShowHistory(true);
-      }
     }
-  }, [currentCard, isScrolledToTop]);
+  }, [currentCard]);
 
   const navigateToCard = useCallback((card: CardType) => {
     setCurrentCard(card);
-    setShowHistory(false);
-  }, []);
-
-  const closeHistory = useCallback(() => {
-    setShowHistory(false);
   }, []);
 
   const currentIndex = CARD_ORDER.indexOf(currentCard);
@@ -88,12 +56,10 @@ export function useSwipeNavigation() {
   return {
     currentCard,
     currentIndex,
-    showHistory,
     showChat,
     handleTouchStart,
     handleTouchEnd,
     navigateToCard,
-    closeHistory,
     cardOrder: CARD_ORDER,
   };
 }

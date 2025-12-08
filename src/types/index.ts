@@ -48,7 +48,7 @@ export interface HistoryItem {
   scriptureReference?: string;
 }
 
-export type CardType = 'chat' | 'scripture' | 'resources' | 'notes';
+export type CardType = 'history' | 'chat' | 'scripture' | 'resources' | 'notes';
 
 export interface SwipeState {
   direction: 'up' | 'down' | 'left' | 'right' | null;
