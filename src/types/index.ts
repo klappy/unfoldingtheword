@@ -16,10 +16,20 @@ export interface ResourceLink {
   preview?: string;
 }
 
-export interface ScripturePassage {
-  reference: string;
+export interface ScriptureVerse {
+  number: number;
   text: string;
-  verses: { number: number; text: string; isParagraphEnd?: boolean }[];
+  isParagraphEnd?: boolean;
+}
+
+export interface ScriptureChapter {
+  chapter: number;
+  verses: ScriptureVerse[];
+}
+
+export interface ScriptureBook {
+  book: string;
+  chapters: ScriptureChapter[];
   translation: string;
   metadata?: {
     language: string;
@@ -27,6 +37,23 @@ export interface ScripturePassage {
     availableTranslations: string[];
     license: string;
   };
+}
+
+export interface ScripturePassage {
+  reference: string;
+  text: string;
+  verses: ScriptureVerse[];
+  translation: string;
+  metadata?: {
+    language: string;
+    organization: string;
+    availableTranslations: string[];
+    license: string;
+  };
+  // Book-level data for full book display
+  book?: ScriptureBook;
+  targetChapter?: number;
+  targetVerse?: number;
 }
 
 export interface Note {

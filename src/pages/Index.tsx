@@ -119,13 +119,6 @@ const Index = () => {
     navigateToCard('chat');
   }, [clearMessages, clearScriptureData, setCurrentConversationId, navigateToCard]);
 
-  const handleLoadFullChapter = useCallback(async (chapterRef: string) => {
-    try {
-      await loadScriptureData(chapterRef);
-    } catch (error) {
-      console.error('Failed to load full chapter:', error);
-    }
-  }, [loadScriptureData]);
 
   const renderCard = useCallback((card: CardType) => {
     switch (card) {
@@ -154,7 +147,6 @@ const Index = () => {
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
-            onLoadFullChapter={handleLoadFullChapter}
           />
         );
       case 'resources':
@@ -182,7 +174,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, scriptureLoading, scriptureError, loadScriptureData, handleLoadFullChapter, resources, navigateToCard, notes, handleDeleteNote]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, scriptureLoading, scriptureError, loadScriptureData, resources, navigateToCard, notes, handleDeleteNote]);
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">

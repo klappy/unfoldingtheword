@@ -1,19 +1,43 @@
-import { useState, useCallback } from 'react';
-import { ScripturePassage, Resource } from '@/types';
+import { useState, useCallback, useRef } from 'react';
+import { ScripturePassage, Resource, ScriptureBook } from '@/types';
 import {
   fetchScripture,
+  fetchBook,
   fetchTranslationNotes,
   fetchTranslationQuestions,
   fetchTranslationWordLinks,
   fetchTranslationWord,
   searchResources,
+  BookData,
 } from '@/services/translationHelpsApi';
+
+// Parse reference to extract book, chapter, verse
+function parseReference(ref: string): { book: string; chapter: number; verse?: number } | null {
+  // Match patterns like "John 3:16", "John 3", "1 John 3:1"
+  const match = ref.match(/^(.+?)\s+(\d+)(?::(\d+))?/);
+  if (!match) {
+    // Try book-only match like "Ruth"
+    const bookOnly = ref.match(/^([A-Za-z0-9\s]+)$/);
+    if (bookOnly) {
+      return { book: bookOnly[1].trim(), chapter: 1 };
+    }
+    return null;
+  }
+  return {
+    book: match[1].trim(),
+    chapter: parseInt(match[2], 10),
+    verse: match[3] ? parseInt(match[3], 10) : undefined,
+  };
+}
 
 export function useScriptureData() {
   const [scripture, setScripture] = useState<ScripturePassage | null>(null);
   const [resources, setResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Cache for fetched books
+  const bookCache = useRef<Map<string, ScriptureBook>>(new Map());
 
   const loadScriptureData = useCallback(async (reference: string) => {
     setIsLoading(true);
@@ -21,13 +45,22 @@ export function useScriptureData() {
 
     console.log('[useScriptureData] Loading data for:', reference);
 
+    const parsed = parseReference(reference);
+    if (!parsed) {
+      console.error('[useScriptureData] Could not parse reference:', reference);
+      setError('Invalid scripture reference');
+      setIsLoading(false);
+      return;
+    }
+
+    const { book, chapter, verse } = parsed;
+
     try {
-      // Fetch scripture and all related resources in parallel
-      const [scriptureData, notes, questions, wordLinks] = await Promise.all([
-        fetchScripture(reference).catch(err => {
-          console.error('[useScriptureData] Scripture fetch failed:', err);
-          return null;
-        }),
+      // Check cache first
+      let bookData: ScriptureBook | undefined = bookCache.current.get(book);
+      
+      // Fetch resources in parallel while potentially fetching book
+      const resourcesPromise = Promise.all([
         fetchTranslationNotes(reference).catch(err => {
           console.error('[useScriptureData] Notes fetch failed:', err);
           return [];
@@ -42,48 +75,68 @@ export function useScriptureData() {
         }),
       ]);
 
+      // Fetch full book if not cached
+      if (!bookData) {
+        console.log(`[useScriptureData] Fetching full book: ${book}`);
+        const fetchedBook = await fetchBook(book);
+        bookData = {
+          book: fetchedBook.book,
+          chapters: fetchedBook.chapters,
+          translation: fetchedBook.translation,
+          metadata: fetchedBook.metadata,
+        };
+        bookCache.current.set(book, bookData);
+      } else {
+        console.log(`[useScriptureData] Using cached book: ${book}`);
+      }
+
+      // Wait for resources
+      const [notes, questions, wordLinks] = await resourcesPromise;
+
       console.log('[useScriptureData] Fetched data:', {
-        scripture: scriptureData,
+        book: bookData.book,
+        chaptersCount: bookData.chapters.length,
         notesCount: notes.length,
         questionsCount: questions.length,
         wordLinksCount: wordLinks.length,
       });
 
-      // Set scripture if we got it
-      if (scriptureData) {
-        setScripture({
-          reference: scriptureData.reference,
-          text: scriptureData.text,
-          verses: scriptureData.verses,
-          translation: scriptureData.translation,
-          metadata: scriptureData.metadata,
-        });
-      }
+      // Set scripture with book data and target position
+      setScripture({
+        reference,
+        text: '', // Not needed for book display
+        verses: [], // Use book.chapters instead
+        translation: bookData.translation,
+        metadata: bookData.metadata,
+        book: bookData,
+        targetChapter: chapter,
+        targetVerse: verse,
+      });
 
-      // Build resources array - include ALL resources without artificial limits
+      // Build resources array
       const newResources: Resource[] = [];
 
-      // Add ALL translation notes - no truncation
+      // Add ALL translation notes
       notes.forEach((note, index) => {
         if (note.note || note.quote) {
           newResources.push({
             id: `note-${index}`,
             type: 'translation-note',
             title: note.quote || `Note on ${note.reference}`,
-            content: note.note, // Full content
+            content: note.note,
             reference: note.reference,
           });
         }
       });
 
-      // Add ALL translation questions - no truncation
+      // Add ALL translation questions
       questions.forEach((q, index) => {
         if (q.question) {
           newResources.push({
             id: `question-${index}`,
             type: 'translation-question',
             title: q.question,
-            content: q.response, // Full content
+            content: q.response,
             reference: q.reference,
           });
         }
@@ -106,7 +159,7 @@ export function useScriptureData() {
               id: `word-${index}`,
               type: 'translation-word',
               title: word.term || link.word,
-              content: word.definition || word.content, // Full content, no truncation
+              content: word.definition || word.content,
               reference: link.reference,
             });
           } else if (link.word) {
@@ -131,7 +184,7 @@ export function useScriptureData() {
     }
   }, []);
 
-  // New function: Search for resources by keyword (for non-scripture queries)
+  // Search for resources by keyword (for non-scripture queries)
   const loadKeywordResources = useCallback(async (keyword: string) => {
     setIsLoading(true);
     setError(null);
@@ -168,7 +221,7 @@ export function useScriptureData() {
 
       const newResources: Resource[] = [];
 
-      // Parse Translation Words results - prioritize exact keyword matches
+      // Parse Translation Words results
       const parsedTwResults = twResults.map((hit: any, index: number) => {
         let content = '';
         try {
@@ -183,15 +236,12 @@ export function useScriptureData() {
         const titleMatch = content.match(/^#\s+([^\n]+)/m);
         const title = titleMatch ? titleMatch[1].trim() : (hit.path?.split('/').pop()?.replace('.md', '') || keyword);
         const pathWord = hit.path?.split('/').pop()?.replace('.md', '')?.toLowerCase() || '';
-        const keywordLower = keyword.toLowerCase().split(' ')[0]; // Get first word of query
-        
-        // Score exact matches higher
+        const keywordLower = keyword.toLowerCase().split(' ')[0];
         const isExactMatch = pathWord === keywordLower || title.toLowerCase() === keywordLower;
 
         return { hit, content, title, isExactMatch, originalIndex: index };
       }).filter(r => r.content);
 
-      // Sort: exact matches first, then by original order
       parsedTwResults.sort((a, b) => {
         if (a.isExactMatch && !b.isExactMatch) return -1;
         if (!a.isExactMatch && b.isExactMatch) return 1;
@@ -288,7 +338,6 @@ export function useScriptureData() {
 
       console.log('[useScriptureData] Built keyword resources:', newResources.length);
       setResources(newResources);
-      // Clear scripture for keyword searches
       setScripture(null);
     } catch (err) {
       console.error('[useScriptureData] Error searching keyword:', err);
