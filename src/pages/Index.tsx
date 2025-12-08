@@ -25,7 +25,7 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, loadScriptureData, loadKeywordResources, filterByVerse, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, verseFilter, loadScriptureData, loadKeywordResources, filterByVerse, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
   const { 
@@ -164,6 +164,12 @@ const Index = () => {
               navigateToCard('chat');
               handleSendMessage(query);
             }}
+            verseFilter={verseFilter}
+            onClearVerseFilter={() => {
+              if (scripture?.book?.book && scripture?.targetChapter) {
+                filterByVerse(`${scripture.book.book} ${scripture.targetChapter}`);
+              }
+            }}
             isLoading={scriptureLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
@@ -180,7 +186,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, navigateToCard, notes, handleDeleteNote]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote]);
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
