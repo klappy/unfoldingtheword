@@ -58,15 +58,21 @@ function getCurrentLanguage(): string {
   return localStorage.getItem('bible-study-language') || 'en';
 }
 
+// Get the current organization from localStorage
+function getCurrentOrganization(): string {
+  return localStorage.getItem('bible-study-organization') || 'unfoldingWord';
+}
+
 async function callProxy(endpoint: string, params: Record<string, any>) {
-  // Inject language parameter if not already present
+  // Inject language and organization parameters if not already present
   const language = params.language || getCurrentLanguage();
-  const paramsWithLanguage = { ...params, language };
+  const organization = params.organization || getCurrentOrganization();
+  const paramsWithDefaults = { ...params, language, organization };
   
-  console.log(`[translationHelpsApi] Calling ${endpoint} with params:`, paramsWithLanguage);
+  console.log(`[translationHelpsApi] Calling ${endpoint} with params:`, paramsWithDefaults);
   
   const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
-    body: { endpoint, params: paramsWithLanguage },
+    body: { endpoint, params: paramsWithDefaults },
   });
 
   if (error) {
