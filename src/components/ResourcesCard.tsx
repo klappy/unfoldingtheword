@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Resource } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { fetchTranslationWord, fetchTranslationAcademy } from '@/services/translationHelpsApi';
 
 interface ResourcesCardProps {
   resources: Resource[];
@@ -37,6 +38,16 @@ const resourceLabels = {
 
 const PREVIEW_LENGTH = 150;
 
+// Extract article ID from title for deterministic lookup
+function extractArticleId(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+}
+
 interface ExpandableResourceProps {
   resource: Resource;
   index: number;
@@ -45,15 +56,22 @@ interface ExpandableResourceProps {
 
 function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourceProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [fullContent, setFullContent] = useState<string | null>(null);
+  const [isLoadingFull, setIsLoadingFull] = useState(false);
   const Icon = resourceIcons[resource.type];
   const colorClasses = resourceColors[resource.type];
   const label = resourceLabels[resource.type];
   
-  const contentPreview = resource.content.length > PREVIEW_LENGTH 
-    ? resource.content.substring(0, PREVIEW_LENGTH) + '...'
-    : resource.content;
+  // Use full content if loaded, otherwise use preview content
+  const displayContent = fullContent || resource.content;
+  const contentPreview = displayContent.length > PREVIEW_LENGTH 
+    ? displayContent.substring(0, PREVIEW_LENGTH) + '...'
+    : displayContent;
   
-  const hasMoreContent = resource.content.length > PREVIEW_LENGTH;
+  // Always allow expansion for word/academy types, or if content is long
+  const canExpand = resource.type === 'translation-word' || 
+                    resource.type === 'academy-article' || 
+                    displayContent.length > PREVIEW_LENGTH;
 
   const handleTextSelection = () => {
     const selection = window.getSelection();
@@ -65,6 +83,45 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
     }
   };
 
+  // Fetch full article content on expand for word/academy types
+  const handleExpand = useCallback(async () => {
+    if (!canExpand) return;
+    
+    const newExpanded = !isExpanded;
+    setIsExpanded(newExpanded);
+    
+    // Only fetch if expanding and we haven't fetched yet
+    if (newExpanded && !fullContent && !isLoadingFull) {
+      const articleId = extractArticleId(resource.title);
+      
+      if (resource.type === 'translation-word') {
+        setIsLoadingFull(true);
+        try {
+          const wordData = await fetchTranslationWord(articleId);
+          if (wordData?.content) {
+            setFullContent(wordData.content);
+          }
+        } catch (err) {
+          console.error('[ExpandableResource] Failed to fetch word:', err);
+        } finally {
+          setIsLoadingFull(false);
+        }
+      } else if (resource.type === 'academy-article') {
+        setIsLoadingFull(true);
+        try {
+          const academyData = await fetchTranslationAcademy(articleId);
+          if (academyData?.content) {
+            setFullContent(academyData.content);
+          }
+        } catch (err) {
+          console.error('[ExpandableResource] Failed to fetch academy:', err);
+        } finally {
+          setIsLoadingFull(false);
+        }
+      }
+    }
+  }, [isExpanded, canExpand, fullContent, isLoadingFull, resource.type, resource.title]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -73,10 +130,10 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
       className="glass-card rounded-xl overflow-hidden"
     >
       <button
-        onClick={() => hasMoreContent && setIsExpanded(!isExpanded)}
+        onClick={handleExpand}
         className={cn(
           "w-full p-4 text-left transition-colors",
-          hasMoreContent && "hover:bg-white/5 cursor-pointer"
+          canExpand && "hover:bg-white/5 cursor-pointer"
         )}
       >
         <div className="flex items-start gap-3">
@@ -119,9 +176,15 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
             )}
           </div>
           
-          {hasMoreContent && (
+          {canExpand && (
             <div className="shrink-0 text-muted-foreground">
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {isLoadingFull ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
             </div>
           )}
         </div>
@@ -165,7 +228,7 @@ function ExpandableResource({ resource, index, onAddToNotes }: ExpandableResourc
                     ),
                   }}
                 >
-                  {resource.content}
+                  {isLoadingFull ? 'Loading full article...' : displayContent}
                 </ReactMarkdown>
               </div>
             </div>
