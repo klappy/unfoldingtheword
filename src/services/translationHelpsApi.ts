@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface ScriptureVerse {
   number: number;
   text: string;
-  isParagraphStart?: boolean;
+  isParagraphEnd?: boolean;
 }
 
 export interface ScriptureResponse {
@@ -11,6 +11,12 @@ export interface ScriptureResponse {
   translation: string;
   text: string;
   verses: ScriptureVerse[];
+  metadata?: {
+    language: string;
+    organization: string;
+    availableTranslations: string[];
+    license: string;
+  };
 }
 
 export interface TranslationNote {
@@ -68,92 +74,139 @@ async function callProxy(endpoint: string, params: Record<string, any>) {
   return data;
 }
 
-// Parse markdown scripture response into structured verses
-function parseScriptureMarkdown(content: string, reference: string): { verses: ScriptureVerse[], translation: string } {
+// Parse YAML frontmatter from markdown content
+function parseYamlFrontmatter(content: string): { metadata: Record<string, string>; body: string } {
+  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+  
+  if (!frontmatterMatch) {
+    return { metadata: {}, body: content };
+  }
+
+  const yamlContent = frontmatterMatch[1];
+  const body = frontmatterMatch[2];
+  
+  const metadata: Record<string, string> = {};
+  yamlContent.split('\n').forEach(line => {
+    const match = line.match(/^(\w+):\s*(.+)$/);
+    if (match) {
+      metadata[match[1]] = match[2].trim();
+    }
+  });
+
+  return { metadata, body };
+}
+
+// Parse scripture content - extract ULT translation with proper verse handling
+function parseScriptureMarkdown(content: string, reference: string): { 
+  verses: ScriptureVerse[]; 
+  translation: string;
+  metadata?: ScriptureResponse['metadata'];
+} {
   const verses: ScriptureVerse[] = [];
   let translation = 'unfoldingWord Literal Text';
   
-  // Try to find verse markers in the content (e.g., "1 In the beginning..." or numbered lines)
-  // First, extract the main text content
-  const ultMatch = content.match(/\*\*ULT v\d+ \(([^)]+)\)\*\*\s*\n\n([\s\S]+?)(?=\n\n\*\*|$)/s);
+  // Parse YAML frontmatter
+  const { metadata, body } = parseYamlFrontmatter(content);
+  
+  const scriptureMetadata: ScriptureResponse['metadata'] = metadata.language ? {
+    language: metadata.language || 'en',
+    organization: metadata.organization || 'unfoldingWord',
+    availableTranslations: (metadata.resources || '').split(',').map(s => s.trim()),
+    license: metadata.license || 'CC BY-SA 4.0',
+  } : undefined;
+
+  // Find the ULT section - this is the primary translation we want to display
+  // Format: **ULT v87 (unfoldingWord® Literal Text)**\n\nContent...
+  const ultMatch = body.match(/\*\*ULT v\d+[^*]*\*\*\s*\n\n([\s\S]*?)(?=\n\n\*\*[A-Z]|$)/);
   
   if (ultMatch) {
-    translation = ultMatch[1];
-    let verseText = ultMatch[2].trim();
+    translation = 'unfoldingWord Literal Text';
+    const ultContent = ultMatch[1].trim();
     
-    // Clean up common markdown artifacts
-    // Replace backslash or forward slash used as line breaks with actual line breaks
-    verseText = verseText
-      .replace(/\s*[\\\/]\s*\n/g, '\n') // slash at end of line
-      .replace(/\n\s*[\\\/]\s*/g, '\n') // slash at start of line
-      .replace(/\s+[\\\/]\s+/g, ' ') // slash as inline separator - replace with space
-      .replace(/\\$/gm, '') // trailing backslashes
-      .replace(/\s{2,}/g, ' '); // multiple spaces to single
+    // Parse verses from ULT content
+    // Format: "1 Text of verse one. 2 Text of verse two. \"
+    // Backslash \ indicates paragraph end
     
-    // Try to parse individual verses by looking for verse number patterns
-    // Pattern: number at start of line or after newline, followed by text
-    const versePattern = /(?:^|\n)(\d+)\s+([^\n]+(?:\n(?!\d+\s)[^\n]*)*)/g;
+    // Split into segments by verse numbers
+    // Pattern: Look for numbers at the start or after paragraph breaks
+    const versePattern = /(?:^|\s)(\d+)\s+/g;
+    const matches: { index: number; verseNum: number }[] = [];
     let match;
     
-    while ((match = versePattern.exec(verseText)) !== null) {
-      const verseNum = parseInt(match[1], 10);
-      let text = match[2].trim();
-      // Preserve paragraph breaks within verse text, collapse single newlines
-      text = text.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ').trim();
-      verses.push({ number: verseNum, text });
+    while ((match = versePattern.exec(ultContent)) !== null) {
+      matches.push({ index: match.index, verseNum: parseInt(match[1], 10) });
     }
     
-    // If no verse patterns found, try splitting by reference from URL
-    if (verses.length === 0) {
-      const verseMatch = reference.match(/:(\d+)(?:-(\d+))?$/);
-      if (verseMatch) {
-        const startVerse = parseInt(verseMatch[1], 10);
-        // Clean up the text - preserve paragraph structure
-        verseText = verseText.replace(/\n\n+/g, '\n\n').replace(/\n(?!\n)/g, ' ').trim();
-        verses.push({ number: startVerse, text: verseText });
-      } else {
-        // Chapter only - try to split by sentence/paragraph
-        const paragraphs = verseText.split(/\n\n+/);
-        let verseNum = 1;
-        for (const para of paragraphs) {
-          const cleanPara = para.trim().replace(/\n/g, ' ').trim();
-          if (cleanPara) {
-            verses.push({ number: verseNum++, text: cleanPara, isParagraphStart: true });
+    // Extract text for each verse
+    for (let i = 0; i < matches.length; i++) {
+      const current = matches[i];
+      const next = matches[i + 1];
+      
+      // Get the start position after the verse number
+      const verseNumStr = current.verseNum.toString();
+      const textStart = current.index + ultContent.slice(current.index).indexOf(verseNumStr) + verseNumStr.length;
+      const textEnd = next ? next.index : ultContent.length;
+      
+      let verseText = ultContent.slice(textStart, textEnd).trim();
+      
+      // Check if this verse ends with a paragraph marker (backslash)
+      const isParagraphEnd = verseText.endsWith('\\');
+      
+      // Clean up the verse text
+      verseText = verseText
+        .replace(/\\\s*$/, '') // Remove trailing backslash
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      
+      if (verseText) {
+        verses.push({
+          number: current.verseNum,
+          text: verseText,
+          isParagraphEnd,
+        });
+      }
+    }
+  }
+  
+  // Fallback: if no ULT section found, try to parse any numbered content
+  if (verses.length === 0) {
+    console.log('[parseScriptureMarkdown] No ULT section found, using fallback parsing');
+    
+    // Try to find any section with verse-like content
+    const lines = body.split('\n');
+    let currentSection = '';
+    
+    for (const line of lines) {
+      // Skip headers and empty lines for this parsing
+      if (line.startsWith('#') || line.startsWith('**') || !line.trim()) {
+        if (currentSection && !line.startsWith('**')) continue;
+        currentSection = line;
+        continue;
+      }
+      
+      // Try to parse verses from this line
+      const versePattern = /(\d+)\s+([^0-9]+?)(?=\d+\s|$|\\)/g;
+      let match;
+      
+      while ((match = versePattern.exec(line)) !== null) {
+        const verseNum = parseInt(match[1], 10);
+        let verseText = match[2].trim();
+        const isParagraphEnd = verseText.endsWith('\\') || line.endsWith('\\');
+        verseText = verseText.replace(/\\\s*$/, '').trim();
+        
+        if (verseText && verseNum > 0) {
+          // Avoid duplicates
+          if (!verses.find(v => v.number === verseNum)) {
+            verses.push({ number: verseNum, text: verseText, isParagraphEnd });
           }
         }
       }
     }
   }
+
+  console.log('[parseScriptureMarkdown] Parsed verses:', verses.length);
   
-  // Fallback: if no ULT found, try to extract any text after the header
-  if (verses.length === 0) {
-    const headerMatch = content.match(/# [^\n]+\n\n([\s\S]+)/);
-    if (headerMatch) {
-      let textContent = headerMatch[1]
-        .replace(/---[\s\S]*?---/g, '') // Remove frontmatter
-        .replace(/\*\*[^*]+\*\*/g, ''); // Remove bold markers
-      
-      // Try to parse verses from extracted content
-      const versePattern = /(?:^|\n)(\d+)\s+([^\n]+(?:\n(?!\d+\s)[^\n]*)*)/g;
-      let match;
-      
-      while ((match = versePattern.exec(textContent)) !== null) {
-        const verseNum = parseInt(match[1], 10);
-        let text = match[2].trim().replace(/\n(?!\n)/g, ' ');
-        verses.push({ number: verseNum, text });
-      }
-      
-      // Still no verses? Use the whole text
-      if (verses.length === 0) {
-        textContent = textContent.trim();
-        if (textContent) {
-          verses.push({ number: 1, text: textContent });
-        }
-      }
-    }
-  }
-  
-  return { verses, translation };
+  return { verses, translation, metadata: scriptureMetadata };
 }
 
 // Parse translation notes from markdown - each numbered section is a separate note
@@ -323,19 +376,16 @@ export async function fetchScripture(reference: string): Promise<ScriptureRespon
     const data = await callProxy('fetch-scripture', { reference });
     const content = data.content || data.text || '';
     
-    // Log full raw content to understand structure
-    console.log('[translationHelpsApi] Raw scripture content:');
-    console.log('=== START RAW CONTENT ===');
-    console.log(content.substring(0, 3000));
-    console.log('=== END RAW CONTENT (first 3000 chars) ===');
+    console.log('[translationHelpsApi] Raw scripture content preview:', content.substring(0, 500));
     
-    const { verses, translation } = parseScriptureMarkdown(content, reference);
+    const { verses, translation, metadata } = parseScriptureMarkdown(content, reference);
 
     return {
       reference: data.reference || reference,
       translation,
       text: content,
       verses: verses.length > 0 ? verses : [{ number: 1, text: 'Scripture content not available' }],
+      metadata,
     };
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching scripture:', error);
@@ -511,28 +561,19 @@ export async function fetchTranslationAcademy(moduleId: string): Promise<Transla
     
     return {
       id: data.id || moduleId,
-      title: data.title || title,
-      content: content.substring(0, 2000),
+      title,
+      content: typeof content === 'string' ? content : JSON.stringify(content),
     };
   } catch (error) {
-    console.error('[translationHelpsApi] Error fetching academy article:', error);
+    console.error('[translationHelpsApi] Error fetching translation academy:', error);
     return null;
   }
 }
 
-export async function searchResources(query: string, resource?: string): Promise<any[]> {
+export async function searchResources(query: string, resource: string): Promise<any[]> {
   try {
-    const params: Record<string, string> = { query };
-    if (resource) params.resource = resource;
-    
-    console.log('[searchResources] Searching with params:', params);
-    const data = await callProxy('search', params);
-    console.log('[searchResources] Raw response:', data);
-    
-    // The API returns { hits: [...] } or { results: [...] }
-    const hits = data.hits || data.results || data.data || (Array.isArray(data) ? data : []);
-    console.log('[searchResources] Found', hits.length, 'results for', resource || 'all');
-    return hits;
+    const data = await callProxy('search', { query, resource });
+    return data?.hits || [];
   } catch (error) {
     console.error('[translationHelpsApi] Error searching resources:', error);
     return [];

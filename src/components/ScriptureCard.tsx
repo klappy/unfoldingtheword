@@ -253,16 +253,16 @@ export function ScriptureCard({ passage, onAddToNotes, isLoading, error, onRetry
           transition={{ delay: 0.1 }}
           className="scripture-text text-lg max-w-xl mx-auto pt-2"
         >
-          {passage.verses.map((verse, index) => {
-            const showParagraphBreak = (verse as any).isParagraphStart && index > 0;
-            return (
-              <span key={verse.number}>
-                {showParagraphBreak && <span className="block h-4" />}
-                <span className="scripture-verse">{verse.number}</span>
-                {verse.text}{' '}
-              </span>
-            );
-          })}
+          {passage.verses.map((verse, index) => (
+            <span key={`${passage.reference}-${verse.number}-${index}`}>
+              <sup className="scripture-verse">{verse.number}</sup>
+              {verse.text}
+              {verse.isParagraphEnd && index < passage.verses.length - 1 && (
+                <span className="block h-4" />
+              )}
+              {!verse.isParagraphEnd && ' '}
+            </span>
+          ))}
         </motion.div>
 
         {/* Dynamic navigation button */}

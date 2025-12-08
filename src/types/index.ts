@@ -19,8 +19,14 @@ export interface ResourceLink {
 export interface ScripturePassage {
   reference: string;
   text: string;
-  verses: { number: number; text: string; isParagraphStart?: boolean }[];
+  verses: { number: number; text: string; isParagraphEnd?: boolean }[];
   translation: string;
+  metadata?: {
+    language: string;
+    organization: string;
+    availableTranslations: string[];
+    license: string;
+  };
 }
 
 export interface Note {
