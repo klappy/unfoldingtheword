@@ -350,7 +350,8 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
     }
   };
 
-  if (isLoading) {
+  // Show loading only when no resources exist yet
+  if (isLoading && resources.length === 0) {
     return (
       <div className="flex flex-col h-full items-center justify-center">
         <div className="text-center px-8">
@@ -367,6 +368,16 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
       </div>
     );
   }
+
+  // Loading overlay when refreshing with existing data
+  const loadingOverlay = isLoading && resources.length > 0 ? (
+    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-20 flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="w-8 h-8 text-accent animate-spin mx-auto mb-2" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  ) : null;
 
   if (error) {
     return (
@@ -435,7 +446,8 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {loadingOverlay}
       {/* Swipe indicator */}
       <div className="pt-4 pb-2">
         <div className="swipe-indicator" />
