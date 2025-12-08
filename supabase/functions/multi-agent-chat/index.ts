@@ -326,8 +326,9 @@ async function fetchScripturePassage(reference: string): Promise<string | null> 
 function isScriptureReference(input: string): boolean {
   const trimmed = input.trim().toLowerCase();
   
-  // List of known Bible book names (and common abbreviations)
+  // List of known Bible book names (and common abbreviations) - English + Spanish + Portuguese
   const bibleBooks = [
+    // English
     'genesis', 'gen', 'exodus', 'exod', 'ex', 'leviticus', 'lev', 'numbers', 'num', 
     'deuteronomy', 'deut', 'joshua', 'josh', 'judges', 'judg', 'ruth', 
     '1 samuel', '2 samuel', '1samuel', '2samuel', '1sam', '2sam', '1 sam', '2 sam',
@@ -349,7 +350,42 @@ function isScriptureReference(input: string): boolean {
     'titus', 'tit', 'philemon', 'phlm', 'hebrews', 'heb',
     'james', 'jas', '1 peter', '2 peter', '1peter', '2peter', '1pet', '2pet', '1 pet', '2 pet',
     '1 john', '2 john', '3 john', '1john', '2john', '3john', '1jn', '2jn', '3jn',
-    'jude', 'revelation', 'rev'
+    'jude', 'revelation', 'rev',
+    // Spanish book names
+    'génesis', 'gén', 'éxodo', 'éx', 'levítico', 'lv', 'números', 'nm', 
+    'deuteronomio', 'dt', 'josué', 'jos', 'jueces', 'jue', 'rut',
+    '1 samuel', '2 samuel', '1 reyes', '2 reyes', '1 crónicas', '2 crónicas',
+    'esdras', 'esd', 'nehemías', 'ne', 'ester', 'est', 
+    'salmos', 'sal', 'proverbios', 'pr', 'eclesiastés', 'ec',
+    'cantares', 'cantar', 'isaías', 'is', 'jeremías', 'jer',
+    'lamentaciones', 'lm', 'ezequiel', 'ez', 
+    'oseas', 'os', 'amós', 'am', 'abdías', 'ab', 'jonás', 'jon',
+    'miqueas', 'mi', 'nahúm', 'na', 'habacuc', 'hab', 'sofonías', 'sof',
+    'hageo', 'ag', 'zacarías', 'zac', 'malaquías', 'mal',
+    'mateo', 'mt', 'marcos', 'mc', 'lucas', 'lc', 'juan', 'jn',
+    'hechos', 'hch', 'romanos', 'ro', 
+    '1 corintios', '2 corintios', '1co', '2co',
+    'gálatas', 'gl', 'efesios', 'ef', 'filipenses', 'flp',
+    'colosenses', 'col', '1 tesalonicenses', '2 tesalonicenses',
+    '1 timoteo', '2 timoteo', 'tito', 'ti', 'filemón', 'flm', 'hebreos', 'he',
+    'santiago', 'stg', '1 pedro', '2 pedro', '1p', '2p',
+    '1 juan', '2 juan', '3 juan', 'judas', 'apocalipsis', 'ap',
+    // Portuguese book names
+    'gênesis', 'êxodo', 'levítico', 'números', 'deuteronômio',
+    'josué', 'juízes', 'rute',
+    '1 samuel', '2 samuel', '1 reis', '2 reis', '1 crônicas', '2 crônicas',
+    'neemias', 'ester', 'jó', 
+    'salmos', 'provérbios', 'eclesiastes', 
+    'cânticos', 'isaías', 'jeremias', 'lamentações', 'ezequiel',
+    'oséias', 'amós', 'obadias', 'jonas', 'miquéias', 'naum',
+    'habacuque', 'sofonias', 'ageu', 'zacarias', 'malaquias',
+    'mateus', 'marcos', 'joão',
+    'atos', 'romanos', '1 coríntios', '2 coríntios',
+    'gálatas', 'efésios', 'filipenses', 'colossenses',
+    '1 tessalonicenses', '2 tessalonicenses',
+    '1 timóteo', '2 timóteo', 'filemon', 'hebreus',
+    'tiago', '1 pedro', '2 pedro', '1 joão', '2 joão', '3 joão',
+    'judas', 'apocalipse'
   ];
   
   // Check if input starts with a known book name
@@ -360,7 +396,7 @@ function isScriptureReference(input: string): boolean {
   });
   
   // Also match patterns like "Book Chapter" or "Book Chapter:Verse"
-  const bookChapterPattern = /^(\d?\s*[a-z]+)\s+(\d+)(\s*:\s*\d+(-\d+)?)?$/i;
+  const bookChapterPattern = /^(\d?\s*[a-záéíóúüñâêôãõç]+)\s+(\d+)(\s*:\s*\d+(-\d+)?)?$/i;
   const matchesPattern = bookChapterPattern.test(trimmed);
   
   // Only consider it a scripture reference if it matches a known book

@@ -52,10 +52,14 @@ const Index = () => {
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
 
-  // Get target language display name
+  // Get target language display name for AI responses
   const targetLanguageName = useMemo(() => {
+    if (!language) return 'English';
     const lang = availableLanguages.find(l => l.id === language);
-    return lang?.name || language;
+    // Return the native name or display name for the AI to understand
+    const name = lang?.name || lang?.nativeName || language;
+    console.log('[Index] Target language name:', name, 'from language code:', language);
+    return name;
   }, [availableLanguages, language]);
 
   // UI localization
