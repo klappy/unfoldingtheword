@@ -29,7 +29,8 @@ export function useMultiAgentChat() {
   const sendMessage = useCallback(async (
     content: string, 
     scriptureContext?: string,
-    onScriptureReference?: (ref: string) => void
+    onScriptureReference?: (ref: string) => void,
+    responseLanguage?: string
   ) => {
     // Add user message
     const userMessage: Message = {
@@ -54,6 +55,7 @@ export function useMultiAgentChat() {
           message: content,
           conversationHistory,
           scriptureContext,
+          responseLanguage,
         },
       });
 
