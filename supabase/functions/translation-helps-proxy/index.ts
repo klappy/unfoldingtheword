@@ -69,12 +69,14 @@ serve(async (req) => {
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[translation-helps-proxy] API error: ${response.status} - ${errorText.substring(0, 200)}`);
+      console.warn(`[translation-helps-proxy] API returned ${response.status} for ${endpoint} - this is expected for missing resources`);
+      // Return 200 with error info in body so client can handle fallback gracefully
       return new Response(JSON.stringify({ 
         error: `API returned ${response.status}`,
-        details: errorText.substring(0, 500)
+        details: errorText.substring(0, 500),
+        status: response.status
       }), {
-        status: response.status,
+        status: 200, // Always return 200 so client can parse and handle fallback
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
