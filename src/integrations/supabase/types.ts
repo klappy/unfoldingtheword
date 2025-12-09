@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           device_id: string
           id: string
+          language: string | null
           preview: string | null
           scripture_reference: string | null
           title: string
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           device_id: string
           id?: string
+          language?: string | null
           preview?: string | null
           scripture_reference?: string | null
           title: string
@@ -37,6 +39,7 @@ export type Database = {
           created_at?: string
           device_id?: string
           id?: string
+          language?: string | null
           preview?: string | null
           scripture_reference?: string | null
           title?: string

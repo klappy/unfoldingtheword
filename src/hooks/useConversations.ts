@@ -3,13 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { HistoryItem, Message, ResourceLink } from '@/types';
 import { useDeviceId } from './useDeviceId';
 
-export function useConversations() {
+export function useConversations(currentLanguage: string = 'en') {
   const deviceId = useDeviceId();
   const [conversations, setConversations] = useState<HistoryItem[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch conversations on mount
+  // Fetch conversations filtered by language
   useEffect(() => {
     if (!deviceId) return;
 
@@ -19,6 +19,7 @@ export function useConversations() {
         .from('conversations')
         .select('*')
         .eq('device_id', deviceId)
+        .eq('language', currentLanguage)
         .order('updated_at', { ascending: false });
 
       if (error) {
@@ -36,9 +37,9 @@ export function useConversations() {
     };
 
     fetchConversations();
-  }, [deviceId]);
+  }, [deviceId, currentLanguage]);
 
-  const createConversation = useCallback(async (title: string, preview?: string, scriptureReference?: string) => {
+  const createConversation = useCallback(async (title: string, preview?: string, scriptureReference?: string, language?: string) => {
     if (!deviceId) return null;
 
     const { data, error } = await supabase
@@ -48,6 +49,7 @@ export function useConversations() {
         title,
         preview,
         scripture_reference: scriptureReference,
+        language: language || currentLanguage,
       })
       .select()
       .single();
@@ -68,7 +70,7 @@ export function useConversations() {
     setConversations(prev => [newConv, ...prev]);
     setCurrentConversationId(data.id);
     return data.id;
-  }, [deviceId]);
+  }, [deviceId, currentLanguage]);
 
   const updateConversation = useCallback(async (id: string, updates: { title?: string; preview?: string; scriptureReference?: string }) => {
     const { error } = await supabase
