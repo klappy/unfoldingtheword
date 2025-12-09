@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw } from 'lucide-react';
+import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw, Mic, MicOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
 import { TranslationStrings } from '@/i18n/translations';
 import { useResetSession } from '@/hooks/useResetSession';
+import { useVoiceRecording } from '@/hooks/useVoiceRecording';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChatCardProps {
   messages: Message[];
@@ -27,6 +29,20 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { resetSession } = useResetSession();
+  const { toast } = useToast();
+
+  const { isRecording, isTranscribing, toggleRecording } = useVoiceRecording({
+    onTranscription: (text) => {
+      setInput(prev => prev ? `${prev} ${text}` : text);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Voice Error',
+        description: error,
+        variant: 'destructive',
+      });
+    },
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,6 +157,27 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                            resize-none outline-none px-3 py-2 text-sm max-h-32"
                 style={{ minHeight: '40px' }}
               />
+              <button
+                type="button"
+                onClick={toggleRecording}
+                disabled={isTranscribing}
+                className={cn(
+                  'p-2 rounded-xl transition-all duration-200',
+                  isRecording
+                    ? 'bg-destructive text-destructive-foreground animate-pulse'
+                    : isTranscribing
+                    ? 'bg-muted text-muted-foreground'
+                    : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                )}
+              >
+                {isTranscribing ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : isRecording ? (
+                  <MicOff className="w-5 h-5" />
+                ) : (
+                  <Mic className="w-5 h-5" />
+                )}
+              </button>
               <button
                 type="submit"
                 disabled={!input.trim() || isLoading}
@@ -300,6 +337,27 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                          resize-none outline-none px-3 py-2 text-sm max-h-32"
               style={{ minHeight: '40px' }}
             />
+            <button
+              type="button"
+              onClick={toggleRecording}
+              disabled={isTranscribing}
+              className={cn(
+                'p-2 rounded-xl transition-all duration-200',
+                isRecording
+                  ? 'bg-destructive text-destructive-foreground animate-pulse'
+                  : isTranscribing
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+              )}
+            >
+              {isTranscribing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : isRecording ? (
+                <MicOff className="w-5 h-5" />
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
+            </button>
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
