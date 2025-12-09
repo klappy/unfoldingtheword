@@ -164,7 +164,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                 className={cn(
                   'p-2 rounded-xl transition-all duration-200',
                   isRecording
-                    ? 'bg-primary text-primary-foreground animate-pulse'
+                    ? 'bg-primary text-primary-foreground animate-pulse-slow'
                     : isTranscribing
                     ? 'bg-muted text-muted-foreground'
                     : 'bg-muted hover:bg-muted/80 text-muted-foreground'
@@ -344,7 +344,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
               className={cn(
                 'p-2 rounded-xl transition-all duration-200',
                 isRecording
-                  ? 'bg-primary text-primary-foreground animate-pulse'
+                  ? 'bg-primary text-primary-foreground animate-pulse-slow'
                   : isTranscribing
                   ? 'bg-muted text-muted-foreground'
                   : 'bg-muted hover:bg-muted/80 text-muted-foreground'
