@@ -44,6 +44,7 @@ export function useScriptureData() {
   const [allResources, setAllResources] = useState<Resource[]>([]); // Store all resources for filtering
   const [verseFilter, setVerseFilter] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResourcesLoading, setIsResourcesLoading] = useState(false); // Separate loading state for resources
   const [error, setError] = useState<string | null>(null);
   const [fallbackState, setFallbackState] = useState<FallbackState>({ hasFallback: false, fallbackInfo: null });
   
@@ -133,6 +134,7 @@ export function useScriptureData() {
     
     // NOW set loading state - this will trigger skeleton since passage is null
     setIsLoading(true);
+    setIsResourcesLoading(true);
     setError(null);
 
     console.log('[useScriptureData] Loading data for:', reference, retryCount > 0 ? `(retry ${retryCount})` : '');
@@ -259,6 +261,7 @@ export function useScriptureData() {
         targetVerse: verse,
       });
       setIsLoading(false);
+      setIsResourcesLoading(false);
 
     } catch (err) {
       console.error('[useScriptureData] Error loading scripture data:', err);
@@ -275,12 +278,13 @@ export function useScriptureData() {
       // Only set error and stop loading when retries exhausted
       setError(err instanceof Error ? err.message : 'Failed to load data');
       setIsLoading(false);
+      setIsResourcesLoading(false);
     }
   }, [loadBookInBackground, scripture?.book?.book]);
 
   // Search for resources by keyword (for non-scripture queries)
   const loadKeywordResources = useCallback(async (keyword: string) => {
-    setIsLoading(true);
+    setIsResourcesLoading(true);
     setError(null);
 
     console.log('[useScriptureData] Searching for keyword:', keyword);
@@ -437,7 +441,7 @@ export function useScriptureData() {
       console.error('[useScriptureData] Error searching keyword:', err);
       setError(err instanceof Error ? err.message : 'Failed to search');
     } finally {
-      setIsLoading(false);
+      setIsResourcesLoading(false);
     }
   }, []);
 
@@ -510,6 +514,7 @@ export function useScriptureData() {
     scripture,
     resources,
     isLoading,
+    isResourcesLoading,
     error,
     verseFilter,
     fallbackState,
