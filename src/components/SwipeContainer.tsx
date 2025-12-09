@@ -92,8 +92,8 @@ export function SwipeContainer({
         </motion.div>
       )}
 
-      {/* Page indicators */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-50 pb-safe">
+      {/* Page indicators - positioned to not overlap with input */}
+      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-2 z-50 pointer-events-none">
         {cardOrder.map((card, index) => (
           <div
             key={card}
