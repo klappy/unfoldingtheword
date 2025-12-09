@@ -107,13 +107,13 @@ const Index = () => {
     updateConversation,
     saveMessage,
     loadConversationMessages,
-  } = useConversations();
+  } = useConversations(language || 'en');
 
   const handleSendMessage = useCallback(async (content: string) => {
     let convId = currentConversationId;
     if (!convId) {
       const title = content.length > 40 ? content.substring(0, 40) + '...' : content;
-      convId = await createConversation(title, content);
+      convId = await createConversation(title, content, undefined, language || 'en');
     }
 
     const userMessage: Message = {
