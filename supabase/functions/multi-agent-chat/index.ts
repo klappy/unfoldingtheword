@@ -448,16 +448,16 @@ async function processToolCalls(toolCalls: any[]): Promise<{ resources: any[], s
   return { resources, scriptureText };
 }
 
-// Call Lovable AI with tool calling for keyword/topic searches
+// Call OpenAI with tool calling for keyword/topic searches
 async function callAIWithTools(userMessage: string, conversationHistory: any[], scriptureContext?: string): Promise<{
   resources: any[],
   scriptureText: string | null,
   scriptureReference: string | null,
   searchQuery: string | null
 }> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY is not configured");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured");
   }
 
   const systemPrompt = `You are a Bible study assistant. Your job is to find relevant resources to answer user questions about topics and keywords.
@@ -476,14 +476,14 @@ The user is searching for a topic or keyword. Use search_resources to find relev
     { role: "user", content: `${userMessage}${scriptureContext ? `\n\nCurrent context: ${scriptureContext}` : ''}` }
   ];
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "gpt-4o-mini",
       messages,
       tools: mcpTools,
       tool_choice: "auto",
@@ -541,9 +541,9 @@ async function* generateStreamingResponse(
   responseLanguage: string,
   conversationHistory: any[]
 ): AsyncGenerator<string, void, unknown> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY is not configured");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured");
   }
 
   // Always add language instruction if responseLanguage is specified and not English
@@ -624,14 +624,14 @@ ${resourceContext}
 
 If no relevant resources are found, say so honestly and suggest what to search for.${languageInstruction}`;
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         ...conversationHistory.slice(-4),
