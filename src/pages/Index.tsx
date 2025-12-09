@@ -48,7 +48,7 @@ const Index = () => {
     cardOrder,
   } = useSwipeNavigation();
 
-  const { scripture, resources, isLoading: scriptureLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
 
@@ -277,7 +277,7 @@ const Index = () => {
             }}
             verseFilter={verseFilter}
             onClearVerseFilter={clearVerseFilter}
-            isLoading={scriptureLoading}
+            isLoading={isResourcesLoading}
             error={scriptureError}
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
             scrollToType={scrollToResourceType}
@@ -296,7 +296,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, versionPreferences, setActiveVersion, getOrganizationsForLanguage, language]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, versionPreferences, setActiveVersion, getOrganizationsForLanguage, language]);
 
   // Show chat-based language selection on first launch or when manually triggered
   if (needsSelection || showLanguageSelector) {
