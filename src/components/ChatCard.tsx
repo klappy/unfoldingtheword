@@ -8,11 +8,14 @@ import { TranslationStrings } from '@/i18n/translations';
 import { useResetSession } from '@/hooks/useResetSession';
 import { useVoiceRecording } from '@/hooks/useVoiceRecording';
 import { useToast } from '@/hooks/use-toast';
+import { CopyButton } from '@/components/CopyButton';
+import { ScriptureReferenceText } from '@/components/ScriptureReferenceText';
 
 interface ChatCardProps {
   messages: Message[];
   onSendMessage: (content: string) => void;
   onResourceClick: (resource: ResourceLink) => void;
+  onScriptureClick?: (reference: string) => void;
   isLoading?: boolean;
   currentLanguage?: { id: string; name: string; nativeName?: string } | null;
   onChangeLanguage?: () => void;
@@ -22,7 +25,7 @@ interface ChatCardProps {
   isTranslatingUi?: boolean;
 }
 
-export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, currentLanguage, onChangeLanguage, t, hasStaticTranslations, onTranslateUi, isTranslatingUi }: ChatCardProps) {
+export function ChatCard({ messages, onSendMessage, onResourceClick, onScriptureClick, isLoading, currentLanguage, onChangeLanguage, t, hasStaticTranslations, onTranslateUi, isTranslatingUi }: ChatCardProps) {
   const [input, setInput] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -229,16 +232,30 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
             >
               <div
                 className={cn(
-                  'max-w-[85%] rounded-2xl px-4 py-3',
+                  'max-w-[85%] rounded-2xl px-4 py-3 relative group',
                   message.role === 'user'
                     ? 'bg-primary text-primary-foreground'
                     : 'glass-card ai-message'
                 )}
               >
-                <div className="prose prose-sm prose-invert max-w-none">
+                {/* Copy button */}
+                <CopyButton 
+                  text={message.content}
+                  className="absolute top-2 right-2"
+                />
+                
+                <div className="prose prose-sm prose-invert max-w-none pr-6">
                   <ReactMarkdown
                     components={{
-                      p: ({ children }) => <p className="text-sm leading-relaxed mb-2 last:mb-0">{children}</p>,
+                      p: ({ children }) => (
+                        <p className="text-sm leading-relaxed mb-2 last:mb-0">
+                          <ScriptureReferenceText 
+                            text={typeof children === 'string' ? children : ''} 
+                            onReferenceClick={onScriptureClick}
+                          />
+                          {typeof children !== 'string' && children}
+                        </p>
+                      ),
                       strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
                       em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
                       ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2 ml-2">{children}</ul>,

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchTranslationWord, fetchTranslationAcademy } from '@/services/translationHelpsApi';
+import { CopyButton } from '@/components/CopyButton';
 
 interface ResourcesCardProps {
   resources: Resource[];
@@ -134,8 +135,13 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="glass-card rounded-xl overflow-hidden"
+      className="glass-card rounded-xl overflow-hidden group relative"
     >
+      {/* Copy button for the full content */}
+      <CopyButton 
+        text={`${resource.title}\n\n${displayContent}`}
+        className="absolute top-3 right-3 z-10"
+      />
       <button
         onClick={handleExpand}
         className={cn(

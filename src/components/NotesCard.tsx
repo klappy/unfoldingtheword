@@ -4,6 +4,7 @@ import { PenLine, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Note } from '@/types';
 import { cn } from '@/lib/utils';
 import { TranslationStrings } from '@/i18n/translations';
+import { CopyButton } from '@/components/CopyButton';
 
 interface NotesCardProps {
   notes: Note[];
@@ -60,7 +61,7 @@ export function NotesCard({ notes, onAddNote, onDeleteNote, t }: NotesCardProps)
                 note.highlighted && 'border-primary/30 bg-primary/5'
               )}
             >
-              <p className="text-sm text-foreground/90 leading-relaxed pr-8">
+              <p className="text-sm text-foreground/90 leading-relaxed pr-16">
                 {note.content}
               </p>
               {note.sourceReference && (
@@ -72,13 +73,16 @@ export function NotesCard({ notes, onAddNote, onDeleteNote, t }: NotesCardProps)
                 {new Date(note.createdAt).toLocaleDateString()}
               </p>
               
-              <button
-                onClick={() => onDeleteNote(note.id)}
-                className="absolute top-3 right-3 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 
-                         transition-opacity bg-destructive/10 text-destructive hover:bg-destructive/20"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <div className="absolute top-3 right-3 flex items-center gap-1">
+                <CopyButton text={note.content} />
+                <button
+                  onClick={() => onDeleteNote(note.id)}
+                  className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 
+                           transition-opacity bg-destructive/10 text-destructive hover:bg-destructive/20"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             </motion.div>
           ))}
         </div>
