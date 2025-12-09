@@ -6,12 +6,14 @@ interface ScriptureReferenceTextProps {
   text: string;
   onReferenceClick?: (reference: string) => void;
   className?: string;
+  variant?: 'default' | 'user'; // 'user' for user message bubbles with primary background
 }
 
 export function ScriptureReferenceText({ 
   text, 
   onReferenceClick,
-  className 
+  className,
+  variant = 'default'
 }: ScriptureReferenceTextProps) {
   const segments = useMemo(() => segmentTextWithReferences(text), [text]);
 
@@ -27,6 +29,11 @@ export function ScriptureReferenceText({
     onReferenceClick?.(refString);
   };
 
+  // Different styles for user messages (primary bg) vs assistant messages
+  const linkStyles = variant === 'user'
+    ? "text-primary-foreground underline decoration-primary-foreground/50 underline-offset-2 hover:decoration-primary-foreground transition-colors cursor-pointer font-medium"
+    : "text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary hover:text-primary/80 transition-colors cursor-pointer";
+
   return (
     <span className={className}>
       {segments.map((segment, index) => {
@@ -38,11 +45,7 @@ export function ScriptureReferenceText({
                 e.stopPropagation();
                 handleClick(segment.reference!);
               }}
-              className={cn(
-                "text-primary underline decoration-primary/40 underline-offset-2",
-                "hover:decoration-primary hover:text-primary/80 transition-colors",
-                "cursor-pointer"
-              )}
+              className={linkStyles}
             >
               {segment.content}
             </button>
