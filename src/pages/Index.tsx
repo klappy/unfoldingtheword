@@ -211,6 +211,13 @@ const Index = () => {
     filterByVerse(reference);
   }, [filterByVerse]);
 
+  // Handle scripture reference clicks from chat messages
+  const handleScriptureReferenceClick = useCallback(async (reference: string) => {
+    console.log('[Index] Scripture reference clicked:', reference);
+    await loadScriptureData(reference);
+    navigateToCard('scripture');
+  }, [loadScriptureData, navigateToCard]);
+
 
   const renderCard = useCallback((card: CardType) => {
     switch (card) {
@@ -229,6 +236,7 @@ const Index = () => {
             messages={messages}
             onSendMessage={handleSendMessage}
             onResourceClick={handleResourceClick}
+            onScriptureClick={handleScriptureReferenceClick}
             isLoading={chatLoading}
             currentLanguage={getCurrentLanguage()}
             onChangeLanguage={() => setShowLanguageSelector(true)}
