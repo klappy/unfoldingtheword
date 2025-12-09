@@ -18,6 +18,13 @@ type Step = 'language' | 'organization' | 'complete';
 // Top gateway languages to show as quick options
 const TOP_LANGUAGES = ['en', 'es-419', 'fr', 'pt-br', 'hi', 'ar', 'id', 'bn'];
 
+// Default organizations for specific languages (auto-select without prompting)
+const DEFAULT_ORGANIZATIONS: Record<string, string> = {
+  'en': 'unfoldingWord',
+  'es-419': 'idiomas_puentes',
+  'hi': 'BCS',
+};
+
 // Engaging greetings and action phrases in each language
 const LANGUAGE_PHRASES: Record<string, { greeting: string; action: string }> = {
   'en': { greeting: 'Welcome!', action: 'Start' },
@@ -80,10 +87,20 @@ export function LanguageSelectionChat({
     setIsLoadingOrgs(true);
 
     try {
+      // Check if this language has a predefined default organization
+      const defaultOrg = DEFAULT_ORGANIZATIONS[lang.id];
+      if (defaultOrg) {
+        console.log(`[LanguageSelectionChat] Using default org for ${lang.id}: ${defaultOrg}`);
+        onComplete(lang.id, defaultOrg);
+        setStep('complete');
+        setIsLoadingOrgs(false);
+        return;
+      }
+
       const orgs = await getOrganizationsForLanguage(lang.id);
       setOrganizations(orgs);
 
-      // If only one org (or unfoldingWord is the only real option), auto-select
+      // If only one org, auto-select
       if (orgs.length === 1) {
         onComplete(lang.id, orgs[0].id);
         setStep('complete');
@@ -103,7 +120,7 @@ export function LanguageSelectionChat({
       }
     } catch (error) {
       console.error('[LanguageSelectionChat] Failed to fetch orgs:', error);
-      onComplete(lang.id, 'unfoldingWord');
+      onComplete(lang.id, DEFAULT_ORGANIZATIONS[lang.id] || 'unfoldingWord');
       setStep('complete');
     } finally {
       setIsLoadingOrgs(false);
