@@ -559,7 +559,7 @@ function parseWordLinksMarkdown(content: string, defaultReference: string): Tran
 export async function fetchScripture(reference: string): Promise<ScriptureResponse> {
   try {
     const resource = getCurrentResource();
-    const data = await callProxy('fetch-scripture', { reference });
+    const data = await callProxy('fetch-scripture', { reference, resource });
     const content = data.content || data.text || '';
     
     console.log('[translationHelpsApi] Raw scripture content preview:', content.substring(0, 500));
@@ -744,7 +744,7 @@ export async function fetchBook(bookName: string): Promise<BookData> {
       batch.map(async (chapterNum) => {
         try {
           const reference = `${bookName} ${chapterNum}`;
-          const data = await callProxy('fetch-scripture', { reference });
+          const data = await callProxy('fetch-scripture', { reference, resource });
           const content = data.content || data.text || '';
           const { verses } = parseScriptureMarkdown(content, reference, resource);
           return { chapter: chapterNum, verses };
@@ -769,7 +769,7 @@ export async function fetchBook(bookName: string): Promise<BookData> {
     try {
       const resource = getCurrentResource();
       const firstChapterRef = `${bookName} 1`;
-      const firstData = await callProxy('fetch-scripture', { reference: firstChapterRef });
+      const firstData = await callProxy('fetch-scripture', { reference: firstChapterRef, resource });
       const content = firstData.content || '';
       const parsed = parseScriptureMarkdown(content, firstChapterRef, resource);
       translation = parsed.translation;
@@ -808,7 +808,8 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
 
   // Try first chapter to detect if fallback is needed
   const firstRef = `${bookName} 1`;
-  const firstResult = await callProxyWithFallback('fetch-scripture', { reference: firstRef });
+  const resource = getCurrentResource();
+  const firstResult = await callProxyWithFallback('fetch-scripture', { reference: firstRef, resource });
   
   const fallbackInfo = firstResult.fallbackInfo;
   const actualLanguage = fallbackInfo.actualLanguage;
@@ -829,7 +830,6 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
       batch.push(j);
     }
     
-    const resource = getCurrentResource();
     const batchResults = await Promise.all(
       batch.map(async (chapterNum) => {
         try {
@@ -837,6 +837,7 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
           // Use the actual language/org determined from first chapter
           const data = await callProxy('fetch-scripture', { 
             reference, 
+            resource,
             language: actualLanguage, 
             organization: actualOrganization 
           });
