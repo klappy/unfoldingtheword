@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw, Mic, MicOff } from 'lucide-react';
+import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw, Mic, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
@@ -164,7 +164,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                 className={cn(
                   'p-2 rounded-xl transition-all duration-200',
                   isRecording
-                    ? 'bg-destructive text-destructive-foreground animate-pulse'
+                    ? 'bg-primary text-primary-foreground animate-pulse'
                     : isTranscribing
                     ? 'bg-muted text-muted-foreground'
                     : 'bg-muted hover:bg-muted/80 text-muted-foreground'
@@ -173,7 +173,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                 {isTranscribing ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : isRecording ? (
-                  <MicOff className="w-5 h-5" />
+                  <Square className="w-4 h-4 fill-current" />
                 ) : (
                   <Mic className="w-5 h-5" />
                 )}
@@ -344,7 +344,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
               className={cn(
                 'p-2 rounded-xl transition-all duration-200',
                 isRecording
-                  ? 'bg-destructive text-destructive-foreground animate-pulse'
+                  ? 'bg-primary text-primary-foreground animate-pulse'
                   : isTranscribing
                   ? 'bg-muted text-muted-foreground'
                   : 'bg-muted hover:bg-muted/80 text-muted-foreground'
@@ -353,7 +353,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
               {isTranscribing ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : isRecording ? (
-                <MicOff className="w-5 h-5" />
+                <Square className="w-4 h-4 fill-current" />
               ) : (
                 <Mic className="w-5 h-5" />
               )}
