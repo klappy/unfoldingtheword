@@ -194,17 +194,25 @@ export function useMultiAgentChat() {
         ? `${assistantContent}\n\n*${totalCount} resources found — swipe right to explore.*`
         : assistantContent;
 
+      // Build final assistant message
+      const finalAssistantMessage: Message = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: finalContent,
+        timestamp: new Date(),
+        resources: resources.length > 0 ? resources : undefined,
+        isStreaming: false,
+      };
+
       // Update final message with resources and clear streaming flag
       setMessages(prev => prev.map(m => 
-        m.id === assistantMessageId 
-          ? { ...m, content: finalContent, resources: resources.length > 0 ? resources : undefined, isStreaming: false }
-          : m
+        m.id === assistantMessageId ? finalAssistantMessage : m
       ));
       
       return {
         scriptureReference: metadata?.scripture_reference || null,
         searchQuery: metadata?.search_query || null,
-        newMessages: [],
+        newMessages: [finalAssistantMessage], // Return for persistence
       };
     } catch (err) {
       console.error('Chat error:', err);
