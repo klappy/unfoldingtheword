@@ -18,6 +18,18 @@ type Step = 'language' | 'organization' | 'complete';
 // Top gateway languages to show as quick options
 const TOP_LANGUAGES = ['en', 'es-419', 'fr', 'pt-br', 'hi', 'ar', 'id', 'bn'];
 
+// Engaging greetings and action phrases in each language
+const LANGUAGE_PHRASES: Record<string, { greeting: string; action: string }> = {
+  'en': { greeting: 'Welcome!', action: 'Start' },
+  'es-419': { greeting: '¡Bienvenido!', action: 'Comenzar' },
+  'fr': { greeting: 'Bienvenue!', action: 'Commencer' },
+  'pt-br': { greeting: 'Bem-vindo!', action: 'Iniciar' },
+  'hi': { greeting: 'स्वागत है!', action: 'शुरू करें' },
+  'ar': { greeting: 'أهلاً!', action: 'ابدأ' },
+  'id': { greeting: 'Selamat datang!', action: 'Mulai' },
+  'bn': { greeting: 'স্বাগতম!', action: 'শুরু করুন' },
+};
+
 export function LanguageSelectionChat({
   languages,
   getOrganizationsForLanguage,
@@ -150,24 +162,40 @@ export function LanguageSelectionChat({
                         <div key={i} className="h-10 w-20 rounded-full bg-muted animate-pulse" />
                       ))
                     ) : (
-                      topLanguages.map((lang, i) => (
-                        <motion.button
-                          key={lang.id}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: i * 0.05 }}
-                          onClick={() => handleLanguageSelect(lang)}
-                          disabled={isLoadingOrgs}
-                          className={cn(
-                            'px-4 py-2 rounded-full text-sm font-medium transition-all',
-                            'bg-card border border-border hover:bg-primary/10 hover:border-primary/30',
-                            'active:scale-95 disabled:opacity-50',
-                            lang.direction === 'rtl' && 'font-arabic'
-                          )}
-                        >
-                          {lang.nativeName || lang.name}
-                        </motion.button>
-                      ))
+                      topLanguages.map((lang, i) => {
+                        const phrases = LANGUAGE_PHRASES[lang.id];
+                        return (
+                          <motion.button
+                            key={lang.id}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: i * 0.05 }}
+                            onClick={() => handleLanguageSelect(lang)}
+                            disabled={isLoadingOrgs}
+                            className={cn(
+                              'px-5 py-3 rounded-2xl transition-all flex flex-col items-center gap-0.5',
+                              'bg-card border border-border hover:bg-primary/10 hover:border-primary/30',
+                              'active:scale-95 disabled:opacity-50',
+                              lang.direction === 'rtl' && 'font-arabic'
+                            )}
+                          >
+                            {phrases ? (
+                              <>
+                                <span className="text-xs text-muted-foreground leading-tight">
+                                  {phrases.greeting}
+                                </span>
+                                <span className="text-sm font-semibold leading-tight">
+                                  {phrases.action}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-sm font-medium">
+                                {lang.nativeName || lang.name}
+                              </span>
+                            )}
+                          </motion.button>
+                        );
+                      })
                     )}
                   </div>
 
