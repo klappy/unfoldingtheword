@@ -48,6 +48,18 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Auto-expand textarea based on content
+  const adjustTextareaHeight = () => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 160)}px`;
+    }
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isLoading) {
@@ -154,7 +166,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
                 placeholder={t('chat.placeholder')}
                 rows={1}
                 className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground 
-                           resize-none outline-none px-3 py-2 text-sm max-h-32"
+                           resize-none outline-none px-3 py-2 text-sm max-h-40 transition-[height] duration-150 overflow-y-auto"
                 style={{ minHeight: '40px' }}
               />
               <button
@@ -334,7 +346,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
               placeholder={t('chat.placeholder')}
               rows={1}
               className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground 
-                         resize-none outline-none px-3 py-2 text-sm max-h-32"
+                         resize-none outline-none px-3 py-2 text-sm max-h-40 transition-[height] duration-150 overflow-y-auto"
               style={{ minHeight: '40px' }}
             />
             <button
