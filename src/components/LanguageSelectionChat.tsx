@@ -119,8 +119,8 @@ export function LanguageSelectionChat({
   };
 
   return (
-    <div className="flex flex-col h-full pt-8 px-4">
-      <div className="flex-1 flex flex-col max-w-md mx-auto w-full">
+    <div className="flex flex-col h-full px-4 justify-center">
+      <div className="flex flex-col max-w-md mx-auto w-full">
         {/* Welcome message */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -354,7 +354,7 @@ export function LanguageSelectionChat({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
-          className="mt-auto pt-8 pb-4"
+          className="pt-8 pb-4"
         >
           {!showResetConfirm ? (
             <button
