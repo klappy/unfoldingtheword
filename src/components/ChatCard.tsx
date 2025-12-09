@@ -42,6 +42,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, isLoading, 
         variant: 'destructive',
       });
     },
+    language: currentLanguage?.id,
   });
 
   useEffect(() => {

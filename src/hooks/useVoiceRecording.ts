@@ -4,13 +4,18 @@ import { supabase } from '@/integrations/supabase/client';
 interface UseVoiceRecordingOptions {
   onTranscription: (text: string) => void;
   onError?: (error: string) => void;
+  language?: string;
 }
 
-export function useVoiceRecording({ onTranscription, onError }: UseVoiceRecordingOptions) {
+export function useVoiceRecording({ onTranscription, onError, language }: UseVoiceRecordingOptions) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const languageRef = useRef(language);
+  
+  // Keep language ref updated
+  languageRef.current = language;
 
   const startRecording = useCallback(async () => {
     try {
@@ -55,7 +60,7 @@ export function useVoiceRecording({ onTranscription, onError }: UseVoiceRecordin
             const base64Audio = (reader.result as string).split(',')[1];
 
             const { data, error } = await supabase.functions.invoke('transcribe-audio', {
-              body: { audio: base64Audio }
+              body: { audio: base64Audio, language: languageRef.current }
             });
 
             setIsTranscribing(false);

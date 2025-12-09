@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { audio } = await req.json();
+    const { audio, language } = await req.json();
     
     if (!audio) {
       throw new Error('No audio data provided');
@@ -34,6 +34,14 @@ serve(async (req) => {
     const blob = new Blob([bytes], { type: 'audio/webm' });
     formData.append('file', blob, 'audio.webm');
     formData.append('model', 'whisper-1');
+    
+    // Add language hint if provided (ISO-639-1 code)
+    if (language) {
+      // Extract base language code (e.g., "es-419" -> "es")
+      const langCode = language.split('-')[0];
+      formData.append('language', langCode);
+      console.log('Using language hint:', langCode);
+    }
 
     // Use OpenAI Whisper API for transcription
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
