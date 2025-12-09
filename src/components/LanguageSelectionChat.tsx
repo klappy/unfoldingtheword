@@ -359,7 +359,7 @@ export function LanguageSelectionChat({
           {!showResetConfirm ? (
             <button
               onClick={() => setShowResetConfirm(true)}
-              className="mx-auto flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              className="mx-auto flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <RotateCcw className="w-3 h-3" />
               <span>Reset all data</span>
