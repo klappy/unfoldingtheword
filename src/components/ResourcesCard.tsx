@@ -46,13 +46,12 @@ const resourceLabels = {
 const PREVIEW_LENGTH = 150;
 
 // Extract article ID from title for deterministic lookup
+// TW titles are often "term, variant1, variant2" - use first term only
 function extractArticleId(title: string): string {
-  return title
+  const firstTerm = title.split(',')[0].trim();
+  return firstTerm
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .trim();
+    .replace(/[^a-z0-9]/g, '');
 }
 
 interface ExpandableResourceProps {

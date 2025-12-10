@@ -963,70 +963,31 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
 
 export async function fetchTranslationWord(articleId: string): Promise<TranslationWord | null> {
   try {
-    // Use search endpoint with article filter to get full word content
-    // The fetch-translation-word endpoint returns ToC without proper articleId format
-    const data = await callProxy('search', { 
-      query: `${articleId} definition meaning`,
-      resource: 'tw',
-      article: articleId 
-    });
+    // Use the fetch-translation-word endpoint with just the article name
+    const data = await callProxy('fetch-translation-word', { article: articleId });
     
-    console.log('[fetchTranslationWord] Search result for', articleId, ':', data?.hits?.length || 0, 'hits');
+    console.log('[fetchTranslationWord] Result for', articleId, ':', data?.content ? 'has content' : 'no content');
     
-    // Find the best match from search results
-    const hits = data?.hits || [];
-    const exactMatch = hits.find((hit: any) => {
-      const path = hit.path || hit.id || '';
-      const wordFromPath = path.split('/').pop()?.replace('.md', '') || '';
-      return wordFromPath.toLowerCase() === articleId.toLowerCase();
-    });
+    const content = data?.content || '';
     
-    const hit = exactMatch || hits[0];
-    
-    if (!hit) {
-      console.log('[fetchTranslationWord] No results found for', articleId);
+    if (!content || data?.error) {
+      console.log('[fetchTranslationWord] No content found for', articleId);
       return null;
     }
     
-    // Parse content from the search result
-    let rawContent = hit.content || '';
-    let term = articleId;
-    let definition = '';
-    let fullContent = '';
-    
-    // The content is JSON-stringified array of text blocks
-    try {
-      const contentBlocks = JSON.parse(rawContent);
-      if (Array.isArray(contentBlocks)) {
-        fullContent = contentBlocks
-          .map((block: any) => block.text || '')
-          .join('\n')
-          .trim();
-      }
-    } catch {
-      // If not JSON, use as-is
-      fullContent = rawContent;
-    }
-    
     // Extract term from title
-    const titleMatch = fullContent.match(/^#\s+([^\n]+)/m);
-    if (titleMatch) term = titleMatch[1].trim();
+    const titleMatch = content.match(/^#\s+([^\n]+)/m);
+    const term = titleMatch?.[1]?.trim() || articleId;
     
     // Extract definition section
-    const defMatch = fullContent.match(/## Definition:\s*\n\n?([\s\S]*?)(?=\n##|\n\(|$)/);
-    if (defMatch) {
-      definition = defMatch[1].trim();
-    } else {
-      // Fallback: first paragraph after title
-      const firstParaMatch = fullContent.match(/^#[^\n]+\n\n([^\n#]+)/m);
-      if (firstParaMatch) definition = firstParaMatch[1].trim();
-    }
+    const defMatch = content.match(/## Definition:\s*\n\n?([\s\S]*?)(?=\n##|$)/);
+    const definition = defMatch?.[1]?.trim() || '';
     
     return {
-      id: hit.id || articleId,
-      term: term,
-      definition: definition,
-      content: fullContent,
+      id: articleId,
+      term,
+      definition,
+      content, // Full markdown content including Bible References
     };
   } catch (error) {
     console.error('[translationHelpsApi] Error fetching translation word:', error);
