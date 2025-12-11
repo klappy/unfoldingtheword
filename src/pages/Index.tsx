@@ -53,7 +53,7 @@ const Index = () => {
 
   const { scripture, resources, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
-  const { notes, addNote, deleteNote } = useNotes();
+  const { notes, addNote, deleteNote, updateNote, refetchNotes } = useNotes();
 
   // Voice conversation - managed at top level so it persists across card navigation
   const voiceConversation = useVoiceConversation({
@@ -68,14 +68,34 @@ const Index = () => {
     }, [loadScriptureData, navigateToCard]),
     onToolCall: useCallback((toolName: string, args: any) => {
       console.log('[Index] Voice tool call:', toolName, args);
-      // Navigate to resources card when voice AI fetches resources (not scripture)
-      if (toolName !== 'get_scripture_passage') {
+      // Navigate to resources card when voice AI fetches resources (not scripture or notes)
+      if (toolName !== 'get_scripture_passage' && !toolName.includes('note')) {
         navigateToCard('resources');
       }
     }, [navigateToCard]),
     onError: (error) => {
       console.error('[Index] Voice error:', error);
     },
+    // Note management callbacks - navigate to notes card
+    onNoteCreated: useCallback((note) => {
+      console.log('[Index] Voice note created:', note);
+      refetchNotes(); // Refresh notes list
+      navigateToCard('notes');
+    }, [navigateToCard, refetchNotes]),
+    onNoteUpdated: useCallback((id, content) => {
+      console.log('[Index] Voice note updated:', id);
+      refetchNotes();
+      navigateToCard('notes');
+    }, [navigateToCard, refetchNotes]),
+    onNoteDeleted: useCallback((id) => {
+      console.log('[Index] Voice note deleted:', id);
+      refetchNotes();
+      navigateToCard('notes');
+    }, [navigateToCard, refetchNotes]),
+    onNotesAccessed: useCallback(() => {
+      console.log('[Index] Voice reading notes');
+      navigateToCard('notes');
+    }, [navigateToCard]),
   });
 
   // Get target language for AI responses - prefer native name for better localization

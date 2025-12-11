@@ -8,34 +8,35 @@ export function useNotes() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch notes on mount
-  useEffect(() => {
+  // Fetch notes function
+  const fetchNotes = useCallback(async () => {
     if (!deviceId) return;
 
-    const fetchNotes = async () => {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('device_id', deviceId)
-        .order('created_at', { ascending: false });
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('device_id', deviceId)
+      .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching notes:', error);
-      } else {
-        setNotes(data.map(note => ({
-          id: note.id,
-          content: note.content,
-          sourceReference: note.source_reference || undefined,
-          createdAt: new Date(note.created_at),
-          highlighted: note.highlighted || false,
-        })));
-      }
-      setIsLoading(false);
-    };
-
-    fetchNotes();
+    if (error) {
+      console.error('Error fetching notes:', error);
+    } else {
+      setNotes(data.map(note => ({
+        id: note.id,
+        content: note.content,
+        sourceReference: note.source_reference || undefined,
+        createdAt: new Date(note.created_at),
+        highlighted: note.highlighted || false,
+      })));
+    }
+    setIsLoading(false);
   }, [deviceId]);
+
+  // Fetch notes on mount and when deviceId changes
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
 
   const addNote = useCallback(async (content: string, sourceReference?: string) => {
     if (!deviceId) return null;
@@ -106,5 +107,6 @@ export function useNotes() {
     addNote,
     deleteNote,
     updateNote,
+    refetchNotes: fetchNotes,
   };
 }
