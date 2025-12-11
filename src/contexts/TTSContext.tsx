@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,11 +20,38 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   const objectUrlRef = useRef<string | null>(null);
   const { toast } = useToast();
 
+  // Create a persistent audio element to maintain user gesture context
+  useEffect(() => {
+    audioRef.current = new Audio();
+    audioRef.current.addEventListener('ended', () => {
+      setIsPlaying(false);
+      setCurrentId(null);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    });
+    audioRef.current.addEventListener('error', () => {
+      console.error('[TTS] Audio playback error');
+      setIsPlaying(false);
+      setCurrentId(null);
+    });
+    
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+    };
+  }, []);
+
   const stop = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current = null;
+      audioRef.current.currentTime = 0;
     }
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
@@ -67,36 +94,35 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         throw new Error(error.message || 'Failed to generate speech');
       }
       
+      // Clean up previous URL
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+      
       // Create blob from response
       const blob = new Blob([data], { type: 'audio/mpeg' });
       const audioUrl = URL.createObjectURL(blob);
       objectUrlRef.current = audioUrl;
       
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-      
-      audio.onended = () => {
-        setIsPlaying(false);
-        setCurrentId(null);
-        if (objectUrlRef.current) {
-          URL.revokeObjectURL(objectUrlRef.current);
-          objectUrlRef.current = null;
+      // Use the persistent audio element
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.load();
+        
+        // Play with proper error handling
+        try {
+          await audioRef.current.play();
+          setIsPlaying(true);
+        } catch (playError) {
+          console.error('[TTS] Play error:', playError);
+          // For mobile browsers, sometimes we need to try again
+          toast({
+            title: 'Tap to Play',
+            description: 'Tap the play button again to start audio',
+          });
+          setCurrentId(null);
         }
-      };
-      
-      audio.onerror = () => {
-        console.error('[TTS] Audio playback error');
-        setIsPlaying(false);
-        setCurrentId(null);
-        toast({
-          title: 'Playback Error',
-          description: 'Failed to play audio',
-          variant: 'destructive',
-        });
-      };
-      
-      await audio.play();
-      setIsPlaying(true);
+      }
     } catch (err) {
       console.error('[TTS] Error:', err);
       setCurrentId(null);
