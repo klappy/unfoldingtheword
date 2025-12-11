@@ -6,7 +6,8 @@ import {
   formatErrorForSpeech,
 } from '@/utils/voiceResponseFormatter';
 
-const MCP_BASE_URL = 'https://translation-helps-mcp.pages.dev';
+// Use our proxy to avoid CORS issues
+const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translation-helps-proxy`;
 
 export type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'speaking' | 'listening' | 'processing' | 'error';
 
@@ -30,23 +31,32 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
-  // Handle tool calls from the AI
+  // Handle tool calls from the AI - route through proxy to avoid CORS
   const handleToolCall = useCallback(async (toolName: string, args: any): Promise<string> => {
     console.log(`Voice tool call: ${toolName}`, args);
     
     try {
       if (toolName === 'get_scripture_passage') {
-        const response = await fetch(
-          `${MCP_BASE_URL}/api/fetch-scripture?reference=${encodeURIComponent(args.reference)}`
-        );
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'fetch-scripture',
+            params: { reference: args.reference }
+          })
+        });
         
         if (response.ok) {
-          const text = await response.text();
-          options.onScriptureReference?.(args.reference);
-          return formatScriptureForSpeech(text, args.reference);
-        } else {
-          return formatErrorForSpeech('Scripture not found');
+          const data = await response.json();
+          if (data.content) {
+            options.onScriptureReference?.(args.reference);
+            return formatScriptureForSpeech(data.content, args.reference);
+          } else if (data.error) {
+            console.error('Scripture fetch error:', data.error);
+            return formatErrorForSpeech('Scripture not found');
+          }
         }
+        return formatErrorForSpeech('Scripture not found');
       }
       
       if (toolName === 'search_translation_resources') {
@@ -55,8 +65,14 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         
         for (const resourceType of resourceTypes) {
           try {
-            const url = `${MCP_BASE_URL}/api/search?query=${encodeURIComponent(args.query)}&resource=${resourceType}`;
-            const response = await fetch(url);
+            const response = await fetch(PROXY_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                endpoint: 'search',
+                params: { query: args.query, resource: resourceType }
+              })
+            });
             
             if (response.ok) {
               const data = await response.json();
@@ -72,7 +88,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         return formatSearchResultsForSpeech(results);
       }
       
-      return "I'm not sure how to handle that request.";
+      return "I couldn't find any resources for that. Could you try rephrasing your question?";
     } catch (error) {
       console.error('Tool call error:', error);
       return formatErrorForSpeech(String(error));
