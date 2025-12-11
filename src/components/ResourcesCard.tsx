@@ -139,8 +139,11 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
       transition={{ delay: index * 0.05 }}
       className="glass-card rounded-xl overflow-hidden group relative"
     >
-      {/* Action buttons */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5">
+      {/* Action buttons - stop propagation to prevent triggering card expansion */}
+      <div 
+        className="absolute top-3 right-3 z-10 flex items-center gap-0.5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <PlayButton 
           text={displayContent}
           id={`resource-${resource.type}-${index}`}
@@ -148,8 +151,12 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
         />
         <CopyButton text={`${resource.title}\n\n${displayContent}`} />
       </div>
-      <button
+      {/* Make entire card clickable for expansion */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={handleExpand}
+        onKeyDown={(e) => e.key === 'Enter' && handleExpand()}
         className={cn(
           "w-full p-4 text-left transition-colors",
           canExpand && "hover:bg-white/5 cursor-pointer"
@@ -226,7 +233,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
             </div>
           )}
         </div>
-      </button>
+      </div>
       
       <AnimatePresence>
         {isExpanded && (
