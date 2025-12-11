@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Send, Mic, Square, Phone, PhoneOff, Loader2, Volume2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { VoiceStatus } from '@/hooks/useVoiceConversation';
+import { VoiceStatus, VoicePlaybackSpeed, VOICE_PLAYBACK_SPEEDS } from '@/hooks/useVoiceConversation';
 import { useVoiceRecording } from '@/hooks/useVoiceRecording';
 import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface PersistentInputBarProps {
   onSendMessage: (content: string) => void;
@@ -19,6 +25,9 @@ interface PersistentInputBarProps {
   onStartVoice: () => void;
   onEndVoice: () => void;
   onShowVoiceMode: () => void;
+  // Voice playback speed
+  voicePlaybackSpeed: VoicePlaybackSpeed;
+  onVoicePlaybackSpeedChange: (speed: VoicePlaybackSpeed) => void;
   // Reset command handling
   onResetCommand?: () => void;
 }
@@ -35,6 +44,8 @@ export function PersistentInputBar({
   onStartVoice,
   onEndVoice,
   onShowVoiceMode,
+  voicePlaybackSpeed,
+  onVoicePlaybackSpeedChange,
   onResetCommand,
 }: PersistentInputBarProps) {
   const [input, setInput] = useState('');
@@ -125,6 +136,32 @@ export function PersistentInputBar({
                 )}
               </div>
             </button>
+
+            {/* Speed selector */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="text-xs font-medium px-2 py-1 rounded-md transition-colors bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                  title="Playback speed"
+                >
+                  {voicePlaybackSpeed}x
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="min-w-[80px]">
+                {VOICE_PLAYBACK_SPEEDS.map((speed) => (
+                  <DropdownMenuItem
+                    key={speed}
+                    onClick={() => onVoicePlaybackSpeedChange(speed)}
+                    className={cn(
+                      'justify-center cursor-pointer',
+                      voicePlaybackSpeed === speed && 'bg-primary/10 text-primary font-medium'
+                    )}
+                  >
+                    {speed}x
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* End call button */}
             <motion.button
