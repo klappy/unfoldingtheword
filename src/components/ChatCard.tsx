@@ -8,10 +8,10 @@ import { TranslationStrings } from '@/i18n/translations';
 import { useResetSession } from '@/hooks/useResetSession';
 import { useVoiceRecording } from '@/hooks/useVoiceRecording';
 import { useToast } from '@/hooks/use-toast';
+import { useTTS } from '@/contexts/TTSContext';
 import { CopyButton } from '@/components/CopyButton';
 import { ScriptureReferenceText } from '@/components/ScriptureReferenceText';
 import { PlayButton } from '@/components/PlayButton';
-
 interface ChatCardProps {
   messages: Message[];
   onSendMessage: (content: string) => void;
@@ -34,10 +34,18 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { resetSession } = useResetSession();
   const { toast } = useToast();
+  const { speak, stop: stopTTS } = useTTS();
+  const wasVoiceInputRef = useRef(false);
+  const lastProcessedMessageIdRef = useRef<string | null>(null);
 
   const { isRecording, isTranscribing, toggleRecording } = useVoiceRecording({
     onTranscription: (text) => {
       setInput(prev => prev ? `${prev} ${text}` : text);
+    },
+    onAutoSubmit: (text) => {
+      wasVoiceInputRef.current = true;
+      stopTTS(); // Stop any playing TTS
+      onSendMessage(text);
     },
     onError: (error) => {
       toast({
@@ -48,6 +56,26 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
     },
     language: currentLanguage?.id,
   });
+
+  // Auto-play TTS when assistant response completes (voice input only)
+  useEffect(() => {
+    if (!wasVoiceInputRef.current || messages.length === 0) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    
+    // Only trigger for completed assistant messages we haven't processed yet
+    if (
+      lastMessage?.role === 'assistant' && 
+      !lastMessage.isStreaming && 
+      lastMessage.id !== lastProcessedMessageIdRef.current
+    ) {
+      lastProcessedMessageIdRef.current = lastMessage.id;
+      wasVoiceInputRef.current = false;
+      
+      // Auto-play TTS for the response
+      speak(lastMessage.content, `chat-${lastMessage.id}`, currentLanguage?.id);
+    }
+  }, [messages, speak, currentLanguage?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
