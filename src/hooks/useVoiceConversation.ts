@@ -88,14 +88,20 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     const prefs = getResourcePrefs();
     console.log(`[Voice] Using resource prefs:`, prefs);
     
+    // Merge user prefs with any args provided by the AI (AI args take precedence if specified)
+    const mergedParams = {
+      language: args.language || prefs.language,
+      organization: args.organization || prefs.organization,
+      resource: args.resource || prefs.resource,
+    };
+    
     // Notify UI about tool call for parallel lookups
-    options.onToolCall?.(toolName, { ...args, prefs });
+    options.onToolCall?.(toolName, { ...args, ...mergedParams });
     
     try {
+      // ===== SCRIPTURE PASSAGE =====
       if (toolName === 'get_scripture_passage') {
-        // Use resource from args if provided, otherwise use user preference
-        const resource = args.resource || prefs.resource;
-        console.log(`[Voice] Fetching scripture with resource: ${resource}`);
+        console.log(`[Voice] Fetching scripture: ${args.reference} with resource: ${mergedParams.resource}`);
         
         const response = await fetch(PROXY_URL, {
           method: 'POST',
@@ -104,9 +110,9 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             endpoint: 'fetch-scripture',
             params: { 
               reference: args.reference,
-              resource: resource,
-              language: prefs.language,
-              organization: prefs.organization,
+              resource: mergedParams.resource,
+              language: mergedParams.language,
+              organization: mergedParams.organization,
             }
           })
         });
@@ -124,7 +130,39 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         return formatErrorForSpeech('Scripture not found');
       }
       
+      // ===== SEARCH RESOURCES =====
+      if (toolName === 'search_resources') {
+        const params: Record<string, string> = {
+          query: args.query,
+          language: mergedParams.language,
+          organization: mergedParams.organization,
+        };
+        if (args.resource) params.resource = args.resource;
+        if (args.reference) params.reference = args.reference;
+        if (args.article) params.article = args.article;
+        
+        console.log(`[Voice] Searching resources:`, params);
+        
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: 'search', params })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`[Voice] Search results:`, data);
+          if (data.hits && Array.isArray(data.hits) && data.hits.length > 0) {
+            return formatSearchResultsForSpeech(data.hits);
+          }
+        }
+        return `I searched for "${args.query}" but didn't find any matching resources.`;
+      }
+      
+      // ===== TRANSLATION NOTES =====
       if (toolName === 'get_translation_notes') {
+        console.log(`[Voice] Fetching translation notes for: ${args.reference}`);
+        
         const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -132,8 +170,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             endpoint: 'fetch-translation-notes',
             params: { 
               reference: args.reference,
-              language: prefs.language,
-              organization: prefs.organization,
+              language: mergedParams.language,
+              organization: mergedParams.organization,
             }
           })
         });
@@ -141,13 +179,16 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         if (response.ok) {
           const data = await response.json();
           if (data.content) {
-            return `Here are the translation notes for ${args.reference}: ${data.content.substring(0, 1500)}`;
+            return `Here are the translation notes for ${args.reference}: ${data.content.substring(0, 2000)}`;
           }
         }
         return `I couldn't find translation notes for ${args.reference}.`;
       }
       
+      // ===== TRANSLATION QUESTIONS =====
       if (toolName === 'get_translation_questions') {
+        console.log(`[Voice] Fetching translation questions for: ${args.reference}`);
+        
         const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -155,8 +196,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             endpoint: 'fetch-translation-questions',
             params: { 
               reference: args.reference,
-              language: prefs.language,
-              organization: prefs.organization,
+              language: mergedParams.language,
+              organization: mergedParams.organization,
             }
           })
         });
@@ -164,13 +205,45 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         if (response.ok) {
           const data = await response.json();
           if (data.content) {
-            return `Here are the study questions for ${args.reference}: ${data.content.substring(0, 1500)}`;
+            return `Here are the study questions for ${args.reference}: ${data.content.substring(0, 2000)}`;
           }
         }
         return `I couldn't find study questions for ${args.reference}.`;
       }
       
+      // ===== TRANSLATION WORD LINKS =====
+      if (toolName === 'get_translation_word_links') {
+        console.log(`[Voice] Fetching word links for: ${args.reference}`);
+        
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'fetch-translation-word-links',
+            params: { 
+              reference: args.reference,
+              language: mergedParams.language,
+              organization: mergedParams.organization,
+            }
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            return `Here are the important biblical terms in ${args.reference}: ${data.content.substring(0, 1500)}`;
+          } else if (data.links && Array.isArray(data.links)) {
+            const terms = data.links.map((l: any) => l.term || l.word).filter(Boolean).join(', ');
+            return `The verse ${args.reference} contains these important terms: ${terms}`;
+          }
+        }
+        return `I couldn't find word links for ${args.reference}.`;
+      }
+      
+      // ===== TRANSLATION WORD =====
       if (toolName === 'get_translation_word') {
+        console.log(`[Voice] Fetching translation word: ${args.term}`);
+        
         const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -183,12 +256,39 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         if (response.ok) {
           const data = await response.json();
           if (data.content) {
-            return `Here's information about the word "${args.term}": ${data.content.substring(0, 1500)}`;
+            return `Here's information about the word "${args.term}": ${data.content.substring(0, 2000)}`;
           }
         }
         return `I couldn't find information about the word "${args.term}".`;
       }
       
+      // ===== TRANSLATION ACADEMY =====
+      if (toolName === 'get_translation_academy') {
+        console.log(`[Voice] Fetching academy article: ${args.moduleId || args.path}`);
+        
+        const params: Record<string, string> = {};
+        if (args.moduleId) params.moduleId = args.moduleId;
+        if (args.path) params.path = args.path;
+        
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'fetch-translation-academy',
+            params
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            return `Here's the translation academy article: ${data.content.substring(0, 2000)}`;
+          }
+        }
+        return `I couldn't find the translation academy article "${args.moduleId || args.path}".`;
+      }
+      
+      // ===== LEGACY: search_translation_resources (for backward compatibility) =====
       if (toolName === 'search_translation_resources') {
         const resourceTypes = args.resource_types || ['tn', 'tq', 'tw', 'ta'];
         const results: any[] = [];
@@ -203,15 +303,14 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
                 params: { 
                   query: args.query, 
                   resource: resourceType,
-                  language: prefs.language,
-                  organization: prefs.organization,
+                  language: mergedParams.language,
+                  organization: mergedParams.organization,
                 }
               })
             });
             
             if (response.ok) {
               const data = await response.json();
-              console.log(`[Voice] Search ${resourceType} results:`, data);
               if (data.hits && Array.isArray(data.hits) && data.hits.length > 0) {
                 results.push(...data.hits.map((r: any) => ({ ...r, resourceType })));
               }
@@ -225,6 +324,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         return formatSearchResultsForSpeech(results);
       }
       
+      console.warn(`[Voice] Unknown tool: ${toolName}`);
       return "I couldn't find any resources for that. Could you try rephrasing your question?";
     } catch (error) {
       console.error('[Voice] Tool call error:', error);
