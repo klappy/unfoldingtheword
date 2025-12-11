@@ -76,8 +76,16 @@ const Index = () => {
       }
       
       await loadScriptureData(reference);
-      // Don't navigate - let user swipe to see scripture while voice continues
-    }, [loadScriptureData, language, organization, resourcePreferences, setActiveResource]),
+      // Navigate to scripture card when voice AI fetches scripture
+      navigateToCard('scripture');
+    }, [loadScriptureData, language, organization, resourcePreferences, setActiveResource, navigateToCard]),
+    onToolCall: useCallback((toolName: string, args: any) => {
+      console.log('[Index] Voice tool call:', toolName, args);
+      // Navigate to resources card when voice AI fetches resources (not scripture)
+      if (toolName !== 'get_scripture_passage') {
+        navigateToCard('resources');
+      }
+    }, [navigateToCard]),
     onError: (error) => {
       console.error('[Index] Voice error:', error);
     },
