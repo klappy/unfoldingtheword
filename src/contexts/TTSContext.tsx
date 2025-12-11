@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface TTSContextType {
@@ -13,9 +12,6 @@ interface TTSContextType {
 
 const TTSContext = createContext<TTSContextType | null>(null);
 
-// Tiny silent MP3 (base64) to unlock audio on mobile
-const SILENT_MP3 = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+1DEAAAGAAGn9AAAIgAANP8AAARMQVU=';
-
 export function TTSProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +20,6 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const isUnlockedRef = useRef(false);
   const { toast } = useToast();
 
   // Update progress based on audio currentTime
@@ -70,7 +65,8 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     };
     
     const handleError = (e: Event) => {
-      console.error('[TTS] Audio error event:', e);
+      const audio = e.target as HTMLAudioElement;
+      console.error('[TTS] Audio error:', audio.error?.message || 'Unknown error');
       setIsPlaying(false);
       setCurrentId(null);
       setProgress(0);
@@ -106,25 +102,6 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     setProgress(0);
   }, []);
 
-  // Unlock audio on first user interaction
-  const unlockAudio = useCallback(async () => {
-    if (isUnlockedRef.current || !audioRef.current) return;
-    
-    try {
-      // Play silent audio to unlock
-      audioRef.current.src = SILENT_MP3;
-      audioRef.current.volume = 0.01;
-      await audioRef.current.play();
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current.volume = 1;
-      isUnlockedRef.current = true;
-      console.log('[TTS] Audio unlocked successfully');
-    } catch (err) {
-      console.log('[TTS] Could not unlock audio:', err);
-    }
-  }, []);
-
   const speak = useCallback(async (text: string, id: string) => {
     // If clicking the same item that's playing, stop it
     if (currentId === id && isPlaying) {
@@ -134,9 +111,6 @@ export function TTSProvider({ children }: { children: ReactNode }) {
 
     // Stop any current playback
     stop();
-    
-    // Immediately try to unlock audio on user gesture
-    await unlockAudio();
     
     setIsLoading(true);
     setCurrentId(id);
@@ -155,25 +129,36 @@ export function TTSProvider({ children }: { children: ReactNode }) {
 
       console.log('[TTS] Fetching audio for text length:', cleanText.length);
 
-      const { data, error } = await supabase.functions.invoke('text-to-speech', {
-        body: { text: cleanText }
-      });
+      // Use direct fetch for binary response handling
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ text: cleanText }),
+        }
+      );
       
-      if (error) {
-        throw new Error(error.message || 'Failed to generate speech');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `HTTP ${response.status}`);
       }
+      
+      // Get response as blob directly
+      const blob = await response.blob();
+      
+      console.log('[TTS] Audio blob received, size:', blob.size, 'type:', blob.type);
       
       // Clean up previous URL
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
       }
       
-      // Create blob from response
-      const blob = new Blob([data], { type: 'audio/mpeg' });
       const audioUrl = URL.createObjectURL(blob);
       objectUrlRef.current = audioUrl;
-      
-      console.log('[TTS] Audio blob created, size:', blob.size);
       
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
@@ -181,17 +166,26 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         // Wait for audio to be ready
         await new Promise<void>((resolve, reject) => {
           const audio = audioRef.current!;
+          const timeoutId = setTimeout(() => {
+            cleanup();
+            reject(new Error('Audio load timeout'));
+          }, 10000);
           
-          const onCanPlay = () => {
+          const cleanup = () => {
+            clearTimeout(timeoutId);
             audio.removeEventListener('canplaythrough', onCanPlay);
             audio.removeEventListener('error', onError);
+          };
+          
+          const onCanPlay = () => {
+            cleanup();
             resolve();
           };
           
-          const onError = (e: Event) => {
-            audio.removeEventListener('canplaythrough', onCanPlay);
-            audio.removeEventListener('error', onError);
-            reject(new Error('Audio load error'));
+          const onError = () => {
+            cleanup();
+            const errorMsg = audio.error?.message || 'Unknown audio error';
+            reject(new Error(errorMsg));
           };
           
           audio.addEventListener('canplaythrough', onCanPlay);
@@ -199,12 +193,10 @@ export function TTSProvider({ children }: { children: ReactNode }) {
           audio.load();
         });
         
-        console.log('[TTS] Audio loaded, attempting play');
-        
-        // Play the audio
+        console.log('[TTS] Audio loaded, playing...');
         await audioRef.current.play();
         setIsPlaying(true);
-        console.log('[TTS] Audio playing successfully');
+        console.log('[TTS] Audio playing');
       }
     } catch (err) {
       console.error('[TTS] Error:', err);
@@ -217,7 +209,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentId, isPlaying, stop, toast, unlockAudio]);
+  }, [currentId, isPlaying, stop, toast]);
 
   return (
     <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress }}>
