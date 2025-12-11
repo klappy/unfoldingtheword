@@ -963,12 +963,12 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
 
 export async function fetchTranslationWord(articleId: string): Promise<TranslationWord | null> {
   try {
-    // Call proxy directly with ONLY the article param - no language/organization
-    // The fetch-translation-word endpoint only needs the article name
+    // Call proxy directly with ONLY the term param - no language/organization
+    // The fetch-translation-word endpoint uses "term" not "article"
     const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
       body: { 
         endpoint: 'fetch-translation-word', 
-        params: { article: articleId }  // Only article, no other params!
+        params: { term: articleId }  // Use "term" param, not "article"!
       },
     });
     
