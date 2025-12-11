@@ -80,6 +80,22 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     // Stop any current playback
     stop();
     
+    // Create audio element IMMEDIATELY on user interaction to satisfy autoplay policy
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+    const audio = audioRef.current;
+    
+    // Play a silent data URL immediately to "unlock" audio context
+    // This must happen synchronously with user gesture
+    audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+    try {
+      await audio.play();
+      audio.pause();
+    } catch (e) {
+      // Ignore unlock errors
+    }
+    
     setIsLoading(true);
     setCurrentId(id);
     
@@ -121,13 +137,6 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       // Create blob URL for HTMLAudioElement
       const audioUrl = URL.createObjectURL(blob);
       console.log('[TTS] Created blob URL:', audioUrl);
-      
-      // Create or reuse audio element
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-      }
-      
-      const audio = audioRef.current;
       
       // Set up event handlers before setting src
       audio.onloadedmetadata = () => {
