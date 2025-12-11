@@ -4,6 +4,7 @@ import { Resource } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useI18n } from '@/hooks/useI18n';
+import { useVoiceConversation } from '@/hooks/useVoiceConversation';
 import { SwipeContainer } from '@/components/SwipeContainer';
 import { ChatCard } from '@/components/ChatCard';
 import { ScriptureCard } from '@/components/ScriptureCard';
@@ -12,6 +13,7 @@ import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
 import { LanguageSelectionChat } from '@/components/LanguageSelectionChat';
 import { TranslationDialog } from '@/components/TranslationDialog';
+import { FloatingVoiceControls } from '@/components/FloatingVoiceControls';
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
@@ -35,6 +37,7 @@ const Index = () => {
   } = useLanguage();
 
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [showVoiceMode, setShowVoiceMode] = useState(false);
 
   const {
     currentCard,
@@ -51,6 +54,19 @@ const Index = () => {
   const { scripture, resources, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
   const { notes, addNote, deleteNote } = useNotes();
+
+  // Voice conversation - managed at top level so it persists across card navigation
+  const voiceConversation = useVoiceConversation({
+    language: language || 'en',
+    onScriptureReference: useCallback(async (reference: string) => {
+      console.log('[Index] Voice scripture reference:', reference);
+      await loadScriptureData(reference);
+      // Don't navigate - let user swipe to see scripture while voice continues
+    }, [loadScriptureData]),
+    onError: (error) => {
+      console.error('[Index] Voice error:', error);
+    },
+  });
 
   // Get target language for AI responses - prefer native name for better localization
   const targetLanguageName = useMemo(() => {
@@ -244,6 +260,16 @@ const Index = () => {
             hasStaticTranslations={hasStaticTranslations}
             onTranslateUi={translateUiStrings}
             isTranslatingUi={i18nLoading}
+            // Voice mode props
+            showVoiceMode={showVoiceMode}
+            onShowVoiceMode={setShowVoiceMode}
+            voiceStatus={voiceConversation.status}
+            voiceIsAgentSpeaking={voiceConversation.isAgentSpeaking}
+            voiceUserTranscript={voiceConversation.userTranscript}
+            voiceAgentTranscript={voiceConversation.agentTranscript}
+            voiceIsConnected={voiceConversation.isConnected}
+            onStartVoice={voiceConversation.startConversation}
+            onEndVoice={voiceConversation.endConversation}
           />
         );
       case 'scripture':
@@ -350,6 +376,20 @@ const Index = () => {
         onConfirm={confirmTranslation}
         onCancel={cancelTranslation}
       />
+      
+      {/* Floating voice controls - shown when voice is active but not viewing chat */}
+      {currentCard !== 'chat' && (
+        <FloatingVoiceControls
+          status={voiceConversation.status}
+          isAgentSpeaking={voiceConversation.isAgentSpeaking}
+          agentTranscript={voiceConversation.agentTranscript}
+          onEndCall={voiceConversation.endConversation}
+          onExpand={() => {
+            setShowVoiceMode(true);
+            navigateToCard('chat');
+          }}
+        />
+      )}
     </div>
   );
 };

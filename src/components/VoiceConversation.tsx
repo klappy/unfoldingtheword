@@ -1,55 +1,61 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Phone, PhoneOff, Volume2, Loader2 } from 'lucide-react';
-import { useVoiceConversation, VoiceStatus } from '@/hooks/useVoiceConversation';
+import { VoiceStatus } from '@/hooks/useVoiceConversation';
 import { cn } from '@/lib/utils';
 
 interface VoiceConversationProps {
-  language?: string;
-  onScriptureReference?: (reference: string) => void;
+  // Voice state from parent
+  status: VoiceStatus;
+  isAgentSpeaking: boolean;
+  userTranscript: string;
+  agentTranscript: string;
+  isConnected: boolean;
+  onStartConversation: () => void;
+  onEndConversation: () => void;
   onClose?: () => void;
 }
 
-export function VoiceConversation({ language, onScriptureReference, onClose }: VoiceConversationProps) {
+export function VoiceConversation({ 
+  status,
+  isAgentSpeaking,
+  userTranscript,
+  agentTranscript,
+  isConnected,
+  onStartConversation,
+  onEndConversation,
+  onClose,
+}: VoiceConversationProps) {
   const [transcriptHistory, setTranscriptHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
-  
-  const {
-    status,
-    isAgentSpeaking,
-    userTranscript,
-    agentTranscript,
-    startConversation,
-    endConversation,
-    isConnected,
-  } = useVoiceConversation({
-    language,
-    onTranscript: (text, isFinal) => {
-      if (isFinal && text.trim()) {
-        setTranscriptHistory(prev => [...prev, { role: 'user', text }]);
-      }
-    },
-    onAgentResponse: () => {
-      // Streaming response - handled via agentTranscript state
-    },
-    onScriptureReference,
-    onError: (error) => {
-      console.error('Voice error:', error);
-    },
-  });
+  const [lastUserTranscript, setLastUserTranscript] = useState('');
+  const [lastAgentTranscript, setLastAgentTranscript] = useState('');
 
-  // Add completed agent responses to history
+  // Track user transcripts and add to history when complete
   useEffect(() => {
-    if (status === 'connected' && agentTranscript === '' && transcriptHistory.length > 0) {
-      const lastEntry = transcriptHistory[transcriptHistory.length - 1];
-      // If last entry was user, check if we need to add the agent response
-      if (lastEntry?.role === 'user') {
-        // Agent response will be added when it completes
+    if (userTranscript && userTranscript !== lastUserTranscript && status !== 'listening') {
+      // User finished speaking, add to history
+      if (userTranscript.trim()) {
+        setTranscriptHistory(prev => [...prev, { role: 'user', text: userTranscript }]);
       }
+      setLastUserTranscript(userTranscript);
     }
-  }, [status, agentTranscript, transcriptHistory]);
+  }, [userTranscript, status, lastUserTranscript]);
+
+  // Track agent transcripts and add to history when complete
+  useEffect(() => {
+    if (lastAgentTranscript && !agentTranscript && status === 'connected') {
+      // Agent finished speaking, add full transcript to history
+      if (lastAgentTranscript.trim()) {
+        setTranscriptHistory(prev => [...prev, { role: 'assistant', text: lastAgentTranscript }]);
+      }
+      setLastAgentTranscript('');
+    } else if (agentTranscript) {
+      setLastAgentTranscript(agentTranscript);
+    }
+  }, [agentTranscript, status, lastAgentTranscript]);
 
   const handleEndCall = () => {
-    endConversation();
+    onEndConversation();
     onClose?.();
   };
 
@@ -171,7 +177,7 @@ export function VoiceConversation({ language, onScriptureReference, onClose }: V
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={startConversation}
+              onClick={onStartConversation}
               disabled={status === 'connecting'}
               className={cn(
                 'w-16 h-16 rounded-full flex items-center justify-center transition-all',
