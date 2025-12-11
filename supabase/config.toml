@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.translate-ui]
 verify_jwt = false
+
+[functions.transcribe-audio]
+verify_jwt = false
+
+[functions.text-to-speech]
+verify_jwt = false
