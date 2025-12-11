@@ -10,6 +10,10 @@ import {
 const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translation-helps-proxy`;
 
 export type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'speaking' | 'listening' | 'processing' | 'error';
+export type VoicePlaybackSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
+export const VOICE_PLAYBACK_SPEEDS: VoicePlaybackSpeed[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+const VOICE_SPEED_KEY = 'voice-playback-speed';
 
 interface UseVoiceConversationOptions {
   language?: string;
@@ -25,11 +29,24 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const [userTranscript, setUserTranscript] = useState('');
   const [agentTranscript, setAgentTranscript] = useState('');
+  const [playbackSpeed, setPlaybackSpeedState] = useState<VoicePlaybackSpeed>(() => {
+    const saved = localStorage.getItem(VOICE_SPEED_KEY);
+    return saved ? (parseFloat(saved) as VoicePlaybackSpeed) : 1;
+  });
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  // Update playback speed
+  const setPlaybackSpeed = useCallback((speed: VoicePlaybackSpeed) => {
+    setPlaybackSpeedState(speed);
+    localStorage.setItem(VOICE_SPEED_KEY, speed.toString());
+    if (audioElRef.current) {
+      audioElRef.current.playbackRate = speed;
+    }
+  }, []);
 
   // Handle tool calls from the AI - route through proxy to avoid CORS
   const handleToolCall = useCallback(async (toolName: string, args: any): Promise<string> => {
@@ -220,10 +237,12 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       // Set up audio element for remote audio
       audioElRef.current = document.createElement('audio');
       audioElRef.current.autoplay = true;
+      audioElRef.current.playbackRate = playbackSpeed;
       
       pcRef.current.ontrack = (e) => {
         if (audioElRef.current) {
           audioElRef.current.srcObject = e.streams[0];
+          audioElRef.current.playbackRate = playbackSpeed;
         }
       };
       
@@ -342,5 +361,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     endConversation,
     sendTextMessage,
     isConnected: status === 'connected' || status === 'speaking' || status === 'listening' || status === 'processing',
+    playbackSpeed,
+    setPlaybackSpeed,
   };
 }

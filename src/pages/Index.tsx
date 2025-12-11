@@ -397,6 +397,8 @@ const Index = () => {
             setShowVoiceMode(true);
             navigateToCard('chat');
           }}
+          voicePlaybackSpeed={voiceConversation.playbackSpeed}
+          onVoicePlaybackSpeedChange={voiceConversation.setPlaybackSpeed}
           onResetCommand={() => setShowResetConfirm(true)}
         />
       )}
