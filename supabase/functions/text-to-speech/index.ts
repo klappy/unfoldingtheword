@@ -46,12 +46,11 @@ serve(async (req) => {
     const langName = LANGUAGE_NAMES[language.toLowerCase()] || LANGUAGE_NAMES[language.split('-')[0]] || 'the given language';
     const isEnglish = language.toLowerCase().startsWith('en');
     
-    // For non-English, instruct to speak naturally in that language
     const instructions = isEnglish 
       ? 'Speak clearly and naturally with a warm, friendly tone.'
       : `Speak naturally in ${langName} with native pronunciation, accent, and intonation. Use a warm, friendly tone appropriate for the language and culture.`;
     
-    console.log(`[TTS] Generating speech: ${truncatedText.length} chars, voice: ${voice}, lang: ${language}, instructions: ${instructions.substring(0, 50)}...`);
+    console.log(`[TTS] Streaming speech: ${truncatedText.length} chars, voice: ${voice}, lang: ${language}`);
 
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
@@ -74,15 +73,14 @@ serve(async (req) => {
       throw new Error(`TTS API failed: ${response.status}`);
     }
 
-    // Get the full audio content
-    const audioData = await response.arrayBuffer();
-    console.log('[TTS] Successfully generated audio, size:', audioData.byteLength);
+    console.log('[TTS] Streaming response from OpenAI...');
 
-    return new Response(audioData, {
+    // Stream the response body directly - true passthrough streaming
+    return new Response(response.body, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'audio/mpeg',
-        'Content-Length': audioData.byteLength.toString(),
+        'Transfer-Encoding': 'chunked',
       },
     });
 
