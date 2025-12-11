@@ -5,6 +5,7 @@ import { Note } from '@/types';
 import { cn } from '@/lib/utils';
 import { TranslationStrings } from '@/i18n/translations';
 import { CopyButton } from '@/components/CopyButton';
+import { PlayButton } from '@/components/PlayButton';
 
 interface NotesCardProps {
   notes: Note[];
@@ -74,6 +75,7 @@ export function NotesCard({ notes, onAddNote, onDeleteNote, t }: NotesCardProps)
               </p>
               
               <div className="absolute top-3 right-3 flex items-center gap-1">
+                <PlayButton text={note.content} id={`note-${note.id}`} />
                 <CopyButton text={note.content} />
                 <button
                   onClick={() => onDeleteNote(note.id)}

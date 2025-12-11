@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, memo, useState, useLayoutEffect } from 'react';
+import { useEffect, useRef, useCallback, memo, useState, useLayoutEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X, ChevronDown } from 'lucide-react';
 import { ScripturePassage, ScriptureChapter, ScriptureVerse } from '@/types';
@@ -10,6 +10,7 @@ import { VersionSelector } from '@/components/VersionSelector';
 import { ScriptureVersion } from '@/hooks/useLanguage';
 import { cn } from '@/lib/utils';
 import { useVisibleChapters } from '@/hooks/useVisibleChapters';
+import { PlayButton } from '@/components/PlayButton';
 
 interface ScriptureCardProps {
   passage: ScripturePassage | null;
@@ -29,6 +30,11 @@ interface ScriptureCardProps {
 }
 
 // Memoized chapter component to prevent unnecessary re-renders
+// Helper to get chapter text for TTS
+function getChapterText(chapter: ScriptureChapter): string {
+  return chapter.verses.map(v => v.text).join(' ');
+}
+
 const ChapterContent = memo(function ChapterContent({
   chapter,
   bookName,
@@ -40,13 +46,23 @@ const ChapterContent = memo(function ChapterContent({
   selectedVerse: { chapter: number; verse: number } | null;
   onVerseClick: (chapter: number, verseNum: number, e: React.MouseEvent) => void;
 }) {
+  const chapterText = useMemo(() => getChapterText(chapter), [chapter]);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="scripture-text text-lg"
+      className="scripture-text text-lg group"
     >
+      {/* Chapter play button */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-muted-foreground">Chapter {chapter.chapter}</span>
+        <PlayButton 
+          text={chapterText}
+          id={`scripture-ch-${chapter.chapter}`}
+          size="md"
+        />
+      </div>
       {chapter.verses.map((verse, index) => {
         const isSelected = selectedVerse?.chapter === chapter.chapter && selectedVerse?.verse === verse.number;
         

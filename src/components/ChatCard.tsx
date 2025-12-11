@@ -10,6 +10,7 @@ import { useVoiceRecording } from '@/hooks/useVoiceRecording';
 import { useToast } from '@/hooks/use-toast';
 import { CopyButton } from '@/components/CopyButton';
 import { ScriptureReferenceText } from '@/components/ScriptureReferenceText';
+import { PlayButton } from '@/components/PlayButton';
 
 interface ChatCardProps {
   messages: Message[];
@@ -238,11 +239,16 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
                     : 'glass-card ai-message'
                 )}
               >
-                {/* Copy button */}
-                <CopyButton 
-                  text={message.content}
-                  className="absolute top-2 right-2"
-                />
+                {/* Action buttons */}
+                <div className="absolute top-2 right-2 flex items-center gap-0.5">
+                  {message.role === 'assistant' && !message.isStreaming && (
+                    <PlayButton 
+                      text={message.content}
+                      id={`chat-${message.id}`}
+                    />
+                  )}
+                  <CopyButton text={message.content} />
+                </div>
                 
                 <div className="prose prose-sm prose-invert max-w-none pr-6">
                   <ReactMarkdown
