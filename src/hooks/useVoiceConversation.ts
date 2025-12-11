@@ -22,6 +22,7 @@ interface UseVoiceConversationOptions {
   onAgentResponse?: (text: string) => void;
   onError?: (error: string) => void;
   onScriptureReference?: (reference: string) => void;
+  onToolCall?: (toolName: string, args: any) => void; // Callback to notify UI of tool calls for parallel lookups
 }
 
 export function useVoiceConversation(options: UseVoiceConversationOptions = {}) {
@@ -83,12 +84,19 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
 
   // Handle tool calls from the AI - route through proxy to avoid CORS
   const handleToolCall = useCallback(async (toolName: string, args: any): Promise<string> => {
-    console.log(`Voice tool call: ${toolName}`, args);
+    console.log(`[Voice] Tool call: ${toolName}`, args);
     const prefs = getResourcePrefs();
-    console.log(`Using resource prefs:`, prefs);
+    console.log(`[Voice] Using resource prefs:`, prefs);
+    
+    // Notify UI about tool call for parallel lookups
+    options.onToolCall?.(toolName, { ...args, prefs });
     
     try {
       if (toolName === 'get_scripture_passage') {
+        // Use resource from args if provided, otherwise use user preference
+        const resource = args.resource || prefs.resource;
+        console.log(`[Voice] Fetching scripture with resource: ${resource}`);
+        
         const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -96,7 +104,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             endpoint: 'fetch-scripture',
             params: { 
               reference: args.reference,
-              resource: prefs.resource,
+              resource: resource,
               language: prefs.language,
               organization: prefs.organization,
             }
@@ -109,11 +117,76 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             options.onScriptureReference?.(args.reference);
             return formatScriptureForSpeech(data.content, args.reference);
           } else if (data.error) {
-            console.error('Scripture fetch error:', data.error);
+            console.error('[Voice] Scripture fetch error:', data.error);
             return formatErrorForSpeech('Scripture not found');
           }
         }
         return formatErrorForSpeech('Scripture not found');
+      }
+      
+      if (toolName === 'get_translation_notes') {
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'fetch-translation-notes',
+            params: { 
+              reference: args.reference,
+              language: prefs.language,
+              organization: prefs.organization,
+            }
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            return `Here are the translation notes for ${args.reference}: ${data.content.substring(0, 1500)}`;
+          }
+        }
+        return `I couldn't find translation notes for ${args.reference}.`;
+      }
+      
+      if (toolName === 'get_translation_questions') {
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'fetch-translation-questions',
+            params: { 
+              reference: args.reference,
+              language: prefs.language,
+              organization: prefs.organization,
+            }
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            return `Here are the study questions for ${args.reference}: ${data.content.substring(0, 1500)}`;
+          }
+        }
+        return `I couldn't find study questions for ${args.reference}.`;
+      }
+      
+      if (toolName === 'get_translation_word') {
+        const response = await fetch(PROXY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'fetch-translation-word',
+            params: { term: args.term }
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            return `Here's information about the word "${args.term}": ${data.content.substring(0, 1500)}`;
+          }
+        }
+        return `I couldn't find information about the word "${args.term}".`;
       }
       
       if (toolName === 'search_translation_resources') {
@@ -138,23 +211,23 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             
             if (response.ok) {
               const data = await response.json();
-              console.log(`Search ${resourceType} results:`, data);
+              console.log(`[Voice] Search ${resourceType} results:`, data);
               if (data.hits && Array.isArray(data.hits) && data.hits.length > 0) {
                 results.push(...data.hits.map((r: any) => ({ ...r, resourceType })));
               }
             }
           } catch (error) {
-            console.error(`Error searching ${resourceType}:`, error);
+            console.error(`[Voice] Error searching ${resourceType}:`, error);
           }
         }
         
-        console.log(`Total search results: ${results.length}`);
+        console.log(`[Voice] Total search results: ${results.length}`);
         return formatSearchResultsForSpeech(results);
       }
       
       return "I couldn't find any resources for that. Could you try rephrasing your question?";
     } catch (error) {
-      console.error('Tool call error:', error);
+      console.error('[Voice] Tool call error:', error);
       return formatErrorForSpeech(String(error));
     }
   }, [options, getResourcePrefs]);
@@ -266,10 +339,14 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         }
       });
       
-      // Get ephemeral token from our edge function
+      // Get current user preferences
+      const userPrefs = getResourcePrefs();
+      console.log('[Voice] Starting conversation with prefs:', userPrefs);
+      
+      // Get ephemeral token from our edge function with user preferences
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
         'realtime-voice-token',
-        { body: { voice: options.voice || 'alloy', language: options.language } }
+        { body: { voice: options.voice || 'alloy', language: options.language, userPrefs } }
       );
       
       if (tokenError || !tokenData?.client_secret?.value) {
@@ -350,7 +427,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       mediaStreamRef.current?.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
     }
-  }, [status, options, handleDataChannelMessage]);
+  }, [status, options, handleDataChannelMessage, getResourcePrefs]);
 
   // End voice conversation
   const endConversation = useCallback(() => {
