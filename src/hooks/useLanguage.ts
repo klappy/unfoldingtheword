@@ -248,13 +248,22 @@ export function useLanguage() {
 
   // Reorder resource preferences (move to top)
   const setActiveResource = useCallback((resource: ScriptureResource) => {
+    console.log('[useLanguage] setActiveResource called with:', resource);
+    console.log('[useLanguage] Current resourcePreferences:', resourcePreferences);
+    
     // Filter out matching resource (by language, org, AND resource type)
-    const filtered = resourcePreferences.filter(
-      r => !(r.language === resource.language && 
-             r.organization === resource.organization && 
-             r.resource === resource.resource)
-    );
+    // Also filter out legacy entries without resource field from the same lang/org
+    const filtered = resourcePreferences.filter(r => {
+      const sameLanguageOrg = r.language === resource.language && r.organization === resource.organization;
+      const sameResource = r.resource === resource.resource;
+      const isLegacyWithoutResource = !r.resource;
+      
+      // Remove if: same resource OR (same lang/org AND no resource field - legacy cleanup)
+      return !(sameLanguageOrg && (sameResource || isLegacyWithoutResource));
+    });
+    
     const newPrefs = [resource, ...filtered];
+    console.log('[useLanguage] New resourcePreferences:', newPrefs);
     setResourcePreferences(newPrefs);
   }, [resourcePreferences, setResourcePreferences]);
 
@@ -282,11 +291,12 @@ export function useLanguage() {
 function buildDefaultResourcePreferences(langId: string, orgId: string): ScriptureResource[] {
   const prefs: ScriptureResource[] = [];
   
-  // Primary selection
+  // Primary selection - default to ULT
   prefs.push({
     language: langId,
     organization: orgId,
-    displayName: `${orgId} (${langId.toUpperCase()})`,
+    resource: 'ult', // Default to ULT
+    displayName: `Literal Text (ULT)`,
     isFallback: false,
   });
   
@@ -295,7 +305,8 @@ function buildDefaultResourcePreferences(langId: string, orgId: string): Scriptu
     prefs.push({
       language: 'en',
       organization: 'unfoldingWord',
-      displayName: 'unfoldingWord (EN)',
+      resource: 'ult',
+      displayName: 'Literal Text (ULT) (English)',
       isFallback: true,
     });
   }
