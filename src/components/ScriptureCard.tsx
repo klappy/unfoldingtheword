@@ -74,6 +74,7 @@ const ChapterContent = memo(function ChapterContent({
           return (
             <span 
               key={`${chapter.chapter}-${verse.number}-${index}`}
+              data-verse={`${chapter.chapter}:${verse.number}`}
               onClick={(e) => onVerseClick(chapter.chapter, verse.number, e)}
               className={cn(
                 "cursor-pointer transition-all rounded-sm",
@@ -94,6 +95,7 @@ const ChapterContent = memo(function ChapterContent({
         return (
           <span 
             key={`${chapter.chapter}-${verse.number}-${index}`}
+            data-verse={`${chapter.chapter}:${verse.number}`}
             onClick={(e) => onVerseClick(chapter.chapter, verse.number, e)}
             className={cn(
               "cursor-pointer transition-all rounded-sm hover:bg-primary/5",
@@ -191,12 +193,35 @@ export function ScriptureCard({
     // Only scroll when we have complete book data with chapters
     if (!passage?.book?.chapters?.length || !passage.targetChapter) return;
     
-    console.log('[ScriptureCard] Book loaded, scrolling to chapter:', passage.targetChapter);
+    console.log('[ScriptureCard] Book loaded, scrolling to chapter:', passage.targetChapter, 'verse:', passage.targetVerse);
 
     // Use requestAnimationFrame to ensure DOM is painted
     const scrollToTarget = () => {
+      const container = containerRef.current;
+      if (!container) return false;
+      
+      // If we have a specific verse, try to scroll to and select it
+      if (passage.targetVerse) {
+        const verseSelector = `[data-verse="${passage.targetChapter}:${passage.targetVerse}"]`;
+        const verseEl = container.querySelector(verseSelector);
+        
+        if (verseEl) {
+          // Scroll verse into view with some offset from top
+          verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          console.log('[ScriptureCard] Scrolled to verse', passage.targetChapter, ':', passage.targetVerse);
+          
+          // Auto-select the verse to highlight it and filter resources
+          if (onVerseSelect && passage.book?.book) {
+            const reference = `${passage.book.book} ${passage.targetChapter}:${passage.targetVerse}`;
+            onVerseSelect(reference);
+          }
+          return true;
+        }
+      }
+      
+      // Fall back to scrolling to just the chapter
       const targetEl = chapterRefs.current.get(passage.targetChapter!);
-      if (targetEl && containerRef.current) {
+      if (targetEl) {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         console.log('[ScriptureCard] Scrolled to chapter', passage.targetChapter);
         return true;
@@ -217,7 +242,7 @@ export function ScriptureCard({
         }, 50);
       }
     });
-  }, [passage?.book?.chapters?.length, passage?.targetChapter, passage?.reference]);
+  }, [passage?.book?.chapters?.length, passage?.targetChapter, passage?.targetVerse, passage?.reference, onVerseSelect, passage?.book?.book]);
 
   const handleTextSelection = () => {
     const selection = window.getSelection();
