@@ -65,6 +65,8 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const gainNodeRef = useRef<GainNode | null>(null);
+
   const stop = useCallback(() => {
     if (sourceNodeRef.current) {
       try {
@@ -81,10 +83,16 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   const initAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Create gain node for volume control
+      gainNodeRef.current = audioContextRef.current.createGain();
+      gainNodeRef.current.gain.value = 1.0;
+      gainNodeRef.current.connect(audioContextRef.current.destination);
+      console.log('[TTS] AudioContext created, sample rate:', audioContextRef.current.sampleRate);
     }
     // Resume if suspended (required for mobile)
     if (audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume();
+      console.log('[TTS] AudioContext resumed');
     }
     return audioContextRef.current;
   }, []);
@@ -141,17 +149,25 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       console.log('[TTS] Received audio buffer, size:', arrayBuffer.byteLength);
       
       // Decode audio data
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      console.log('[TTS] Decoded audio, duration:', audioBuffer.duration);
+      console.log('[TTS] Decoding audio...');
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+      console.log('[TTS] Decoded audio - duration:', audioBuffer.duration, 'channels:', audioBuffer.numberOfChannels, 'sampleRate:', audioBuffer.sampleRate);
       
       durationRef.current = audioBuffer.duration;
       
       // Create and configure source node
       const sourceNode = audioContext.createBufferSource();
       sourceNode.buffer = audioBuffer;
-      sourceNode.connect(audioContext.destination);
+      
+      // Connect through gain node for volume control
+      if (gainNodeRef.current) {
+        sourceNode.connect(gainNodeRef.current);
+      } else {
+        sourceNode.connect(audioContext.destination);
+      }
       
       sourceNode.onended = () => {
+        console.log('[TTS] Playback ended');
         setIsPlaying(false);
         setCurrentId(null);
         setProgress(0);
@@ -164,7 +180,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       // Start playback
       sourceNode.start(0);
       setIsPlaying(true);
-      console.log('[TTS] Audio playing');
+      console.log('[TTS] Audio started, context state:', audioContext.state);
       
     } catch (err) {
       console.error('[TTS] Error:', err);
