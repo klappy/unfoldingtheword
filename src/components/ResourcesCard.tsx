@@ -95,14 +95,20 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
 
   // Fetch full article content on expand for word/academy types
   const handleExpand = useCallback(async () => {
-    if (!canExpand) return;
+    console.log('[ExpandableResource] handleExpand called, canExpand:', canExpand, 'isExpanded:', isExpanded, 'type:', resource.type);
+    if (!canExpand) {
+      console.log('[ExpandableResource] Cannot expand - canExpand is false');
+      return;
+    }
     
     const newExpanded = !isExpanded;
+    console.log('[ExpandableResource] Setting expanded to:', newExpanded);
     setIsExpanded(newExpanded);
     
     // Only fetch if expanding and we haven't fetched yet
     if (newExpanded && !fullContent && !isLoadingFull) {
       const articleId = extractArticleId(resource.title);
+      console.log('[ExpandableResource] Fetching full content for:', articleId);
       
       if (resource.type === 'translation-word') {
         setIsLoadingFull(true);
@@ -132,6 +138,12 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
     }
   }, [isExpanded, canExpand, fullContent, isLoadingFull, resource.type, resource.title]);
 
+  // Handle click on the main card area
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
+    console.log('[ExpandableResource] Card clicked, target:', (e.target as HTMLElement).tagName, (e.target as HTMLElement).className?.substring(0, 50));
+    handleExpand();
+  }, [handleExpand]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -139,10 +151,17 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
       transition={{ delay: index * 0.05 }}
       className="glass-card rounded-xl overflow-hidden group relative"
     >
-      {/* Action buttons - only capture events when visible (on hover) */}
+      {/* Action buttons - positioned separately, prevent click propagation */}
       <div 
-        className="absolute top-3 right-3 z-10 flex items-center gap-0.5 pointer-events-none group-hover:pointer-events-auto"
-        onClick={(e) => e.stopPropagation()}
+        className="absolute top-3 right-3 z-10 flex items-center gap-0.5"
+        onClick={(e) => {
+          console.log('[ExpandableResource] Action buttons container clicked - stopping propagation');
+          e.stopPropagation();
+        }}
+        onTouchEnd={(e) => {
+          console.log('[ExpandableResource] Action buttons container touched - stopping propagation');
+          e.stopPropagation();
+        }}
       >
         <PlayButton 
           text={displayContent}
@@ -155,7 +174,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
       <div
         role="button"
         tabIndex={0}
-        onClick={handleExpand}
+        onClick={handleCardClick}
         onKeyDown={(e) => e.key === 'Enter' && handleExpand()}
         className={cn(
           "w-full p-4 text-left transition-colors",
