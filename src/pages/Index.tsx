@@ -31,8 +31,8 @@ const Index = () => {
     needsSelection,
     getCurrentLanguage,
     completeSelection,
-    versionPreferences,
-    setActiveVersion,
+    resourcePreferences,
+    setActiveResource,
   } = useLanguage();
 
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
@@ -287,10 +287,10 @@ const Index = () => {
             fallbackState={fallbackState}
             onTranslateRequest={handleTranslateAllRequest}
             isTranslating={isTranslating}
-            versionPreferences={versionPreferences}
-            onVersionSelect={async (version) => {
-              setActiveVersion(version);
-              // Clear and reload scripture with new version
+            resourcePreferences={resourcePreferences}
+            onResourceSelect={async (resource) => {
+              setActiveResource(resource);
+              // Clear and reload scripture with new resource
               if (scripture?.reference) {
                 const ref = scripture.reference;
                 clearScriptureData(); // Clear first to force skeleton
@@ -334,7 +334,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleResourceClick, handleScriptureReferenceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, versionPreferences, setActiveVersion, language, t, hasStaticTranslations, translateUiStrings, i18nLoading, showVoiceMode, voiceConversation, showResetConfirm, handleSendMessage, scrollToResourceType, clearVerseFilter, fallbackState, handleTranslateAllRequest, isTranslating, clearScriptureData]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleResourceClick, handleScriptureReferenceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, resourcePreferences, setActiveResource, language, t, hasStaticTranslations, translateUiStrings, i18nLoading, showVoiceMode, voiceConversation, showResetConfirm, handleSendMessage, scrollToResourceType, clearVerseFilter, fallbackState, handleTranslateAllRequest, isTranslating, clearScriptureData]);
 
   // Show chat-based language selection on first launch or when manually triggered
   if (needsSelection || showLanguageSelector) {

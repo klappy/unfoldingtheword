@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Globe, BookOpen, AlertCircle } from 'lucide-react';
-import { ScriptureVersion } from '@/hooks/useLanguage';
+import { ScriptureResource } from '@/hooks/useLanguage';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
-interface VersionSelectorProps {
+interface ResourceSelectorProps {
   isOpen: boolean;
   onClose: () => void;
-  versionPreferences: ScriptureVersion[];
-  onVersionSelect: (version: ScriptureVersion) => void;
-  currentLanguage: string;
+  resourcePreferences?: ScriptureResource[];
+  onResourceSelect: (resource: ScriptureResource) => void;
+  currentLanguage?: string;
   currentReference?: string;
 }
 
@@ -23,18 +23,18 @@ const SCRIPTURE_RESOURCES = [
   { id: 'udb', name: 'Unlocked Dynamic Bible', description: 'Legacy dynamic translation' },
 ];
 
-interface ResourceAvailability extends ScriptureVersion {
+interface ResourceAvailability extends ScriptureResource {
   isAvailable: boolean;
 }
 
-export function VersionSelector({
+export function ResourceSelector({
   isOpen,
   onClose,
-  versionPreferences,
-  onVersionSelect,
-  currentLanguage,
+  resourcePreferences = [],
+  onResourceSelect,
+  currentLanguage = 'en',
   currentReference,
-}: VersionSelectorProps) {
+}: ResourceSelectorProps) {
   const [availableResources, setAvailableResources] = useState<ResourceAvailability[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -66,7 +66,6 @@ export function VersionSelector({
       }
       
       // If we got content back, consider it available
-      // The API returns content regardless of exact language match
       return !!data?.content || !!data?.markdown;
     } catch {
       return false;
@@ -123,12 +122,12 @@ export function VersionSelector({
         // Get the book from current reference for availability check
         const book = currentReference?.split(' ')[0] || 'John';
         
-        console.log('[VersionSelector] Checking resources for:', { currentLanguage, book });
+        console.log('[ResourceSelector] Checking resources for:', { currentLanguage, book });
         
         // Check availability for each resource in the primary language
         const primaryChecks = SCRIPTURE_RESOURCES.map(async (resource) => {
           const isAvailable = await checkResourceAvailability(currentLanguage, resource.id, book);
-          console.log(`[VersionSelector] ${currentLanguage}/${resource.id}: ${isAvailable ? 'available' : 'not available'}`);
+          console.log(`[ResourceSelector] ${currentLanguage}/${resource.id}: ${isAvailable ? 'available' : 'not available'}`);
           return {
             language: currentLanguage,
             organization: 'unfoldingWord',
@@ -163,11 +162,11 @@ export function VersionSelector({
         
         // Combine and set - filter to only show available resources
         const allResources = [...primaryResults, ...fallbackResults];
-        console.log('[VersionSelector] Available resources:', allResources.filter(r => r.isAvailable).map(r => `${r.language}/${r.resource}`));
+        console.log('[ResourceSelector] Available resources:', allResources.filter(r => r.isAvailable).map(r => `${r.language}/${r.resource}`));
         
         setAvailableResources(allResources);
       } catch (error) {
-        console.error('[VersionSelector] Failed to load resources:', error);
+        console.error('[ResourceSelector] Failed to load resources:', error);
       } finally {
         setIsLoading(false);
       }
@@ -176,22 +175,22 @@ export function VersionSelector({
     loadResources();
   }, [isOpen, currentLanguage, currentReference]);
 
-  const handleVersionClick = (version: ScriptureVersion) => {
-    onVersionSelect(version);
+  const handleResourceClick = (resource: ScriptureResource) => {
+    onResourceSelect(resource);
     onClose();
   };
 
-  const isVersionActive = (version: ScriptureVersion) => {
-    const active = versionPreferences[0];
-    return active?.language === version.language && 
-           active?.organization === version.organization &&
-           active?.resource === version.resource;
+  const isResourceActive = (resource: ScriptureResource) => {
+    const active = resourcePreferences[0];
+    return active?.language === resource.language && 
+           active?.organization === resource.organization &&
+           active?.resource === resource.resource;
   };
 
-  // Group versions by language - only show available resources
-  const primaryResources = availableResources.filter(v => !v.isFallback && v.isAvailable);
-  const fallbackResources = availableResources.filter(v => v.isFallback && v.isAvailable);
-  const unavailablePrimary = availableResources.filter(v => !v.isFallback && !v.isAvailable);
+  // Group resources by language - only show available resources
+  const primaryResources = availableResources.filter(r => !r.isFallback && r.isAvailable);
+  const fallbackResources = availableResources.filter(r => r.isFallback && r.isAvailable);
+  const unavailablePrimary = availableResources.filter(r => !r.isFallback && !r.isAvailable);
 
   return (
     <AnimatePresence>
@@ -221,7 +220,7 @@ export function VersionSelector({
 
             {/* Header */}
             <div className="px-6 pb-4 flex-shrink-0">
-              <h2 className="text-lg font-semibold text-foreground">Scripture Version</h2>
+              <h2 className="text-lg font-semibold text-foreground">Scripture Resource</h2>
               <p className="text-sm text-muted-foreground">
                 Select your preferred translation
               </p>
@@ -248,27 +247,27 @@ export function VersionSelector({
                         </span>
                       </div>
                       <div className="space-y-2">
-                        {primaryResources.map((version) => (
+                        {primaryResources.map((resource) => (
                           <button
-                            key={`${version.language}-${version.resource}`}
-                            onClick={() => handleVersionClick(version)}
+                            key={`${resource.language}-${resource.resource}`}
+                            onClick={() => handleResourceClick(resource)}
                             className={cn(
                               'w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all text-left',
                               'hover:bg-primary/10 active:scale-[0.98]',
-                              isVersionActive(version) && 'bg-primary/10 ring-1 ring-primary/30'
+                              isResourceActive(resource) && 'bg-primary/10 ring-1 ring-primary/30'
                             )}
                           >
                             <div className="flex flex-col gap-0.5">
                               <span className="font-medium text-foreground">
-                                {version.displayName}
+                                {resource.displayName}
                               </span>
-                              {version.description && (
+                              {resource.description && (
                                 <span className="text-xs text-muted-foreground">
-                                  {version.description}
+                                  {resource.description}
                                 </span>
                               )}
                             </div>
-                            {isVersionActive(version) && (
+                            {isResourceActive(resource) && (
                               <Check className="w-5 h-5 text-primary flex-shrink-0" />
                             )}
                           </button>
@@ -305,27 +304,27 @@ export function VersionSelector({
                         </span>
                       </div>
                       <div className="space-y-2">
-                        {fallbackResources.map((version) => (
+                        {fallbackResources.map((resource) => (
                           <button
-                            key={`${version.language}-${version.resource}`}
-                            onClick={() => handleVersionClick(version)}
+                            key={`${resource.language}-${resource.resource}`}
+                            onClick={() => handleResourceClick(resource)}
                             className={cn(
                               'w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all text-left',
                               'hover:bg-muted/50 active:scale-[0.98]',
-                              isVersionActive(version) && 'bg-muted/70 ring-1 ring-border'
+                              isResourceActive(resource) && 'bg-muted/70 ring-1 ring-border'
                             )}
                           >
                             <div className="flex flex-col gap-0.5">
                               <span className="text-foreground">
-                                {version.displayName}
+                                {resource.displayName}
                               </span>
-                              {version.description && (
+                              {resource.description && (
                                 <span className="text-xs text-muted-foreground">
-                                  {version.description}
+                                  {resource.description}
                                 </span>
                               )}
                             </div>
-                            {isVersionActive(version) && (
+                            {isResourceActive(resource) && (
                               <Check className="w-5 h-5 text-primary flex-shrink-0" />
                             )}
                           </button>
