@@ -53,9 +53,9 @@ export function useScriptureData() {
   const hasShownFallbackToast = useRef(false);
   const currentResourceRef = useRef<string>('ult');
 
-  // Get current resource from preferences
+  // Get current resource from preferences - check new key first, then old for backward compatibility
   const getCurrentResourceFromPrefs = (): string => {
-    const prefsJson = localStorage.getItem('bible-study-version-preferences');
+    const prefsJson = localStorage.getItem('bible-study-resource-preferences') || localStorage.getItem('bible-study-version-preferences');
     if (prefsJson) {
       try {
         const prefs = JSON.parse(prefsJson);
