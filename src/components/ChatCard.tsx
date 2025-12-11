@@ -1,23 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw, Mic, Square, Phone, X } from 'lucide-react';
+import { Sparkles, Globe, Languages, Loader2, RotateCcw, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
 import { TranslationStrings } from '@/i18n/translations';
 import { useResetSession } from '@/hooks/useResetSession';
-import { useVoiceRecording } from '@/hooks/useVoiceRecording';
-import { useToast } from '@/hooks/use-toast';
 import { CopyButton } from '@/components/CopyButton';
 import { ScriptureReferenceText } from '@/components/ScriptureReferenceText';
 import { PlayButton } from '@/components/PlayButton';
 import { VoiceConversation } from '@/components/VoiceConversation';
-
 import { VoiceStatus } from '@/hooks/useVoiceConversation';
 
 interface ChatCardProps {
   messages: Message[];
-  onSendMessage: (content: string) => void;
   onResourceClick: (resource: ResourceLink) => void;
   onScriptureClick?: (reference: string) => void;
   isLoading?: boolean;
@@ -37,66 +33,25 @@ interface ChatCardProps {
   voiceIsConnected?: boolean;
   onStartVoice?: () => void;
   onEndVoice?: () => void;
+  // Reset dialog control
+  showResetConfirm?: boolean;
+  onShowResetConfirm?: (show: boolean) => void;
 }
 
 export function ChatCard({ 
-  messages, onSendMessage, onResourceClick, onScriptureClick, isLoading, 
+  messages, onResourceClick, onScriptureClick, isLoading, 
   currentLanguage, onChangeLanguage, t, hasStaticTranslations, onTranslateUi, isTranslatingUi,
   showVoiceMode = false, onShowVoiceMode, voiceStatus = 'idle', voiceIsAgentSpeaking = false,
-  voiceUserTranscript = '', voiceAgentTranscript = '', voiceIsConnected = false, onStartVoice, onEndVoice
+  voiceUserTranscript = '', voiceAgentTranscript = '', voiceIsConnected = false, onStartVoice, onEndVoice,
+  showResetConfirm = false, onShowResetConfirm
 }: ChatCardProps) {
-  const [input, setInput] = useState('');
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { resetSession } = useResetSession();
-  const { toast } = useToast();
-
-  const { isRecording, isTranscribing, toggleRecording } = useVoiceRecording({
-    onTranscription: (text) => {
-      setInput(prev => prev ? `${prev} ${text}` : text);
-    },
-    onError: (error) => {
-      toast({
-        title: 'Voice Error',
-        description: error,
-        variant: 'destructive',
-      });
-    },
-    language: currentLanguage?.id,
-  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  // Auto-expand textarea based on content
-  const adjustTextareaHeight = () => {
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 160)}px`;
-    }
-  };
-
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [input]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim() && !isLoading) {
-      const trimmedInput = input.trim().toLowerCase();
-      // Detect reset command
-      if (trimmedInput === 'reset' || trimmedInput === 'reset all' || trimmedInput === 'clear all data') {
-        setInput('');
-        setShowResetConfirm(true);
-        return;
-      }
-      onSendMessage(input.trim());
-      setInput('');
-    }
-  };
 
   const handleReset = async () => {
     setIsResetting(true);
@@ -115,10 +70,10 @@ export function ChatCard({
     }
   };
 
-  // Empty state with centered input
+  // Empty state - just welcome content, no input (input is in PersistentInputBar)
   if (messages.length === 0) {
     return (
-      <div className="flex flex-col h-full pt-4 relative">
+      <div className="flex flex-col h-full pt-4 pb-24 relative">
         {/* Language button - top right */}
         <div className="absolute top-4 right-4 flex items-center gap-2">
           {/* Translate UI button - show when no static translations */}
@@ -160,7 +115,7 @@ export function ChatCard({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-6"
+            className="text-center"
           >
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-6 glow-primary">
               <Sparkles className="w-8 h-8 text-primary" />
@@ -172,69 +127,6 @@ export function ChatCard({
               {t('chat.welcome.subtitle')}
             </p>
           </motion.div>
-
-          {/* Input directly below intro text */}
-          <form onSubmit={handleSubmit} className="w-full max-w-md">
-            <div className="glass-card rounded-2xl p-2 flex items-end gap-2">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit(e);
-                  }
-                }}
-                placeholder={t('chat.placeholder')}
-                rows={1}
-                className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground 
-                           resize-none outline-none px-3 py-2 text-sm max-h-40 transition-[height] duration-150 overflow-y-auto"
-                style={{ minHeight: '40px' }}
-              />
-              <button
-                type="button"
-                onClick={toggleRecording}
-                disabled={isTranscribing}
-                className={cn(
-                  'p-2 rounded-xl transition-all duration-200',
-                  isRecording
-                    ? 'bg-primary text-primary-foreground animate-pulse-slow'
-                    : isTranscribing
-                    ? 'bg-muted text-muted-foreground'
-                    : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                )}
-              >
-                {isTranscribing ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : isRecording ? (
-                  <Square className="w-4 h-4 fill-current" />
-                ) : (
-                  <Mic className="w-5 h-5" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => onShowVoiceMode?.(true)}
-                className="p-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent transition-all duration-200"
-                title="Voice conversation"
-              >
-                <Phone className="w-5 h-5" />
-              </button>
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading}
-                className={cn(
-                  'p-2 rounded-xl transition-all duration-200',
-                  input.trim() && !isLoading
-                    ? 'bg-primary text-primary-foreground glow-primary'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
-          </form>
         </div>
 
         {/* Voice conversation mode overlay */}
@@ -276,7 +168,7 @@ export function ChatCard({
   }
 
   return (
-    <div className="flex flex-col h-full pt-4">
+    <div className="flex flex-col h-full pt-4 pb-24">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 fade-edges">
         <div className="max-w-2xl mx-auto space-y-6 pt-4">
@@ -410,11 +302,11 @@ export function ChatCard({
                         className="inline-resource text-sm block text-left py-1"
                       >
                         {resource.type === 'scripture' && '📖 '} 
-                        {resource.type === 'note' && '📝 '} 
-                        {resource.type === 'question' && '❓ '} 
-                        {resource.type === 'academy' && '🎓 '} 
+                        {resource.type === 'note' && '📝 '}
+                        {resource.type === 'question' && '❓ '}
                         {resource.type === 'word' && '📚 '}
-                        {resource.title}
+                        {resource.type === 'academy' && '🎓 '}
+                        <span className="underline underline-offset-2">{resource.title}</span>
                       </button>
                     ))}
                   </div>
@@ -422,91 +314,9 @@ export function ChatCard({
               </div>
             </motion.div>
           ))}
-
-          {/* Only show separate loading bubble before streaming starts (initial loading) */}
-          {isLoading && !messages.some(m => m.isStreaming) && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-start"
-            >
-              <div className="glass-card rounded-2xl px-4 py-3">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-accent rounded-full animate-pulse-subtle" />
-                  <span className="w-2 h-2 bg-accent rounded-full animate-pulse-subtle" style={{ animationDelay: '0.2s' }} />
-                  <span className="w-2 h-2 bg-accent rounded-full animate-pulse-subtle" style={{ animationDelay: '0.4s' }} />
-                </div>
-              </div>
-            </motion.div>
-          )}
-
+          
           <div ref={messagesEndRef} />
         </div>
-      </div>
-
-      {/* Input area */}
-      <div className="p-4 pt-0">
-        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
-          <div className="glass-card rounded-2xl p-2 flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
-              placeholder={t('chat.placeholder')}
-              rows={1}
-              className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground 
-                         resize-none outline-none px-3 py-2 text-sm max-h-40 transition-[height] duration-150 overflow-y-auto"
-              style={{ minHeight: '40px' }}
-            />
-            <button
-              type="button"
-              onClick={toggleRecording}
-              disabled={isTranscribing}
-              className={cn(
-                'p-2 rounded-xl transition-all duration-200',
-                isRecording
-                  ? 'bg-primary text-primary-foreground animate-pulse-slow'
-                  : isTranscribing
-                  ? 'bg-muted text-muted-foreground'
-                  : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-              )}
-            >
-              {isTranscribing ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : isRecording ? (
-                <Square className="w-4 h-4 fill-current" />
-              ) : (
-                <Mic className="w-5 h-5" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => onShowVoiceMode?.(true)}
-              className="p-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent transition-all duration-200"
-              title="Voice conversation"
-            >
-              <Phone className="w-5 h-5" />
-            </button>
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className={cn(
-                'p-2 rounded-xl transition-all duration-200',
-                input.trim() && !isLoading
-                  ? 'bg-primary text-primary-foreground glow-primary'
-                  : 'bg-muted text-muted-foreground'
-              )}
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </div>
-        </form>
       </div>
 
       {/* Reset confirmation dialog */}
@@ -532,7 +342,7 @@ export function ChatCard({
             </p>
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => setShowResetConfirm(false)}
+                onClick={() => onShowResetConfirm?.(false)}
                 disabled={isResetting}
                 className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >

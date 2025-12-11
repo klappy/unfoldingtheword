@@ -1,5 +1,4 @@
 import { useCallback, useState, useMemo } from 'react';
-import { AnimatePresence } from 'framer-motion';
 import { Resource } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -13,7 +12,7 @@ import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
 import { LanguageSelectionChat } from '@/components/LanguageSelectionChat';
 import { TranslationDialog } from '@/components/TranslationDialog';
-import { FloatingVoiceControls } from '@/components/FloatingVoiceControls';
+import { PersistentInputBar } from '@/components/PersistentInputBar';
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
@@ -38,6 +37,7 @@ const Index = () => {
 
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const {
     currentCard,
@@ -170,7 +170,7 @@ const Index = () => {
     if (result?.searchQuery) {
       await loadKeywordResources(result.searchQuery);
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, currentConversationId, createConversation, saveMessage, updateConversation]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName]);
 
   // Map ResourceLink type to Resource type for scrolling
   const getResourceTypeFromLink = (linkType: ResourceLink['type']): Resource['type'] | null => {
@@ -250,7 +250,6 @@ const Index = () => {
         return (
           <ChatCard
             messages={messages}
-            onSendMessage={handleSendMessage}
             onResourceClick={handleResourceClick}
             onScriptureClick={handleScriptureReferenceClick}
             isLoading={chatLoading}
@@ -270,6 +269,9 @@ const Index = () => {
             voiceIsConnected={voiceConversation.isConnected}
             onStartVoice={voiceConversation.startConversation}
             onEndVoice={voiceConversation.endConversation}
+            // Reset dialog
+            showResetConfirm={showResetConfirm}
+            onShowResetConfirm={setShowResetConfirm}
           />
         );
       case 'scripture':
@@ -332,7 +334,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleSendMessage, handleResourceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, versionPreferences, setActiveVersion, getOrganizationsForLanguage, language]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleResourceClick, handleScriptureReferenceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, versionPreferences, setActiveVersion, language, t, hasStaticTranslations, translateUiStrings, i18nLoading, showVoiceMode, voiceConversation, showResetConfirm, handleSendMessage, scrollToResourceType, clearVerseFilter, fallbackState, handleTranslateAllRequest, isTranslating, clearScriptureData]);
 
   // Show chat-based language selection on first launch or when manually triggered
   if (needsSelection || showLanguageSelector) {
@@ -352,6 +354,7 @@ const Index = () => {
   }
 
   const batchItemCount = pendingBatch?.length || 0;
+  const showInputBar = currentCard !== 'history';
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
@@ -377,17 +380,24 @@ const Index = () => {
         onCancel={cancelTranslation}
       />
       
-      {/* Floating voice controls - shown when voice is active but not viewing chat */}
-      {currentCard !== 'chat' && (
-        <FloatingVoiceControls
-          status={voiceConversation.status}
-          isAgentSpeaking={voiceConversation.isAgentSpeaking}
-          agentTranscript={voiceConversation.agentTranscript}
-          onEndCall={voiceConversation.endConversation}
-          onExpand={() => {
+      {/* Persistent input bar - shown on all cards except history */}
+      {showInputBar && (
+        <PersistentInputBar
+          onSendMessage={handleSendMessage}
+          isLoading={chatLoading}
+          placeholder={t('chat.placeholder')}
+          language={language || undefined}
+          voiceStatus={voiceConversation.status}
+          voiceIsConnected={voiceConversation.isConnected}
+          voiceIsAgentSpeaking={voiceConversation.isAgentSpeaking}
+          voiceAgentTranscript={voiceConversation.agentTranscript}
+          onStartVoice={voiceConversation.startConversation}
+          onEndVoice={voiceConversation.endConversation}
+          onShowVoiceMode={() => {
             setShowVoiceMode(true);
             navigateToCard('chat');
           }}
+          onResetCommand={() => setShowResetConfirm(true)}
         />
       )}
     </div>
