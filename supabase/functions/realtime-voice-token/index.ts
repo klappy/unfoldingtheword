@@ -281,7 +281,7 @@ serve(async (req) => {
           silence_duration_ms: 800
         },
         temperature: 0.8,
-        max_response_output_tokens: 1024
+        max_response_output_tokens: 4096  // Increased from 1024 to allow reading full chapters
       }),
     });
 
