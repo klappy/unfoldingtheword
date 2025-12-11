@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Note } from '@/types';
+import { Note, NoteType } from '@/types';
 import { useDeviceId } from './useDeviceId';
 
 export function useNotes() {
@@ -28,6 +28,7 @@ export function useNotes() {
         sourceReference: note.source_reference || undefined,
         createdAt: new Date(note.created_at),
         highlighted: note.highlighted || false,
+        noteType: (note.note_type as NoteType) || 'note',
       })));
     }
     setIsLoading(false);
@@ -38,7 +39,7 @@ export function useNotes() {
     fetchNotes();
   }, [fetchNotes]);
 
-  const addNote = useCallback(async (content: string, sourceReference?: string) => {
+  const addNote = useCallback(async (content: string, sourceReference?: string, noteType: NoteType = 'note') => {
     if (!deviceId) return null;
 
     const { data, error } = await supabase
@@ -48,6 +49,7 @@ export function useNotes() {
         content,
         source_reference: sourceReference,
         highlighted: true,
+        note_type: noteType,
       })
       .select()
       .single();
@@ -63,11 +65,20 @@ export function useNotes() {
       sourceReference: data.source_reference || undefined,
       createdAt: new Date(data.created_at),
       highlighted: data.highlighted || false,
+      noteType: (data.note_type as NoteType) || 'note',
     };
 
     setNotes(prev => [newNote, ...prev]);
     return newNote;
   }, [deviceId]);
+
+  // Convenience method for adding bug reports
+  const addBugReport = useCallback(async (errorMessage: string, context?: string) => {
+    const content = context 
+      ? `Error: ${errorMessage}\n\nContext: ${context}`
+      : `Error: ${errorMessage}`;
+    return addNote(content, undefined, 'bug_report');
+  }, [addNote]);
 
   const deleteNote = useCallback(async (id: string) => {
     const { error } = await supabase
@@ -105,6 +116,7 @@ export function useNotes() {
     notes,
     isLoading,
     addNote,
+    addBugReport,
     deleteNote,
     updateNote,
     refetchNotes: fetchNotes,

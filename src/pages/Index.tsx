@@ -52,8 +52,10 @@ const Index = () => {
   } = useSwipeNavigation();
 
   const { scripture, resources, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
-  const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat();
-  const { notes, addNote, deleteNote, updateNote, refetchNotes } = useNotes();
+  const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
+  const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
+    onBugReport: addBugReport,
+  });
 
   // Voice conversation - managed at top level so it persists across card navigation
   const voiceConversation = useVoiceConversation({
@@ -98,6 +100,10 @@ const Index = () => {
       console.log('[Index] Voice reading notes');
       navigateToCard('notes');
     }, [navigateToCard]),
+    onBugReport: useCallback((errorMessage: string, context: string) => {
+      console.log('[Index] Creating bug report from voice error');
+      addBugReport(errorMessage, context);
+    }, [addBugReport]),
   });
 
   // Get target language for AI responses - prefer native name for better localization

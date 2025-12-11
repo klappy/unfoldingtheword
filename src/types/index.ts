@@ -57,12 +57,15 @@ export interface ScripturePassage {
   targetVerse?: number;
 }
 
+export type NoteType = 'note' | 'bug_report';
+
 export interface Note {
   id: string;
   content: string;
   sourceReference?: string;
   createdAt: Date;
   highlighted?: boolean;
+  noteType: NoteType;
 }
 
 export interface Resource {
