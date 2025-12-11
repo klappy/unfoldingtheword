@@ -220,39 +220,29 @@ export function PersistentInputBar({
                 <Mic className="w-5 h-5" />
               )}
             </button>
+            {/* Contextual smart button: Send when has text, Voice call when empty */}
             <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
+              type={input.trim() ? 'submit' : 'button'}
+              onClick={input.trim() ? undefined : onStartVoice}
+              disabled={isLoading || (!input.trim() && voiceStatus === 'connecting')}
               className={cn(
                 'p-2 rounded-xl transition-all duration-200 shrink-0',
                 input.trim() && !isLoading
                   ? 'bg-primary text-primary-foreground glow-primary'
-                  : 'bg-muted text-muted-foreground'
+                  : voiceStatus === 'connecting'
+                  ? 'bg-accent/50 text-accent'
+                  : 'bg-accent/20 hover:bg-accent/30 text-accent'
               )}
             >
-              <Send className="w-5 h-5" />
+              {voiceStatus === 'connecting' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : input.trim() ? (
+                <Send className="w-5 h-5" />
+              ) : (
+                <Phone className="w-5 h-5" />
+              )}
             </button>
           </div>
-          
-          {/* Voice call button */}
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.95 }}
-            onClick={onStartVoice}
-            disabled={voiceStatus === 'connecting'}
-            className={cn(
-              'w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0',
-              voiceStatus === 'connecting'
-                ? 'bg-primary/50'
-                : 'bg-accent/20 hover:bg-accent/30 text-accent'
-            )}
-          >
-            {voiceStatus === 'connecting' ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Phone className="w-5 h-5" />
-            )}
-          </motion.button>
         </form>
       </div>
     </div>
