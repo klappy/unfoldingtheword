@@ -48,9 +48,29 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     }
   }, []);
 
+  // Get current resource preferences from localStorage
+  const getResourcePrefs = useCallback(() => {
+    const prefsJson = localStorage.getItem('bible-study-resource-preferences') || localStorage.getItem('bible-study-version-preferences');
+    if (prefsJson) {
+      try {
+        const prefs = JSON.parse(prefsJson);
+        if (prefs.length > 0) {
+          return {
+            language: prefs[0].language || 'en',
+            organization: prefs[0].organization || 'unfoldingWord',
+            resource: prefs[0].resource || 'ult',
+          };
+        }
+      } catch {}
+    }
+    return { language: 'en', organization: 'unfoldingWord', resource: 'ult' };
+  }, []);
+
   // Handle tool calls from the AI - route through proxy to avoid CORS
   const handleToolCall = useCallback(async (toolName: string, args: any): Promise<string> => {
     console.log(`Voice tool call: ${toolName}`, args);
+    const prefs = getResourcePrefs();
+    console.log(`Using resource prefs:`, prefs);
     
     try {
       if (toolName === 'get_scripture_passage') {
@@ -59,7 +79,12 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             endpoint: 'fetch-scripture',
-            params: { reference: args.reference }
+            params: { 
+              reference: args.reference,
+              resource: prefs.resource,
+              language: prefs.language,
+              organization: prefs.organization,
+            }
           })
         });
         
@@ -87,13 +112,19 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 endpoint: 'search',
-                params: { query: args.query, resource: resourceType }
+                params: { 
+                  query: args.query, 
+                  resource: resourceType,
+                  language: prefs.language,
+                  organization: prefs.organization,
+                }
               })
             });
             
             if (response.ok) {
               const data = await response.json();
-              if (data.hits && Array.isArray(data.hits)) {
+              console.log(`Search ${resourceType} results:`, data);
+              if (data.hits && Array.isArray(data.hits) && data.hits.length > 0) {
                 results.push(...data.hits.map((r: any) => ({ ...r, resourceType })));
               }
             }
@@ -102,6 +133,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
           }
         }
         
+        console.log(`Total search results: ${results.length}`);
         return formatSearchResultsForSpeech(results);
       }
       
@@ -110,7 +142,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       console.error('Tool call error:', error);
       return formatErrorForSpeech(String(error));
     }
-  }, [options]);
+  }, [options, getResourcePrefs]);
 
   // Process incoming messages from the data channel
   const handleDataChannelMessage = useCallback(async (event: MessageEvent) => {
