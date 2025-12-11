@@ -92,6 +92,7 @@ export type Database = {
           device_id: string
           highlighted: boolean | null
           id: string
+          note_type: string
           source_reference: string | null
           updated_at: string
         }
@@ -101,6 +102,7 @@ export type Database = {
           device_id: string
           highlighted?: boolean | null
           id?: string
+          note_type?: string
           source_reference?: string | null
           updated_at?: string
         }
@@ -110,6 +112,7 @@ export type Database = {
           device_id?: string
           highlighted?: boolean | null
           id?: string
+          note_type?: string
           source_reference?: string | null
           updated_at?: string
         }

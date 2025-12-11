@@ -79,5 +79,6 @@ export const mockNotes: Note[] = [
     sourceReference: 'John 3:16',
     createdAt: new Date(Date.now() - 3600000),
     highlighted: true,
+    noteType: 'note',
   },
 ];

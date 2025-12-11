@@ -32,6 +32,8 @@ interface UseVoiceConversationOptions {
   onNoteUpdated?: (id: string, content: string) => void;
   onNoteDeleted?: (id: string) => void;
   onNotesAccessed?: () => void;
+  // Bug report callback for logging errors
+  onBugReport?: (errorMessage: string, context: string) => void;
 }
 
 export function useVoiceConversation(options: UseVoiceConversationOptions = {}) {
@@ -328,6 +330,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
           sourceReference: data.source_reference || undefined,
           createdAt: new Date(data.created_at),
           highlighted: data.highlighted || false,
+          noteType: 'note',
         };
         
         options.onNoteCreated?.(newNote);
@@ -454,6 +457,11 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       return "I couldn't find any resources for that. Could you try rephrasing your question?";
     } catch (error) {
       console.error('[Voice] Tool call error:', error);
+      // Create bug report for tool errors
+      options.onBugReport?.(
+        String(error),
+        `Voice AI tool call failed: ${toolName}\nArguments: ${JSON.stringify(args, null, 2)}`
+      );
       return formatErrorForSpeech(String(error));
     }
   }, [options, getResourcePrefs]);

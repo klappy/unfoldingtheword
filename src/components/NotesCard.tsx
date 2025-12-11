@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { PenLine, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Note } from '@/types';
+import { PenLine, Trash2, ChevronLeft, ChevronRight, Bug, StickyNote } from 'lucide-react';
+import { Note, NoteType } from '@/types';
 import { cn } from '@/lib/utils';
 import { TranslationStrings } from '@/i18n/translations';
 import { CopyButton } from '@/components/CopyButton';
@@ -15,8 +15,11 @@ interface NotesCardProps {
   currentLanguage?: string;
 }
 
+type FilterType = 'all' | 'note' | 'bug_report';
+
 export function NotesCard({ notes, onAddNote, onDeleteNote, t, currentLanguage }: NotesCardProps) {
   const [newNote, setNewNote] = useState('');
+  const [filter, setFilter] = useState<FilterType>('all');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +29,13 @@ export function NotesCard({ notes, onAddNote, onDeleteNote, t, currentLanguage }
     }
   };
 
+  const filteredNotes = filter === 'all' 
+    ? notes 
+    : notes.filter(note => note.noteType === filter);
+
+  const noteCount = notes.filter(n => n.noteType === 'note').length;
+  const bugCount = notes.filter(n => n.noteType === 'bug_report').length;
+
   return (
     <div className="flex flex-col h-full">
       {/* Swipe indicator */}
@@ -34,25 +44,68 @@ export function NotesCard({ notes, onAddNote, onDeleteNote, t, currentLanguage }
       </div>
 
       {/* Header */}
-      <div className="px-6 pb-4">
+      <div className="px-6 pb-2">
         <div className="flex items-center gap-2 text-foreground">
           <PenLine className="w-4 h-4 text-emerald-400" />
           <span className="text-sm font-medium">{t('notes.title')}</span>
         </div>
       </div>
 
+      {/* Filter tabs */}
+      <div className="px-4 pb-3">
+        <div className="flex gap-2 max-w-xl mx-auto">
+          <button
+            onClick={() => setFilter('all')}
+            className={cn(
+              'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-colors',
+              filter === 'all'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+            )}
+          >
+            All ({notes.length})
+          </button>
+          <button
+            onClick={() => setFilter('note')}
+            className={cn(
+              'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5',
+              filter === 'note'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+            )}
+          >
+            <StickyNote className="w-3 h-3" />
+            Notes ({noteCount})
+          </button>
+          <button
+            onClick={() => setFilter('bug_report')}
+            className={cn(
+              'flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5',
+              filter === 'bug_report'
+                ? 'bg-destructive text-destructive-foreground'
+                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+            )}
+          >
+            <Bug className="w-3 h-3" />
+            Bugs ({bugCount})
+          </button>
+        </div>
+      </div>
+
       {/* Notes list */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 fade-edges">
         <div className="max-w-xl mx-auto space-y-3">
-          {notes.length === 0 && (
+          {filteredNotes.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-sm">
-                {t('notes.empty.description')}
+                {filter === 'bug_report' 
+                  ? 'No bug reports yet'
+                  : t('notes.empty.description')}
               </p>
             </div>
           )}
 
-          {notes.map((note, index) => (
+          {filteredNotes.map((note, index) => (
             <motion.div
               key={note.id}
               initial={{ opacity: 0, y: 10 }}
@@ -60,10 +113,20 @@ export function NotesCard({ notes, onAddNote, onDeleteNote, t, currentLanguage }
               transition={{ delay: index * 0.05 }}
               className={cn(
                 'glass-card rounded-xl p-4 group relative',
-                note.highlighted && 'border-primary/30 bg-primary/5'
+                note.noteType === 'bug_report' 
+                  ? 'border-destructive/30 bg-destructive/5'
+                  : note.highlighted && 'border-primary/30 bg-primary/5'
               )}
             >
-              <p className="text-sm text-foreground/90 leading-relaxed pr-16">
+              {/* Bug report badge */}
+              {note.noteType === 'bug_report' && (
+                <div className="flex items-center gap-1.5 text-destructive text-xs font-medium mb-2">
+                  <Bug className="w-3 h-3" />
+                  <span>Bug Report</span>
+                </div>
+              )}
+              
+              <p className="text-sm text-foreground/90 leading-relaxed pr-16 whitespace-pre-wrap">
                 {note.content}
               </p>
               {note.sourceReference && (

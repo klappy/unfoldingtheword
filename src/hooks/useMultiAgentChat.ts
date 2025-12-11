@@ -14,9 +14,13 @@ interface ChatMetadata {
   mcp_resources: any[];
 }
 
+interface UseMultiAgentChatOptions {
+  onBugReport?: (errorMessage: string, context: string) => void;
+}
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/multi-agent-chat`;
 
-export function useMultiAgentChat() {
+export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +222,12 @@ export function useMultiAgentChat() {
       console.error('Chat error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
+      
+      // Create bug report for chat errors
+      options.onBugReport?.(
+        errorMsg,
+        `Text chat error\nMessage: ${content}\nScripture context: ${scriptureContext || 'none'}`
+      );
       
       // Add error message
       const errorMessage: Message = {
