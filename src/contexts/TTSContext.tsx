@@ -31,31 +31,68 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       ? Number(stored) as PlaybackSpeed 
       : 1;
   });
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Use AudioContext for better autoplay support
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const durationRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
+  // Get or create AudioContext (lazy init)
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+    // Resume if suspended (needed after user gesture)
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  }, []);
+
+  // Unlock AudioContext on first user interaction
+  useEffect(() => {
+    const unlock = () => {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+    };
+    
+    document.addEventListener('click', unlock, { once: true });
+    document.addEventListener('touchstart', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    
+    return () => {
+      document.removeEventListener('click', unlock);
+      document.removeEventListener('touchstart', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+  }, [getAudioContext]);
+
   const setPlaybackSpeed = useCallback((speed: PlaybackSpeed) => {
     setPlaybackSpeedState(speed);
     localStorage.setItem(SPEED_STORAGE_KEY, String(speed));
-    // Apply to current audio if playing
-    if (audioRef.current) {
-      audioRef.current.playbackRate = speed;
+    // Apply to current source if playing
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.playbackRate.value = speed;
     }
   }, []);
 
-  // Update progress based on audio element
+  // Update progress based on AudioContext time
   const updateProgress = useCallback(() => {
-    if (audioRef.current && audioRef.current.duration > 0 && !isNaN(audioRef.current.duration)) {
-      const currentProgress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
+    const ctx = audioContextRef.current;
+    if (ctx && durationRef.current > 0 && isPlaying) {
+      const elapsed = (ctx.currentTime - startTimeRef.current) * (sourceNodeRef.current?.playbackRate.value || 1);
+      const currentProgress = Math.min((elapsed / durationRef.current) * 100, 100);
       setProgress(currentProgress);
       
-      if (currentProgress < 100 && isPlaying) {
+      if (currentProgress < 100) {
         animationFrameRef.current = requestAnimationFrame(updateProgress);
       }
-    } else if (isPlaying) {
-      animationFrameRef.current = requestAnimationFrame(updateProgress);
     }
   }, [isPlaying]);
 
@@ -78,10 +115,11 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-        audioRef.current = null;
+      if (sourceNodeRef.current) {
+        try { sourceNodeRef.current.stop(); } catch {}
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -96,22 +134,20 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       abortControllerRef.current = null;
     }
     
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      // Revoke any existing blob URL
-      if (audioRef.current.src.startsWith('blob:')) {
-        URL.revokeObjectURL(audioRef.current.src);
-      }
-      audioRef.current.src = '';
+    // Stop current audio source
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.stop();
+      } catch {}
+      sourceNodeRef.current = null;
     }
+    
     setIsPlaying(false);
     setIsLoading(false);
     setCurrentId(null);
     setProgress(0);
   }, []);
 
-  // Synchronous function to maintain user gesture context
   const speak = useCallback((text: string, id: string, language: string = 'en') => {
     // If clicking the same item that's playing, stop it
     if (currentId === id && isPlaying) {
@@ -121,10 +157,6 @@ export function TTSProvider({ children }: { children: ReactNode }) {
 
     // Stop any current playback
     stop();
-    
-    // CRITICAL: Create audio element synchronously on user gesture
-    const audio = new Audio();
-    audioRef.current = audio;
     
     setIsLoading(true);
     setCurrentId(id);
@@ -146,7 +178,9 @@ export function TTSProvider({ children }: { children: ReactNode }) {
 
     console.log('[TTS] Fetching audio, text length:', cleanText.length, 'language:', language);
 
-    // Fetch audio - audio element already created synchronously
+    // Get AudioContext (will resume if suspended)
+    const audioContext = getAudioContext();
+
     fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
       {
@@ -164,12 +198,12 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         const errorText = await response.text();
         throw new Error(errorText || `HTTP ${response.status}`);
       }
-      return response.blob();
+      return response.arrayBuffer();
     })
-    .then((blob) => {
-      console.log('[TTS] Received blob, size:', blob.size, 'type:', blob.type);
+    .then(async (arrayBuffer) => {
+      console.log('[TTS] Received audio, size:', arrayBuffer.byteLength);
       
-      if (blob.size === 0) {
+      if (arrayBuffer.byteLength === 0) {
         throw new Error('Received empty audio file');
       }
       
@@ -178,58 +212,33 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      const audioUrl = URL.createObjectURL(blob);
-      console.log('[TTS] Created blob URL:', audioUrl);
+      // Decode audio data
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      console.log('[TTS] Decoded audio - duration:', audioBuffer.duration);
       
-      // Set up event handlers
-      audio.onloadeddata = () => {
-        console.log('[TTS] Audio loaded - duration:', audio.duration);
-      };
+      // Create source node
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.playbackRate.value = playbackSpeed;
+      source.connect(audioContext.destination);
       
-      audio.onplay = () => {
-        console.log('[TTS] Audio playing');
-        setIsPlaying(true);
-        setIsLoading(false);
-      };
+      sourceNodeRef.current = source;
+      durationRef.current = audioBuffer.duration;
+      startTimeRef.current = audioContext.currentTime;
       
-      audio.onended = () => {
+      source.onended = () => {
         console.log('[TTS] Playback ended');
         setIsPlaying(false);
         setCurrentId(null);
         setProgress(0);
-        URL.revokeObjectURL(audioUrl);
+        sourceNodeRef.current = null;
       };
       
-      audio.onerror = () => {
-        console.error('[TTS] Audio error:', audio.error);
-        setIsLoading(false);
-        setIsPlaying(false);
-        setCurrentId(null);
-        URL.revokeObjectURL(audioUrl);
-        toast({
-          title: 'TTS Error',
-          description: `Audio playback failed: ${audio.error?.message || 'Unknown error'}`,
-          variant: 'destructive',
-        });
-      };
-      
-      // Set source, speed, and play
-      audio.src = audioUrl;
-      audio.volume = 1.0;
-      audio.playbackRate = playbackSpeed;
-      
+      // Start playback
       console.log('[TTS] Starting playback at', playbackSpeed + 'x speed...');
-      audio.play().catch((err) => {
-        console.error('[TTS] Play failed:', err);
-        setIsLoading(false);
-        setCurrentId(null);
-        URL.revokeObjectURL(audioUrl);
-        toast({
-          title: 'TTS Error',
-          description: 'Could not play audio. Try tapping again.',
-          variant: 'destructive',
-        });
-      });
+      source.start();
+      setIsPlaying(true);
+      setIsLoading(false);
     })
     .catch((err) => {
       if (err.name === 'AbortError') {
@@ -245,7 +254,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         variant: 'destructive',
       });
     });
-  }, [currentId, isPlaying, stop, toast, playbackSpeed]);
+  }, [currentId, isPlaying, stop, toast, playbackSpeed, getAudioContext]);
 
   return (
     <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress, playbackSpeed, setPlaybackSpeed }}>
