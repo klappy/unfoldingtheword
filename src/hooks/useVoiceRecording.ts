@@ -3,11 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface UseVoiceRecordingOptions {
   onTranscription: (text: string) => void;
+  onAutoSubmit?: (text: string) => void;
   onError?: (error: string) => void;
   language?: string;
 }
 
-export function useVoiceRecording({ onTranscription, onError, language }: UseVoiceRecordingOptions) {
+export function useVoiceRecording({ onTranscription, onAutoSubmit, onError, language }: UseVoiceRecordingOptions) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -72,7 +73,11 @@ export function useVoiceRecording({ onTranscription, onError, language }: UseVoi
             }
 
             if (data?.text) {
-              onTranscription(data.text);
+              if (onAutoSubmit) {
+                onAutoSubmit(data.text);
+              } else {
+                onTranscription(data.text);
+              }
             } else if (data?.error) {
               onError?.(data.error);
             }
