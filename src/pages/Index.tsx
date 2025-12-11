@@ -61,24 +61,11 @@ const Index = () => {
     onScriptureReference: useCallback(async (reference: string, resource?: string) => {
       console.log('[Index] Voice scripture reference:', reference, 'resource:', resource);
       
-      // If voice AI specified a resource, update preferences to match
-      if (resource && language && organization) {
-        const currentActive = resourcePreferences[0];
-        if (!currentActive || currentActive.resource !== resource) {
-          console.log('[Index] Updating resource preference from voice:', resource);
-          setActiveResource({
-            language,
-            organization,
-            resource,
-            displayName: resource.toUpperCase(),
-          });
-        }
-      }
-      
-      await loadScriptureData(reference);
+      // Pass resource directly to loadScriptureData - avoids race condition with localStorage
+      await loadScriptureData(reference, resource);
       // Navigate to scripture card when voice AI fetches scripture
       navigateToCard('scripture');
-    }, [loadScriptureData, language, organization, resourcePreferences, setActiveResource, navigateToCard]),
+    }, [loadScriptureData, navigateToCard]),
     onToolCall: useCallback((toolName: string, args: any) => {
       console.log('[Index] Voice tool call:', toolName, args);
       // Navigate to resources card when voice AI fetches resources (not scripture)

@@ -74,8 +74,9 @@ export function useScriptureData() {
   }, []);
 
   // Load book data in background with fallback support
-  const loadBookInBackground = useCallback(async (bookName: string): Promise<{ book: ScriptureBook; fallbackInfo: FallbackInfo | null } | null> => {
-    const resource = getCurrentResourceFromPrefs();
+  // resourceOverride: if provided, use this resource instead of reading from localStorage
+  const loadBookInBackground = useCallback(async (bookName: string, resourceOverride?: string): Promise<{ book: ScriptureBook; fallbackInfo: FallbackInfo | null } | null> => {
+    const resource = resourceOverride || getCurrentResourceFromPrefs();
     const cacheKey = `${bookName}:${resource}`;
     
     // Check if resource changed - clear cache if so
@@ -93,7 +94,7 @@ export function useScriptureData() {
 
     console.log(`[useScriptureData] Loading book in background: ${bookName} (resource: ${resource})`);
     try {
-      const fetchedBook = await fetchBookWithFallback(bookName);
+      const fetchedBook = await fetchBookWithFallback(bookName, resource);
       const bookData: ScriptureBook = {
         book: fetchedBook.book,
         chapters: fetchedBook.chapters,
@@ -108,7 +109,8 @@ export function useScriptureData() {
     }
   }, []);
 
-  const loadScriptureData = useCallback(async (reference: string, retryCount = 0) => {
+  // resourceOverride: if provided, use this resource instead of reading from localStorage
+  const loadScriptureData = useCallback(async (reference: string, resourceOverride?: string, retryCount = 0) => {
     const maxRetries = 3;
     
     // Parse reference FIRST, before any state changes
@@ -137,12 +139,13 @@ export function useScriptureData() {
     setIsResourcesLoading(true);
     setError(null);
 
-    console.log('[useScriptureData] Loading data for:', reference, retryCount > 0 ? `(retry ${retryCount})` : '');
+    const effectiveResource = resourceOverride || getCurrentResourceFromPrefs();
+    console.log('[useScriptureData] Loading data for:', reference, 'resource:', effectiveResource, retryCount > 0 ? `(retry ${retryCount})` : '');
 
     try {
       // Start ALL fetches in parallel - book AND resources
       const [bookData, notes, questions, wordLinks] = await Promise.all([
-        loadBookInBackground(book),
+        loadBookInBackground(book, resourceOverride),
         fetchTranslationNotes(reference).catch(err => {
           console.error('[useScriptureData] Notes fetch failed:', err);
           return [];
@@ -270,7 +273,7 @@ export function useScriptureData() {
       if (retryCount < maxRetries) {
         console.log(`[useScriptureData] Auto-retrying in ${(retryCount + 1) * 1000}ms...`);
         setTimeout(() => {
-          loadScriptureData(reference, retryCount + 1);
+          loadScriptureData(reference, resourceOverride, retryCount + 1);
         }, (retryCount + 1) * 1000);
         return; // Don't set isLoading to false - we're still loading
       }

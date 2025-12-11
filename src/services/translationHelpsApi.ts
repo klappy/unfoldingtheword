@@ -797,7 +797,8 @@ export interface BookDataWithFallback extends BookData {
 }
 
 // Fetch entire book with fallback support
-export async function fetchBookWithFallback(bookName: string): Promise<BookDataWithFallback> {
+// resourceOverride: if provided, use this resource instead of reading from localStorage
+export async function fetchBookWithFallback(bookName: string, resourceOverride?: string): Promise<BookDataWithFallback> {
   const normalizedName = normalizeBookName(bookName);
   const totalChapters = BOOK_CHAPTERS[normalizedName];
   if (!totalChapters) {
@@ -806,12 +807,12 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
 
   const requestedLanguage = getCurrentLanguage();
   const requestedOrganization = getCurrentOrganization();
+  const resource = resourceOverride || getCurrentResource();
 
-  console.log(`[translationHelpsApi] Fetching full book with fallback: ${bookName} (${requestedLanguage}/${requestedOrganization})`);
+  console.log(`[translationHelpsApi] Fetching full book with fallback: ${bookName} (${requestedLanguage}/${requestedOrganization}, resource: ${resource})`);
 
   // Try first chapter to detect if fallback is needed
   const firstRef = `${bookName} 1`;
-  const resource = getCurrentResource();
   const firstResult = await callProxyWithFallback('fetch-scripture', { reference: firstRef, resource });
   
   const fallbackInfo = firstResult.fallbackInfo;
@@ -864,7 +865,6 @@ export async function fetchBookWithFallback(bookName: string): Promise<BookDataW
   let metadata: ScriptureResponse['metadata'] | undefined;
 
   if (chapters.length > 0 && chapters[0].verses.length > 0) {
-    const resource = getCurrentResource();
     const content = firstResult.data.content || '';
     const parsed = parseScriptureMarkdown(content, firstRef, resource);
     translation = parsed.translation;
