@@ -57,7 +57,8 @@ export interface ScripturePassage {
   targetVerse?: number;
 }
 
-export type NoteType = 'note' | 'bug_report';
+export type NoteType = 'note' | 'bug_report' | 'feedback';
+export type ResourceType = 'scripture' | 'tn' | 'tq' | 'tw' | 'ta';
 
 export interface Note {
   id: string;
@@ -66,6 +67,8 @@ export interface Note {
   createdAt: Date;
   highlighted?: boolean;
   noteType: NoteType;
+  resourceType?: ResourceType;
+  resourceId?: string;
 }
 
 export interface Resource {
