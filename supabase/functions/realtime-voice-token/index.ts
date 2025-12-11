@@ -26,6 +26,17 @@ AVAILABLE TOOLS:
 - get_translation_word_links: Get word study links for a verse
 - get_translation_word: Get detailed word definitions and usage
 - get_translation_academy: Get translation training articles
+- create_note: Save a note for the user (confirm content first)
+- get_notes: Read user's saved notes (can filter by book/chapter/verse)
+- update_note: Update an existing note
+- delete_note: Delete a note (confirm first)
+
+NOTES MANAGEMENT:
+- When creating notes, ALWAYS read the content back to confirm before saving
+- Attach scripture references to notes when the user is viewing or discussing a passage
+- You can read previous notes to provide personalized context
+- Filter notes by scope: "all" for everything, "book" for a book, "chapter" for a chapter, "verse" for specific verse(s)
+- When accessing notes, the UI will navigate to show them
 
 VOICE CONVERSATION STYLE:
 - Speak naturally, not like reading a document
@@ -217,6 +228,84 @@ const createVoiceTools = (userPrefs: { language: string; organization: string; r
         }
       },
       required: []
+    }
+  },
+  // NOTE MANAGEMENT TOOLS
+  {
+    type: "function",
+    name: "create_note",
+    description: "Create a new note for the user. IMPORTANT: Read the note content back to the user to confirm before calling this tool. Include scripture references when relevant to help the user find related content later.",
+    parameters: {
+      type: "object",
+      properties: {
+        content: { 
+          type: "string", 
+          description: "The note content to save" 
+        },
+        source_reference: { 
+          type: "string", 
+          description: "Optional scripture reference like 'John 3:16' or 'Romans 8' to associate with the note" 
+        }
+      },
+      required: ["content"]
+    }
+  },
+  {
+    type: "function",
+    name: "get_notes",
+    description: "Retrieve the user's saved notes. Can filter by scope: 'all' for all notes, 'book' for a specific book (e.g., 'John'), 'chapter' for a specific chapter (e.g., 'John 3'), 'verse' for a specific verse (e.g., 'John 3:16'). When reading notes, the app will navigate to show them.",
+    parameters: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: ["all", "book", "chapter", "verse"],
+          description: "Scope level for filtering: 'all' returns all notes, 'book/chapter/verse' filter by the reference parameter"
+        },
+        reference: {
+          type: "string",
+          description: "Scripture reference for filtering (e.g., 'John', 'John 3', 'John 3:16'). Required when scope is not 'all'."
+        },
+        limit: { 
+          type: "number", 
+          description: "Maximum notes to return (default 10)" 
+        }
+      },
+      required: []
+    }
+  },
+  {
+    type: "function",
+    name: "update_note",
+    description: "Update an existing note's content. Read the updated content back to confirm. Requires the note ID which can be obtained from get_notes.",
+    parameters: {
+      type: "object",
+      properties: {
+        note_id: { 
+          type: "string", 
+          description: "The ID of the note to update" 
+        },
+        content: { 
+          type: "string", 
+          description: "The new note content" 
+        }
+      },
+      required: ["note_id", "content"]
+    }
+  },
+  {
+    type: "function",
+    name: "delete_note",
+    description: "Delete a note. Confirm with the user before deleting by reading the note content back. Requires the note ID.",
+    parameters: {
+      type: "object",
+      properties: {
+        note_id: { 
+          type: "string", 
+          description: "The ID of the note to delete" 
+        }
+      },
+      required: ["note_id"]
     }
   }
 ];

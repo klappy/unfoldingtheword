@@ -200,3 +200,43 @@ export function formatErrorForSpeech(error: string): string {
   
   return "Something went wrong while searching. Let me try that again.";
 }
+
+// Format user notes for voice conversation
+export function formatNotesForVoice(notes: any[], scopeReference?: string): string {
+  if (!notes || notes.length === 0) {
+    if (scopeReference) {
+      return `You don't have any notes for ${scopeReference}. Would you like me to create one?`;
+    }
+    return "You don't have any saved notes yet. Would you like me to create one?";
+  }
+  
+  const count = notes.length;
+  let response = '';
+  
+  // Add scope context if filtering
+  if (scopeReference) {
+    response += `You have ${count} note${count > 1 ? 's' : ''} related to ${scopeReference}. `;
+  } else {
+    response += `You have ${count} note${count > 1 ? 's' : ''} in total. `;
+  }
+  
+  // Read up to 3 notes with their references
+  const toRead = notes.slice(0, 3);
+  toRead.forEach((note, i) => {
+    const content = note.content || '';
+    const truncated = content.length > 100 ? content.substring(0, 100) + '...' : content;
+    const ordinal = ['First', 'Second', 'Third'][i];
+    
+    response += `${ordinal}: "${truncated}"`;
+    if (note.source_reference) {
+      response += ` - from ${note.source_reference}`;
+    }
+    response += '. ';
+  });
+  
+  if (count > 3) {
+    response += `There are ${count - 3} more note${count - 3 > 1 ? 's' : ''}. Would you like me to continue?`;
+  }
+  
+  return response;
+}

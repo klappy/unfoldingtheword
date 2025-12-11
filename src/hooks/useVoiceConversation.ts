@@ -4,7 +4,10 @@ import {
   formatScriptureForSpeech,
   formatSearchResultsForSpeech,
   formatErrorForSpeech,
+  formatNotesForVoice,
 } from '@/utils/voiceResponseFormatter';
+import { filterNotesByScope } from '@/lib/referenceScope';
+import { Note } from '@/types';
 
 // Use our proxy to avoid CORS issues
 const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/translation-helps-proxy`;
@@ -14,6 +17,7 @@ export type VoicePlaybackSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
 export const VOICE_PLAYBACK_SPEEDS: VoicePlaybackSpeed[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 const VOICE_SPEED_KEY = 'voice-playback-speed';
+const DEVICE_ID_KEY = 'bible-study-device-id';
 
 interface UseVoiceConversationOptions {
   language?: string;
@@ -21,8 +25,13 @@ interface UseVoiceConversationOptions {
   onTranscript?: (text: string, isFinal: boolean) => void;
   onAgentResponse?: (text: string) => void;
   onError?: (error: string) => void;
-  onScriptureReference?: (reference: string, resource?: string) => void; // Now includes resource
-  onToolCall?: (toolName: string, args: any) => void; // Callback to notify UI of tool calls for parallel lookups
+  onScriptureReference?: (reference: string, resource?: string) => void;
+  onToolCall?: (toolName: string, args: any) => void;
+  // Note management callbacks
+  onNoteCreated?: (note: Note) => void;
+  onNoteUpdated?: (id: string, content: string) => void;
+  onNoteDeleted?: (id: string) => void;
+  onNotesAccessed?: () => void;
 }
 
 export function useVoiceConversation(options: UseVoiceConversationOptions = {}) {
@@ -287,6 +296,122 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
           }
         }
         return `I couldn't find the translation academy article "${args.moduleId || args.path}".`;
+      }
+      
+      // ===== NOTE MANAGEMENT TOOLS =====
+      
+      // CREATE NOTE
+      if (toolName === 'create_note') {
+        const deviceId = localStorage.getItem(DEVICE_ID_KEY);
+        if (!deviceId) return "I can't save notes right now. Please try again.";
+        
+        const { data, error } = await supabase
+          .from('notes')
+          .insert({
+            device_id: deviceId,
+            content: args.content,
+            source_reference: args.source_reference || null,
+            highlighted: true
+          })
+          .select()
+          .single();
+          
+        if (error) {
+          console.error('[Voice] Error creating note:', error);
+          return `I couldn't save that note. ${error.message}`;
+        }
+        
+        // Transform to Note type and notify UI
+        const newNote: Note = {
+          id: data.id,
+          content: data.content,
+          sourceReference: data.source_reference || undefined,
+          createdAt: new Date(data.created_at),
+          highlighted: data.highlighted || false,
+        };
+        
+        options.onNoteCreated?.(newNote);
+        
+        const refText = args.source_reference ? ` with reference to ${args.source_reference}` : '';
+        return `I've saved your note: "${args.content}"${refText}.`;
+      }
+      
+      // GET NOTES (with scope filtering)
+      if (toolName === 'get_notes') {
+        const deviceId = localStorage.getItem(DEVICE_ID_KEY);
+        if (!deviceId) return "I can't access notes right now.";
+        
+        const limit = args.limit || 10;
+        const scope = args.scope || 'all';
+        
+        // Navigate to notes card so user can see notes being read
+        options.onNotesAccessed?.();
+        
+        // Fetch all notes for this device
+        const { data, error } = await supabase
+          .from('notes')
+          .select('*')
+          .eq('device_id', deviceId)
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error('[Voice] Error fetching notes:', error);
+          return "I had trouble retrieving your notes. Please try again.";
+        }
+        
+        if (!data || data.length === 0) {
+          return "You don't have any saved notes yet. Would you like me to create one?";
+        }
+        
+        // Transform to match filter function expectations
+        const transformedNotes = data.map(n => ({
+          ...n,
+          sourceReference: n.source_reference,
+        }));
+        
+        // Apply scope filtering
+        let filteredNotes = transformedNotes;
+        if (scope !== 'all' && args.reference) {
+          filteredNotes = filterNotesByScope(transformedNotes, args.reference);
+        }
+        
+        if (filteredNotes.length === 0) {
+          return `You don't have any notes for ${args.reference}. Would you like to create one?`;
+        }
+        
+        return formatNotesForVoice(filteredNotes.slice(0, limit), args.reference);
+      }
+      
+      // UPDATE NOTE
+      if (toolName === 'update_note') {
+        const { error } = await supabase
+          .from('notes')
+          .update({ content: args.content })
+          .eq('id', args.note_id);
+          
+        if (error) {
+          console.error('[Voice] Error updating note:', error);
+          return `I couldn't update that note. ${error.message}`;
+        }
+        
+        options.onNoteUpdated?.(args.note_id, args.content);
+        return `I've updated the note to: "${args.content}"`;
+      }
+      
+      // DELETE NOTE
+      if (toolName === 'delete_note') {
+        const { error } = await supabase
+          .from('notes')
+          .delete()
+          .eq('id', args.note_id);
+          
+        if (error) {
+          console.error('[Voice] Error deleting note:', error);
+          return `I couldn't delete that note. ${error.message}`;
+        }
+        
+        options.onNoteDeleted?.(args.note_id);
+        return "I've deleted that note for you.";
       }
       
       // ===== LEGACY: search_translation_resources (for backward compatibility) =====
