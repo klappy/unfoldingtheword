@@ -47,8 +47,8 @@ If someone seems distressed, respond with warmth, search for comforting scriptur
 LANGUAGE:
 Match the user's language naturally.`;
 
-// Tool definitions for OpenAI Realtime API
-const voiceTools = [
+// Tool definitions for OpenAI Realtime API - includes user preferences as parameters
+const createVoiceTools = (userPrefs: { language: string; organization: string; resource: string }) => [
   {
     type: "function",
     name: "search_translation_resources",
@@ -72,16 +72,66 @@ const voiceTools = [
   {
     type: "function",
     name: "get_scripture_passage",
-    description: "Get the text of a scripture passage to read aloud to the user. Tell the user you're fetching the passage.",
+    description: `Get the text of a scripture passage. The user's preferred scripture resource is "${userPrefs.resource}" (options: ult=Literal Translation, ust=Simplified Translation). Always use this tool when the user asks about a Bible verse or passage.`,
     parameters: {
       type: "object",
       properties: {
         reference: { 
           type: "string", 
           description: "Scripture reference like 'John 3:16' or 'Romans 8:1-4'" 
+        },
+        resource: {
+          type: "string",
+          enum: ["ult", "ust"],
+          description: `Scripture resource to use. Default: "${userPrefs.resource}". ult=Literal Translation, ust=Simplified Translation`
         }
       },
       required: ["reference"]
+    }
+  },
+  {
+    type: "function",
+    name: "get_translation_notes",
+    description: "Get translation notes for a specific scripture reference. These explain translation decisions and cultural context.",
+    parameters: {
+      type: "object",
+      properties: {
+        reference: { 
+          type: "string", 
+          description: "Scripture reference like 'John 3:16' or 'Romans 8'" 
+        }
+      },
+      required: ["reference"]
+    }
+  },
+  {
+    type: "function",
+    name: "get_translation_questions",
+    description: "Get study questions for a scripture passage to help users engage with the text.",
+    parameters: {
+      type: "object",
+      properties: {
+        reference: { 
+          type: "string", 
+          description: "Scripture reference like 'John 3:16' or 'Romans 8'" 
+        }
+      },
+      required: ["reference"]
+    }
+  },
+  {
+    type: "function",
+    name: "get_translation_word",
+    description: "Get detailed information about a translation word term - includes definition, translation suggestions, and Bible references.",
+    parameters: {
+      type: "object",
+      properties: {
+        term: { 
+          type: "string", 
+          description: "The translation word term ID or name (e.g., 'love', 'faith', 'grace')" 
+        }
+      },
+      required: ["term"]
     }
   }
 ];
@@ -98,13 +148,28 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY is not set');
     }
 
-    const { voice = 'alloy', language } = await req.json();
+    const { voice = 'alloy', language, userPrefs } = await req.json();
+
+    // Get user preferences with defaults
+    const prefs = {
+      language: userPrefs?.language || language || 'en',
+      organization: userPrefs?.organization || 'unfoldingWord',
+      resource: userPrefs?.resource || 'ult',
+    };
+
+    console.log('[Voice] Creating session with user prefs:', prefs);
 
     // Add language instruction if specified
     let systemPrompt = VOICE_SYSTEM_PROMPT;
-    if (language && language !== 'en') {
-      systemPrompt += `\n\nIMPORTANT: The user's preferred language is ${language}. Respond naturally in this language.`;
+    if (prefs.language && prefs.language !== 'en') {
+      systemPrompt += `\n\nIMPORTANT: The user's preferred language is ${prefs.language}. Respond naturally in this language.`;
     }
+    
+    // Add resource preference hint
+    systemPrompt += `\n\nUSER PREFERENCES: The user prefers the "${prefs.resource}" scripture resource (${prefs.resource === 'ust' ? 'Simplified Translation' : 'Literal Translation'}). Use this when fetching scripture unless they specify otherwise.`;
+
+    // Create tools with user preferences baked in
+    const voiceTools = createVoiceTools(prefs);
 
     // Request an ephemeral token from OpenAI with our voice-optimized configuration
     const response = await fetch("https://api.openai.com/v1/realtime/sessions", {
