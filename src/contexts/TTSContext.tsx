@@ -8,6 +8,7 @@ interface TTSContextType {
   isPlaying: boolean;
   isLoading: boolean;
   currentId: string | null;
+  progress: number; // 0-100
 }
 
 const TTSContext = createContext<TTSContextType | null>(null);
@@ -16,9 +17,39 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const { toast } = useToast();
+
+  // Update progress based on audio currentTime
+  const updateProgress = useCallback(() => {
+    if (audioRef.current && audioRef.current.duration > 0) {
+      const currentProgress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
+      setProgress(currentProgress);
+    }
+    if (isPlaying) {
+      animationFrameRef.current = requestAnimationFrame(updateProgress);
+    }
+  }, [isPlaying]);
+
+  // Start/stop progress tracking
+  useEffect(() => {
+    if (isPlaying) {
+      animationFrameRef.current = requestAnimationFrame(updateProgress);
+    } else {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      setProgress(0);
+    }
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isPlaying, updateProgress]);
 
   // Create a persistent audio element to maintain user gesture context
   useEffect(() => {
@@ -26,6 +57,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     audioRef.current.addEventListener('ended', () => {
       setIsPlaying(false);
       setCurrentId(null);
+      setProgress(0);
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
@@ -35,6 +67,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       console.error('[TTS] Audio playback error');
       setIsPlaying(false);
       setCurrentId(null);
+      setProgress(0);
     });
     
     return () => {
@@ -59,6 +92,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     }
     setIsPlaying(false);
     setCurrentId(null);
+    setProgress(0);
   }, []);
 
   const speak = useCallback(async (text: string, id: string) => {
@@ -137,7 +171,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   }, [currentId, isPlaying, stop, toast]);
 
   return (
-    <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId }}>
+    <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress }}>
       {children}
     </TTSContext.Provider>
   );

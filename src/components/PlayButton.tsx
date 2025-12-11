@@ -9,12 +9,53 @@ interface PlayButtonProps {
   size?: 'sm' | 'md';
 }
 
+// Circular progress ring component
+function ProgressRing({ progress, size }: { progress: number; size: number }) {
+  const strokeWidth = 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (progress / 100) * circumference;
+
+  return (
+    <svg
+      className="absolute inset-0 -rotate-90"
+      width={size}
+      height={size}
+    >
+      {/* Background circle */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        className="text-primary/20"
+      />
+      {/* Progress circle */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        className="text-primary transition-[stroke-dashoffset] duration-100"
+      />
+    </svg>
+  );
+}
+
 export function PlayButton({ text, id, className, size = 'sm' }: PlayButtonProps) {
-  const { speak, isPlaying, isLoading, currentId } = useTTS();
+  const { speak, isPlaying, isLoading, currentId, progress } = useTTS();
   const isActive = currentId === id;
   
   const iconSize = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4';
-  const buttonSize = size === 'sm' ? 'p-1.5' : 'p-2';
+  const buttonSize = size === 'sm' ? 'w-7 h-7' : 'w-8 h-8';
+  const ringSize = size === 'sm' ? 28 : 32;
   
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -27,22 +68,30 @@ export function PlayButton({ text, id, className, size = 'sm' }: PlayButtonProps
       disabled={isLoading && isActive}
       className={cn(
         buttonSize,
-        'rounded-lg transition-all duration-200',
+        'relative rounded-lg transition-all duration-200 flex items-center justify-center',
         'opacity-0 group-hover:opacity-100 focus:opacity-100',
         'hover:bg-primary/10 text-muted-foreground hover:text-primary',
-        isActive && isPlaying && 'opacity-100 text-primary bg-primary/10',
+        isActive && isPlaying && 'opacity-100 text-primary',
         isActive && isLoading && 'opacity-100',
         className
       )}
       title={isActive && isPlaying ? 'Stop' : 'Play'}
     >
-      {isLoading && isActive ? (
-        <Loader2 className={cn(iconSize, 'animate-spin')} />
-      ) : isPlaying && isActive ? (
-        <Square className={cn(iconSize, 'fill-current')} />
-      ) : (
-        <Volume2 className={iconSize} />
+      {/* Progress ring when playing */}
+      {isActive && isPlaying && (
+        <ProgressRing progress={progress} size={ringSize} />
       )}
+      
+      {/* Icon */}
+      <span className="relative z-10">
+        {isLoading && isActive ? (
+          <Loader2 className={cn(iconSize, 'animate-spin')} />
+        ) : isPlaying && isActive ? (
+          <Square className={cn(iconSize, 'fill-current')} />
+        ) : (
+          <Volume2 className={iconSize} />
+        )}
+      </span>
     </button>
   );
 }
