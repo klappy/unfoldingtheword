@@ -153,6 +153,9 @@ export function LanguageSelectionChat({
                 <p className="text-sm text-foreground leading-relaxed">
                   Welcome! I'm your Bible study assistant. Let's start by choosing your preferred language for resources.
                 </p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-2 italic">
+                  💡 Tip: You can speak in English while reviewing translations in another language—perfect for translation checking!
+                </p>
               </div>
             </div>
           </div>

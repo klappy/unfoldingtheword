@@ -9,6 +9,7 @@ export interface TranslationStrings {
   'chat.welcome.title': string;
   'chat.welcome.subtitle': string;
   'chat.welcome.hint': string;
+  'chat.welcome.reviewTip': string;
   'chat.changeLanguage': string;
   'chat.translateUi': string;
   
@@ -96,6 +97,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.title': 'Begin Your Study',
     'chat.welcome.subtitle': 'Ask about any passage, topic, or word. Swipe left to explore scripture and resources.',
     'chat.welcome.hint': 'Try: "Romans 3" or "What does justification mean?"',
+    'chat.welcome.reviewTip': 'Tip: You can speak in English while reviewing translations in another language—perfect for translation checking!',
     'chat.changeLanguage': 'Change language',
     'chat.translateUi': 'Translate UI',
     
@@ -174,6 +176,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.title': 'Comienza Tu Estudio',
     'chat.welcome.subtitle': 'Pregunta sobre cualquier pasaje, tema o palabra. Desliza a la izquierda para explorar las Escrituras y los recursos.',
     'chat.welcome.hint': 'Intenta: "Romanos 3" o "¿Qué significa justificación?"',
+    'chat.welcome.reviewTip': 'Consejo: Puedes hablar en inglés mientras revisas traducciones en otro idioma—¡perfecto para verificar traducciones!',
     'chat.changeLanguage': 'Cambiar idioma',
     'chat.translateUi': 'Traducir interfaz',
     
@@ -252,6 +255,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.title': 'Assistente de Tradução Bíblica',
     'chat.welcome.subtitle': 'Pergunte sobre qualquer passagem das Escrituras para começar',
     'chat.welcome.hint': 'Tente: "Romanos 3" ou "O que significa justificação?"',
+    'chat.welcome.reviewTip': 'Dica: Você pode falar em inglês enquanto revisa traduções em outro idioma—perfeito para verificação de traduções!',
     'chat.changeLanguage': 'Mudar idioma',
     'chat.translateUi': 'Traduzir interface',
     
@@ -330,6 +334,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.title': 'Assistant de Traduction Biblique',
     'chat.welcome.subtitle': 'Posez une question sur un passage des Écritures pour commencer',
     'chat.welcome.hint': 'Essayez : "Romains 3" ou "Que signifie justification ?"',
+    'chat.welcome.reviewTip': 'Astuce : Vous pouvez parler en anglais tout en révisant des traductions dans une autre langue—parfait pour la vérification des traductions !',
     'chat.changeLanguage': 'Changer de langue',
     'chat.translateUi': 'Traduire l\'interface',
     
@@ -408,6 +413,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.title': 'बाइबिल अनुवाद सहायक',
     'chat.welcome.subtitle': 'शुरू करने के लिए किसी भी पवित्रशास्त्र के अंश के बारे में पूछें',
     'chat.welcome.hint': 'कोशिश करें: "रोमियों 3" या "धर्मीकरण का क्या अर्थ है?"',
+    'chat.welcome.reviewTip': 'सुझाव: आप अंग्रेज़ी में बोलते हुए दूसरी भाषा में अनुवादों की समीक्षा कर सकते हैं—अनुवाद जाँच के लिए बिल्कुल सही!',
     'chat.changeLanguage': 'भाषा बदलें',
     'chat.translateUi': 'इंटरफ़ेस अनुवाद करें',
     
@@ -486,6 +492,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.title': 'Asisten Penerjemahan Alkitab',
     'chat.welcome.subtitle': 'Tanyakan tentang bagian Kitab Suci mana pun untuk memulai',
     'chat.welcome.hint': 'Coba: "Roma 3" atau "Apa arti pembenaran?"',
+    'chat.welcome.reviewTip': 'Tips: Anda dapat berbicara dalam bahasa Inggris sambil meninjau terjemahan dalam bahasa lain—sempurna untuk pemeriksaan terjemahan!',
     'chat.changeLanguage': 'Ubah bahasa',
     'chat.translateUi': 'Terjemahkan antarmuka',
     
@@ -564,6 +571,7 @@ export const translations: Record<string, TranslationStrings> = {
     'chat.welcome.title': 'مساعد ترجمة الكتاب المقدس',
     'chat.welcome.subtitle': 'اسأل عن أي مقطع من الكتاب المقدس للبدء',
     'chat.welcome.hint': 'جرّب: "رومية 3" أو "ما معنى التبرير؟"',
+    'chat.welcome.reviewTip': 'نصيحة: يمكنك التحدث بالإنجليزية أثناء مراجعة الترجمات بلغة أخرى—مثالي للتحقق من الترجمات!',
     'chat.changeLanguage': 'تغيير اللغة',
     'chat.translateUi': 'ترجمة الواجهة',
     
