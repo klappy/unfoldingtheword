@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Note, NoteType } from '@/types';
+import { Note, NoteType, ResourceType } from '@/types';
 import { useDeviceId } from './useDeviceId';
 
 export function useNotes() {
@@ -29,6 +29,8 @@ export function useNotes() {
         createdAt: new Date(note.created_at),
         highlighted: note.highlighted || false,
         noteType: (note.note_type as NoteType) || 'note',
+        resourceType: (note.resource_type as ResourceType) || undefined,
+        resourceId: note.resource_id || undefined,
       })));
     }
     setIsLoading(false);
@@ -39,7 +41,13 @@ export function useNotes() {
     fetchNotes();
   }, [fetchNotes]);
 
-  const addNote = useCallback(async (content: string, sourceReference?: string, noteType: NoteType = 'note') => {
+  const addNote = useCallback(async (
+    content: string, 
+    sourceReference?: string, 
+    noteType: NoteType = 'note',
+    resourceType?: ResourceType,
+    resourceId?: string
+  ) => {
     if (!deviceId) return null;
 
     const { data, error } = await supabase
@@ -50,6 +58,8 @@ export function useNotes() {
         source_reference: sourceReference,
         highlighted: true,
         note_type: noteType,
+        resource_type: resourceType,
+        resource_id: resourceId,
       })
       .select()
       .single();
@@ -66,6 +76,8 @@ export function useNotes() {
       createdAt: new Date(data.created_at),
       highlighted: data.highlighted || false,
       noteType: (data.note_type as NoteType) || 'note',
+      resourceType: (data.resource_type as ResourceType) || undefined,
+      resourceId: data.resource_id || undefined,
     };
 
     setNotes(prev => [newNote, ...prev]);
@@ -78,6 +90,16 @@ export function useNotes() {
       ? `Error: ${errorMessage}\n\nContext: ${context}`
       : `Error: ${errorMessage}`;
     return addNote(content, undefined, 'bug_report');
+  }, [addNote]);
+
+  // Convenience method for adding translation feedback
+  const addFeedback = useCallback(async (
+    feedback: string, 
+    resourceType: ResourceType, 
+    resourceId: string,
+    sourceReference?: string
+  ) => {
+    return addNote(feedback, sourceReference, 'feedback', resourceType, resourceId);
   }, [addNote]);
 
   const deleteNote = useCallback(async (id: string) => {
@@ -117,6 +139,7 @@ export function useNotes() {
     isLoading,
     addNote,
     addBugReport,
+    addFeedback,
     deleteNote,
     updateNote,
     refetchNotes: fetchNotes,

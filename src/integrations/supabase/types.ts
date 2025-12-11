@@ -93,6 +93,8 @@ export type Database = {
           highlighted: boolean | null
           id: string
           note_type: string
+          resource_id: string | null
+          resource_type: string | null
           source_reference: string | null
           updated_at: string
         }
@@ -103,6 +105,8 @@ export type Database = {
           highlighted?: boolean | null
           id?: string
           note_type?: string
+          resource_id?: string | null
+          resource_type?: string | null
           source_reference?: string | null
           updated_at?: string
         }
@@ -113,6 +117,8 @@ export type Database = {
           highlighted?: boolean | null
           id?: string
           note_type?: string
+          resource_id?: string | null
+          resource_type?: string | null
           source_reference?: string | null
           updated_at?: string
         }
