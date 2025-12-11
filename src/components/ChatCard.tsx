@@ -13,6 +13,8 @@ import { ScriptureReferenceText } from '@/components/ScriptureReferenceText';
 import { PlayButton } from '@/components/PlayButton';
 import { VoiceConversation } from '@/components/VoiceConversation';
 
+import { VoiceStatus } from '@/hooks/useVoiceConversation';
+
 interface ChatCardProps {
   messages: Message[];
   onSendMessage: (content: string) => void;
@@ -25,13 +27,27 @@ interface ChatCardProps {
   hasStaticTranslations?: boolean;
   onTranslateUi?: () => void;
   isTranslatingUi?: boolean;
+  // Voice mode props - managed by parent
+  showVoiceMode?: boolean;
+  onShowVoiceMode?: (show: boolean) => void;
+  voiceStatus?: VoiceStatus;
+  voiceIsAgentSpeaking?: boolean;
+  voiceUserTranscript?: string;
+  voiceAgentTranscript?: string;
+  voiceIsConnected?: boolean;
+  onStartVoice?: () => void;
+  onEndVoice?: () => void;
 }
 
-export function ChatCard({ messages, onSendMessage, onResourceClick, onScriptureClick, isLoading, currentLanguage, onChangeLanguage, t, hasStaticTranslations, onTranslateUi, isTranslatingUi }: ChatCardProps) {
+export function ChatCard({ 
+  messages, onSendMessage, onResourceClick, onScriptureClick, isLoading, 
+  currentLanguage, onChangeLanguage, t, hasStaticTranslations, onTranslateUi, isTranslatingUi,
+  showVoiceMode = false, onShowVoiceMode, voiceStatus = 'idle', voiceIsAgentSpeaking = false,
+  voiceUserTranscript = '', voiceAgentTranscript = '', voiceIsConnected = false, onStartVoice, onEndVoice
+}: ChatCardProps) {
   const [input, setInput] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [showVoiceMode, setShowVoiceMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { resetSession } = useResetSession();
@@ -199,7 +215,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
               </button>
               <button
                 type="button"
-                onClick={() => setShowVoiceMode(true)}
+                onClick={() => onShowVoiceMode?.(true)}
                 className="p-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent transition-all duration-200"
                 title="Voice conversation"
               >
@@ -233,8 +249,8 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
               {/* Header with close button */}
               <div className="flex items-center justify-between p-4 border-b border-border/30">
                 <h3 className="text-lg font-medium text-foreground">Voice Conversation</h3>
-                <button
-                  onClick={() => setShowVoiceMode(false)}
+              <button
+                  onClick={() => onShowVoiceMode?.(false)}
                   className="p-2 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -243,9 +259,14 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
               
               {/* Voice conversation component */}
               <VoiceConversation
-                language={currentLanguage?.id}
-                onScriptureReference={onScriptureClick}
-                onClose={() => setShowVoiceMode(false)}
+                status={voiceStatus}
+                isAgentSpeaking={voiceIsAgentSpeaking}
+                userTranscript={voiceUserTranscript}
+                agentTranscript={voiceAgentTranscript}
+                isConnected={voiceIsConnected}
+                onStartConversation={onStartVoice || (() => {})}
+                onEndConversation={onEndVoice || (() => {})}
+                onClose={() => onShowVoiceMode?.(false)}
               />
             </motion.div>
           )}
@@ -466,7 +487,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
             </button>
             <button
               type="button"
-              onClick={() => setShowVoiceMode(true)}
+              onClick={() => onShowVoiceMode?.(true)}
               className="p-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent transition-all duration-200"
               title="Voice conversation"
             >
@@ -543,7 +564,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
             <div className="flex items-center justify-between p-4 border-b border-border/30">
               <h3 className="text-lg font-medium text-foreground">Voice Conversation</h3>
               <button
-                onClick={() => setShowVoiceMode(false)}
+                onClick={() => onShowVoiceMode?.(false)}
                 className="p-2 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -552,9 +573,14 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
             
             {/* Voice conversation component */}
             <VoiceConversation
-              language={currentLanguage?.id}
-              onScriptureReference={onScriptureClick}
-              onClose={() => setShowVoiceMode(false)}
+              status={voiceStatus}
+              isAgentSpeaking={voiceIsAgentSpeaking}
+              userTranscript={voiceUserTranscript}
+              agentTranscript={voiceAgentTranscript}
+              isConnected={voiceIsConnected}
+              onStartConversation={onStartVoice || (() => {})}
+              onEndConversation={onEndVoice || (() => {})}
+              onClose={() => onShowVoiceMode?.(false)}
             />
           </motion.div>
         )}
