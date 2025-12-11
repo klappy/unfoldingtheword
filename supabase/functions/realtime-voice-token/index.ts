@@ -12,17 +12,20 @@ const MCP_BASE_URL = 'https://translation-helps-mcp.pages.dev';
 const VOICE_SYSTEM_PROMPT = `You are a Bible study resource finder. You help users discover scripture and translation resources by using the tools provided. You speak naturally and conversationally.
 
 CRITICAL RULE - ONLY USE TOOLS:
-- You MUST use the provided tools (search_translation_resources, get_scripture_passage) to find information
+- You MUST use the provided tools to find information
 - You NEVER answer from your own knowledge or training data
 - If tools return no results, say "I couldn't find resources on that topic. Could you try a different search?"
 - NEVER make up or invent scripture verses, translation notes, or any content
 - ONLY share what the tools return to you
 
-YOUR ROLE:
-- Use search_translation_resources to find translation notes, questions, word studies, and academy articles
-- Use get_scripture_passage to fetch scripture text
-- Summarize and read aloud what the tools return
-- Guide users to explore related topics
+AVAILABLE TOOLS:
+- get_scripture_passage: Get scripture text (ULT=Literal, UST=Simplified translations)
+- search_resources: AI semantic search across all resource types
+- get_translation_notes: Get notes explaining difficult passages
+- get_translation_questions: Get comprehension questions for passages
+- get_translation_word_links: Get word study links for a verse
+- get_translation_word: Get detailed word definitions and usage
+- get_translation_academy: Get translation training articles
 
 VOICE CONVERSATION STYLE:
 - Speak naturally, not like reading a document
@@ -47,43 +50,31 @@ If someone seems distressed, respond with warmth, search for comforting scriptur
 LANGUAGE:
 Match the user's language naturally.`;
 
-// Tool definitions for OpenAI Realtime API - includes user preferences as parameters
+// All MCP tools with full parameters - user prefs are injected into descriptions
 const createVoiceTools = (userPrefs: { language: string; organization: string; resource: string }) => [
   {
     type: "function",
-    name: "search_translation_resources",
-    description: "Search for translation resources including notes, questions, word studies, and academy articles. Tell the user you're looking for resources before calling this.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { 
-          type: "string", 
-          description: "Search query - can be a topic, scripture reference, or keyword" 
-        },
-        resource_types: { 
-          type: "array", 
-          items: { type: "string", enum: ["tn", "tq", "tw", "ta"] },
-          description: "Resource types to search: tn=translation notes, tq=translation questions, tw=translation words, ta=translation academy"
-        }
-      },
-      required: ["query"]
-    }
-  },
-  {
-    type: "function",
     name: "get_scripture_passage",
-    description: `Get the text of a scripture passage. The user's preferred scripture resource is "${userPrefs.resource}" (options: ult=Literal Translation, ust=Simplified Translation). Always use this tool when the user asks about a Bible verse or passage.`,
+    description: `Get scripture text. User's current preference: resource="${userPrefs.resource}", language="${userPrefs.language}", organization="${userPrefs.organization}". Use these defaults unless user specifies otherwise.`,
     parameters: {
       type: "object",
       properties: {
         reference: { 
           type: "string", 
-          description: "Scripture reference like 'John 3:16' or 'Romans 8:1-4'" 
+          description: "Scripture reference like 'John 3:16', 'Romans 8:1-4', or 'Matthew 5'" 
         },
         resource: {
           type: "string",
           enum: ["ult", "ust"],
-          description: `Scripture resource to use. Default: "${userPrefs.resource}". ult=Literal Translation, ust=Simplified Translation`
+          description: `Scripture resource. ult=Literal Translation, ust=Simplified Translation. Default: "${userPrefs.resource}"`
+        },
+        language: {
+          type: "string",
+          description: `Language code. Default: "${userPrefs.language}"`
+        },
+        organization: {
+          type: "string", 
+          description: `Organization/publisher. Default: "${userPrefs.organization}"`
         }
       },
       required: ["reference"]
@@ -91,14 +82,58 @@ const createVoiceTools = (userPrefs: { language: string; organization: string; r
   },
   {
     type: "function",
+    name: "search_resources",
+    description: `AI semantic search across translation resources. User's current preference: language="${userPrefs.language}", organization="${userPrefs.organization}". Searches notes, questions, words, and academy articles.`,
+    parameters: {
+      type: "object",
+      properties: {
+        query: { 
+          type: "string", 
+          description: "Search query - topic, concept, or keyword" 
+        },
+        resource: { 
+          type: "string",
+          enum: ["tn", "tq", "tw", "ta"],
+          description: "Limit to resource type: tn=notes, tq=questions, tw=words, ta=academy. Omit to search all."
+        },
+        reference: {
+          type: "string",
+          description: "Limit to scripture reference like 'John 3' or 'Romans'"
+        },
+        article: {
+          type: "string",
+          description: "Search within specific article ID"
+        },
+        language: {
+          type: "string",
+          description: `Language code. Default: "${userPrefs.language}"`
+        },
+        organization: {
+          type: "string",
+          description: `Organization. Default: "${userPrefs.organization}"`
+        }
+      },
+      required: ["query"]
+    }
+  },
+  {
+    type: "function",
     name: "get_translation_notes",
-    description: "Get translation notes for a specific scripture reference. These explain translation decisions and cultural context.",
+    description: `Get translation notes explaining difficult passages and terms. Shows original Greek/Hebrew text with explanations. User prefs: language="${userPrefs.language}", organization="${userPrefs.organization}"`,
     parameters: {
       type: "object",
       properties: {
         reference: { 
           type: "string", 
           description: "Scripture reference like 'John 3:16' or 'Romans 8'" 
+        },
+        language: {
+          type: "string",
+          description: `Language code. Default: "${userPrefs.language}"`
+        },
+        organization: {
+          type: "string",
+          description: `Organization. Default: "${userPrefs.organization}"`
         }
       },
       required: ["reference"]
@@ -107,13 +142,44 @@ const createVoiceTools = (userPrefs: { language: string; organization: string; r
   {
     type: "function",
     name: "get_translation_questions",
-    description: "Get study questions for a scripture passage to help users engage with the text.",
+    description: `Get comprehension and checking questions for scripture passages. User prefs: language="${userPrefs.language}", organization="${userPrefs.organization}"`,
     parameters: {
       type: "object",
       properties: {
         reference: { 
           type: "string", 
           description: "Scripture reference like 'John 3:16' or 'Romans 8'" 
+        },
+        language: {
+          type: "string",
+          description: `Language code. Default: "${userPrefs.language}"`
+        },
+        organization: {
+          type: "string",
+          description: `Organization. Default: "${userPrefs.organization}"`
+        }
+      },
+      required: ["reference"]
+    }
+  },
+  {
+    type: "function",
+    name: "get_translation_word_links",
+    description: `Get links between a scripture verse and translation word articles. Shows which important biblical terms appear in the verse. User prefs: language="${userPrefs.language}", organization="${userPrefs.organization}"`,
+    parameters: {
+      type: "object",
+      properties: {
+        reference: { 
+          type: "string", 
+          description: "Scripture reference like 'John 3:16' - works best with specific verses" 
+        },
+        language: {
+          type: "string",
+          description: `Language code. Default: "${userPrefs.language}"`
+        },
+        organization: {
+          type: "string",
+          description: `Organization. Default: "${userPrefs.organization}"`
         }
       },
       required: ["reference"]
@@ -122,16 +188,35 @@ const createVoiceTools = (userPrefs: { language: string; organization: string; r
   {
     type: "function",
     name: "get_translation_word",
-    description: "Get detailed information about a translation word term - includes definition, translation suggestions, and Bible references.",
+    description: "Get detailed information about a biblical term - definition, translation suggestions, and Bible references where it appears.",
     parameters: {
       type: "object",
       properties: {
         term: { 
           type: "string", 
-          description: "The translation word term ID or name (e.g., 'love', 'faith', 'grace')" 
+          description: "Translation word term ID like 'love', 'faith', 'grace', 'holy', 'righteous'" 
         }
       },
       required: ["term"]
+    }
+  },
+  {
+    type: "function",
+    name: "get_translation_academy",
+    description: "Get translation training articles from Translation Academy. Helps with translation principles and techniques.",
+    parameters: {
+      type: "object",
+      properties: {
+        moduleId: { 
+          type: "string", 
+          description: "Academy module ID like 'figs-metaphor', 'translate-names', 'figs-explicit'" 
+        },
+        path: {
+          type: "string",
+          description: "Directory path to fetch multiple articles"
+        }
+      },
+      required: []
     }
   }
 ];
