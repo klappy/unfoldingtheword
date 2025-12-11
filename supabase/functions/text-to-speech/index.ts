@@ -37,7 +37,7 @@ serve(async (req) => {
         model: 'tts-1',
         input: truncatedText,
         voice: voice,
-        response_format: 'opus',
+        response_format: 'mp3',
       }),
     });
 
@@ -47,13 +47,16 @@ serve(async (req) => {
       throw new Error(`TTS API failed: ${response.status}`);
     }
 
-    console.log('[TTS] Successfully generated audio');
+    // Get the full audio content
+    const audioData = await response.arrayBuffer();
+    console.log('[TTS] Successfully generated audio, size:', audioData.byteLength);
 
-    // Return audio stream directly
-    return new Response(response.body, {
+    // Return audio as complete response (not stream)
+    return new Response(audioData, {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'audio/ogg',
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': audioData.byteLength.toString(),
       },
     });
 
