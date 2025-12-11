@@ -21,7 +21,7 @@ interface UseVoiceConversationOptions {
   onTranscript?: (text: string, isFinal: boolean) => void;
   onAgentResponse?: (text: string) => void;
   onError?: (error: string) => void;
-  onScriptureReference?: (reference: string) => void;
+  onScriptureReference?: (reference: string, resource?: string) => void; // Now includes resource
   onToolCall?: (toolName: string, args: any) => void; // Callback to notify UI of tool calls for parallel lookups
 }
 
@@ -120,7 +120,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         if (response.ok) {
           const data = await response.json();
           if (data.content) {
-            options.onScriptureReference?.(args.reference);
+            // Pass the resource to the callback so UI can update correctly
+            options.onScriptureReference?.(args.reference, mergedParams.resource);
             return formatScriptureForSpeech(data.content, args.reference);
           } else if (data.error) {
             console.error('[Voice] Scripture fetch error:', data.error);
