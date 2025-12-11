@@ -58,11 +58,26 @@ const Index = () => {
   // Voice conversation - managed at top level so it persists across card navigation
   const voiceConversation = useVoiceConversation({
     language: language || 'en',
-    onScriptureReference: useCallback(async (reference: string) => {
-      console.log('[Index] Voice scripture reference:', reference);
+    onScriptureReference: useCallback(async (reference: string, resource?: string) => {
+      console.log('[Index] Voice scripture reference:', reference, 'resource:', resource);
+      
+      // If voice AI specified a resource, update preferences to match
+      if (resource && language && organization) {
+        const currentActive = resourcePreferences[0];
+        if (!currentActive || currentActive.resource !== resource) {
+          console.log('[Index] Updating resource preference from voice:', resource);
+          setActiveResource({
+            language,
+            organization,
+            resource,
+            displayName: resource.toUpperCase(),
+          });
+        }
+      }
+      
       await loadScriptureData(reference);
       // Don't navigate - let user swipe to see scripture while voice continues
-    }, [loadScriptureData]),
+    }, [loadScriptureData, language, organization, resourcePreferences, setActiveResource]),
     onError: (error) => {
       console.error('[Index] Voice error:', error);
     },
