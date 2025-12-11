@@ -8,10 +8,13 @@ interface TTSContextType {
   isPlaying: boolean;
   isLoading: boolean;
   currentId: string | null;
-  progress: number; // 0-100
+  progress: number;
 }
 
 const TTSContext = createContext<TTSContextType | null>(null);
+
+// Tiny silent MP3 (base64) to unlock audio on mobile
+const SILENT_MP3 = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+1DEAAAGAAGn9AAAIgAANP8AAARMQVU=';
 
 export function TTSProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -21,11 +24,12 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isUnlockedRef = useRef(false);
   const { toast } = useToast();
 
   // Update progress based on audio currentTime
   const updateProgress = useCallback(() => {
-    if (audioRef.current && audioRef.current.duration > 0) {
+    if (audioRef.current && audioRef.current.duration > 0 && !isNaN(audioRef.current.duration)) {
       const currentProgress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
       setProgress(currentProgress);
     }
@@ -51,10 +55,11 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     };
   }, [isPlaying, updateProgress]);
 
-  // Create a persistent audio element to maintain user gesture context
+  // Create a persistent audio element
   useEffect(() => {
     audioRef.current = new Audio();
-    audioRef.current.addEventListener('ended', () => {
+    
+    const handleEnded = () => {
       setIsPlaying(false);
       setCurrentId(null);
       setProgress(0);
@@ -62,16 +67,22 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
       }
-    });
-    audioRef.current.addEventListener('error', () => {
-      console.error('[TTS] Audio playback error');
+    };
+    
+    const handleError = (e: Event) => {
+      console.error('[TTS] Audio error event:', e);
       setIsPlaying(false);
       setCurrentId(null);
       setProgress(0);
-    });
+    };
+    
+    audioRef.current.addEventListener('ended', handleEnded);
+    audioRef.current.addEventListener('error', handleError);
     
     return () => {
       if (audioRef.current) {
+        audioRef.current.removeEventListener('ended', handleEnded);
+        audioRef.current.removeEventListener('error', handleError);
         audioRef.current.pause();
         audioRef.current.src = '';
       }
@@ -95,6 +106,25 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     setProgress(0);
   }, []);
 
+  // Unlock audio on first user interaction
+  const unlockAudio = useCallback(async () => {
+    if (isUnlockedRef.current || !audioRef.current) return;
+    
+    try {
+      // Play silent audio to unlock
+      audioRef.current.src = SILENT_MP3;
+      audioRef.current.volume = 0.01;
+      await audioRef.current.play();
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.volume = 1;
+      isUnlockedRef.current = true;
+      console.log('[TTS] Audio unlocked successfully');
+    } catch (err) {
+      console.log('[TTS] Could not unlock audio:', err);
+    }
+  }, []);
+
   const speak = useCallback(async (text: string, id: string) => {
     // If clicking the same item that's playing, stop it
     if (currentId === id && isPlaying) {
@@ -105,20 +135,25 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     // Stop any current playback
     stop();
     
+    // Immediately try to unlock audio on user gesture
+    await unlockAudio();
+    
     setIsLoading(true);
     setCurrentId(id);
     
     try {
       // Strip markdown for cleaner TTS
       const cleanText = text
-        .replace(/#{1,6}\s/g, '') // headers
-        .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
-        .replace(/\*([^*]+)\*/g, '$1') // italic
-        .replace(/`([^`]+)`/g, '$1') // code
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
-        .replace(/^\s*[-*+]\s/gm, '') // list items
-        .replace(/^\s*\d+\.\s/gm, '') // numbered lists
+        .replace(/#{1,6}\s/g, '')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/^\s*[-*+]\s/gm, '')
+        .replace(/^\s*\d+\.\s/gm, '')
         .trim();
+
+      console.log('[TTS] Fetching audio for text length:', cleanText.length);
 
       const { data, error } = await supabase.functions.invoke('text-to-speech', {
         body: { text: cleanText }
@@ -138,37 +173,51 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       const audioUrl = URL.createObjectURL(blob);
       objectUrlRef.current = audioUrl;
       
-      // Use the persistent audio element
+      console.log('[TTS] Audio blob created, size:', blob.size);
+      
       if (audioRef.current) {
         audioRef.current.src = audioUrl;
-        audioRef.current.load();
         
-        // Play with proper error handling
-        try {
-          await audioRef.current.play();
-          setIsPlaying(true);
-        } catch (playError) {
-          console.error('[TTS] Play error:', playError);
-          // For mobile browsers, sometimes we need to try again
-          toast({
-            title: 'Tap to Play',
-            description: 'Tap the play button again to start audio',
-          });
-          setCurrentId(null);
-        }
+        // Wait for audio to be ready
+        await new Promise<void>((resolve, reject) => {
+          const audio = audioRef.current!;
+          
+          const onCanPlay = () => {
+            audio.removeEventListener('canplaythrough', onCanPlay);
+            audio.removeEventListener('error', onError);
+            resolve();
+          };
+          
+          const onError = (e: Event) => {
+            audio.removeEventListener('canplaythrough', onCanPlay);
+            audio.removeEventListener('error', onError);
+            reject(new Error('Audio load error'));
+          };
+          
+          audio.addEventListener('canplaythrough', onCanPlay);
+          audio.addEventListener('error', onError);
+          audio.load();
+        });
+        
+        console.log('[TTS] Audio loaded, attempting play');
+        
+        // Play the audio
+        await audioRef.current.play();
+        setIsPlaying(true);
+        console.log('[TTS] Audio playing successfully');
       }
     } catch (err) {
       console.error('[TTS] Error:', err);
       setCurrentId(null);
       toast({
         title: 'TTS Error',
-        description: err instanceof Error ? err.message : 'Failed to generate speech',
+        description: err instanceof Error ? err.message : 'Failed to play audio',
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
     }
-  }, [currentId, isPlaying, stop, toast]);
+  }, [currentId, isPlaying, stop, toast, unlockAudio]);
 
   return (
     <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress }}>
