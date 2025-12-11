@@ -93,6 +93,93 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     return { language: 'en', organization: 'unfoldingWord', resource: 'ult' };
   }, []);
 
+  // Helper to translate content when using English fallback
+  const translateFallbackContent = useCallback(async (
+    content: string, 
+    targetLanguage: string, 
+    contentType: string
+  ): Promise<string | null> => {
+    if (targetLanguage === 'en') return content; // No need to translate if already English
+    
+    try {
+      console.log(`[Voice] Translating ${contentType} to ${targetLanguage}`);
+      const { data, error } = await supabase.functions.invoke('translate-content', {
+        body: { content, targetLanguage, contentType }
+      });
+      
+      if (error) {
+        console.error('[Voice] Translation error:', error);
+        return null;
+      }
+      
+      return data?.translatedContent || null;
+    } catch (e) {
+      console.error('[Voice] Translation exception:', e);
+      return null;
+    }
+  }, []);
+
+  // Helper to fetch with fallback to English and optional translation
+  const fetchWithFallback = useCallback(async (
+    endpoint: string,
+    primaryParams: Record<string, any>,
+    userLanguage: string,
+    contentType: string
+  ): Promise<{ content: string | null; isFallback: boolean }> => {
+    // Try primary language first
+    console.log(`[Voice] Trying primary fetch: ${endpoint}`, primaryParams);
+    
+    const primaryResponse = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint, params: primaryParams })
+    });
+    
+    if (primaryResponse.ok) {
+      const data = await primaryResponse.json();
+      if (data.content && !data.error) {
+        console.log(`[Voice] Primary fetch successful for ${endpoint}`);
+        return { content: data.content, isFallback: false };
+      }
+    }
+    
+    // If user is already using English, no fallback needed
+    if (userLanguage === 'en') {
+      console.log(`[Voice] Primary fetch failed, no fallback for English user`);
+      return { content: null, isFallback: false };
+    }
+    
+    // Fallback to English/unfoldingWord
+    console.log(`[Voice] Falling back to English for ${endpoint}`);
+    const fallbackParams = { ...primaryParams, language: 'en', organization: 'unfoldingWord' };
+    
+    const fallbackResponse = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint, params: fallbackParams })
+    });
+    
+    if (fallbackResponse.ok) {
+      const data = await fallbackResponse.json();
+      if (data.content && !data.error) {
+        console.log(`[Voice] Fallback fetch successful, translating...`);
+        // Translate the English content to user's language
+        const translated = await translateFallbackContent(data.content, userLanguage, contentType);
+        return { 
+          content: translated || data.content, // Use English if translation fails
+          isFallback: true 
+        };
+      }
+    }
+    
+    return { content: null, isFallback: false };
+  }, [translateFallbackContent]);
+
+  // Generate fallback notice for voice response
+  const getFallbackNotice = (contentType: string): string => {
+    return `I found this ${contentType} in English and translated it for you. `;
+  };
+
   // Handle tool calls from the AI - route through proxy to avoid CORS
   const handleToolCall = useCallback(async (toolName: string, args: any): Promise<string> => {
     console.log(`[Voice] Tool call: ${toolName}`, args);
@@ -114,30 +201,22 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       if (toolName === 'get_scripture_passage') {
         console.log(`[Voice] Fetching scripture: ${args.reference} with resource: ${mergedParams.resource}`);
         
-        const response = await fetch(PROXY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint: 'fetch-scripture',
-            params: { 
-              reference: args.reference,
-              resource: mergedParams.resource,
-              language: mergedParams.language,
-              organization: mergedParams.organization,
-            }
-          })
-        });
+        const { content, isFallback } = await fetchWithFallback(
+          'fetch-scripture',
+          { 
+            reference: args.reference,
+            resource: mergedParams.resource,
+            language: mergedParams.language,
+            organization: mergedParams.organization,
+          },
+          mergedParams.language,
+          'scripture'
+        );
         
-        if (response.ok) {
-          const data = await response.json();
-          if (data.content) {
-            // Pass the resource to the callback so UI can update correctly
-            options.onScriptureReference?.(args.reference, mergedParams.resource);
-            return formatScriptureForSpeech(data.content, args.reference);
-          } else if (data.error) {
-            console.error('[Voice] Scripture fetch error:', data.error);
-            return formatErrorForSpeech('Scripture not found');
-          }
+        if (content) {
+          options.onScriptureReference?.(args.reference, mergedParams.resource);
+          const formatted = formatScriptureForSpeech(content, args.reference);
+          return isFallback ? getFallbackNotice('passage') + formatted : formatted;
         }
         return formatErrorForSpeech('Scripture not found');
       }
@@ -155,12 +234,14 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         
         console.log(`[Voice] Searching resources:`, params);
         
-        const response = await fetch(PROXY_URL, {
+        // Try primary language first
+        let response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ endpoint: 'search', params })
         });
         
+        let isFallback = false;
         if (response.ok) {
           const data = await response.json();
           console.log(`[Voice] Search results:`, data);
@@ -168,6 +249,27 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             return formatSearchResultsForSpeech(data.hits);
           }
         }
+        
+        // Fallback to English if user's language has no results
+        if (mergedParams.language !== 'en') {
+          console.log(`[Voice] Falling back to English for search`);
+          const fallbackParams = { ...params, language: 'en', organization: 'unfoldingWord' };
+          response = await fetch(PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: 'search', params: fallbackParams })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.hits && Array.isArray(data.hits) && data.hits.length > 0) {
+              isFallback = true;
+              const formatted = formatSearchResultsForSpeech(data.hits);
+              return getFallbackNotice('search results') + formatted;
+            }
+          }
+        }
+        
         return `I searched for "${args.query}" but didn't find any matching resources.`;
       }
       
@@ -175,24 +277,20 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       if (toolName === 'get_translation_notes') {
         console.log(`[Voice] Fetching translation notes for: ${args.reference}`);
         
-        const response = await fetch(PROXY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint: 'fetch-translation-notes',
-            params: { 
-              reference: args.reference,
-              language: mergedParams.language,
-              organization: mergedParams.organization,
-            }
-          })
-        });
+        const { content, isFallback } = await fetchWithFallback(
+          'fetch-translation-notes',
+          { 
+            reference: args.reference,
+            language: mergedParams.language,
+            organization: mergedParams.organization,
+          },
+          mergedParams.language,
+          'translation notes'
+        );
         
-        if (response.ok) {
-          const data = await response.json();
-          if (data.content) {
-            return `Here are the translation notes for ${args.reference}: ${data.content.substring(0, 2000)}`;
-          }
+        if (content) {
+          const formatted = `Here are the translation notes for ${args.reference}: ${content.substring(0, 2000)}`;
+          return isFallback ? getFallbackNotice('notes') + formatted : formatted;
         }
         return `I couldn't find translation notes for ${args.reference}.`;
       }
@@ -201,24 +299,20 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       if (toolName === 'get_translation_questions') {
         console.log(`[Voice] Fetching translation questions for: ${args.reference}`);
         
-        const response = await fetch(PROXY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint: 'fetch-translation-questions',
-            params: { 
-              reference: args.reference,
-              language: mergedParams.language,
-              organization: mergedParams.organization,
-            }
-          })
-        });
+        const { content, isFallback } = await fetchWithFallback(
+          'fetch-translation-questions',
+          { 
+            reference: args.reference,
+            language: mergedParams.language,
+            organization: mergedParams.organization,
+          },
+          mergedParams.language,
+          'translation questions'
+        );
         
-        if (response.ok) {
-          const data = await response.json();
-          if (data.content) {
-            return `Here are the study questions for ${args.reference}: ${data.content.substring(0, 2000)}`;
-          }
+        if (content) {
+          const formatted = `Here are the study questions for ${args.reference}: ${content.substring(0, 2000)}`;
+          return isFallback ? getFallbackNotice('questions') + formatted : formatted;
         }
         return `I couldn't find study questions for ${args.reference}.`;
       }
@@ -227,6 +321,23 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       if (toolName === 'get_translation_word_links') {
         console.log(`[Voice] Fetching word links for: ${args.reference}`);
         
+        const { content, isFallback } = await fetchWithFallback(
+          'fetch-translation-word-links',
+          { 
+            reference: args.reference,
+            language: mergedParams.language,
+            organization: mergedParams.organization,
+          },
+          mergedParams.language,
+          'word links'
+        );
+        
+        if (content) {
+          const formatted = `Here are the important biblical terms in ${args.reference}: ${content.substring(0, 1500)}`;
+          return isFallback ? getFallbackNotice('word studies') + formatted : formatted;
+        }
+        
+        // Also check for links array format
         const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -242,9 +353,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         
         if (response.ok) {
           const data = await response.json();
-          if (data.content) {
-            return `Here are the important biblical terms in ${args.reference}: ${data.content.substring(0, 1500)}`;
-          } else if (data.links && Array.isArray(data.links)) {
+          if (data.links && Array.isArray(data.links)) {
             const terms = data.links.map((l: any) => l.term || l.word).filter(Boolean).join(', ');
             return `The verse ${args.reference} contains these important terms: ${terms}`;
           }
@@ -256,6 +365,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       if (toolName === 'get_translation_word') {
         console.log(`[Voice] Fetching translation word: ${args.term}`);
         
+        // Translation words are typically language-neutral, but content can be translated
         const response = await fetch(PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -268,6 +378,13 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         if (response.ok) {
           const data = await response.json();
           if (data.content) {
+            // If user language isn't English, translate the word article
+            if (mergedParams.language !== 'en') {
+              const translated = await translateFallbackContent(data.content, mergedParams.language, 'word article');
+              if (translated) {
+                return getFallbackNotice('word article') + `Here's information about the word "${args.term}": ${translated.substring(0, 2000)}`;
+              }
+            }
             return `Here's information about the word "${args.term}": ${data.content.substring(0, 2000)}`;
           }
         }
@@ -294,6 +411,13 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         if (response.ok) {
           const data = await response.json();
           if (data.content) {
+            // If user language isn't English, translate the academy article
+            if (mergedParams.language !== 'en') {
+              const translated = await translateFallbackContent(data.content, mergedParams.language, 'academy article');
+              if (translated) {
+                return getFallbackNotice('article') + `Here's the translation academy article: ${translated.substring(0, 2000)}`;
+              }
+            }
             return `Here's the translation academy article: ${data.content.substring(0, 2000)}`;
           }
         }
@@ -464,7 +588,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       );
       return formatErrorForSpeech(String(error));
     }
-  }, [options, getResourcePrefs]);
+  }, [options, getResourcePrefs, fetchWithFallback, translateFallbackContent]);
 
   // Process incoming messages from the data channel
   const handleDataChannelMessage = useCallback(async (event: MessageEvent) => {
