@@ -963,17 +963,23 @@ export async function fetchTranslationWordLinks(reference: string): Promise<Tran
 
 export async function fetchTranslationWord(articleId: string): Promise<TranslationWord | null> {
   try {
-    // Use the fetch-translation-word endpoint with just the article name
-    const data = await callProxy('fetch-translation-word', { article: articleId });
+    // Call proxy directly with ONLY the article param - no language/organization
+    // The fetch-translation-word endpoint only needs the article name
+    const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
+      body: { 
+        endpoint: 'fetch-translation-word', 
+        params: { article: articleId }  // Only article, no other params!
+      },
+    });
     
-    console.log('[fetchTranslationWord] Result for', articleId, ':', data?.content ? 'has content' : 'no content');
+    console.log('[fetchTranslationWord] Result for', articleId, ':', data?.content ? `${data.content.length} chars` : 'no content');
     
-    const content = data?.content || '';
-    
-    if (!content || data?.error) {
-      console.log('[fetchTranslationWord] No content found for', articleId);
+    if (error || !data?.content || data?.error) {
+      console.log('[fetchTranslationWord] No content found for', articleId, error || data?.error);
       return null;
     }
+    
+    const content = data.content;
     
     // Extract term from title
     const titleMatch = content.match(/^#\s+([^\n]+)/m);
