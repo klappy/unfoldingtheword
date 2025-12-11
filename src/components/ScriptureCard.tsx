@@ -39,12 +39,14 @@ const ChapterContent = memo(function ChapterContent({
   chapter,
   bookName,
   selectedVerse,
-  onVerseClick
+  onVerseClick,
+  currentLanguage
 }: {
   chapter: ScriptureChapter;
   bookName: string;
   selectedVerse: { chapter: number; verse: number } | null;
   onVerseClick: (chapter: number, verseNum: number, e: React.MouseEvent) => void;
+  currentLanguage?: string;
 }) {
   const chapterText = useMemo(() => getChapterText(chapter), [chapter]);
   return (
@@ -61,6 +63,7 @@ const ChapterContent = memo(function ChapterContent({
           text={chapterText}
           id={`scripture-ch-${chapter.chapter}`}
           size="md"
+          language={currentLanguage}
         />
       </div>
       {chapter.verses.map((verse, index) => {
@@ -477,6 +480,7 @@ export function ScriptureCard({
                       bookName={passage.book!.book}
                       selectedVerse={selectedVerse}
                       onVerseClick={handleVerseClick}
+                      currentLanguage={currentLanguage}
                     />
                   ) : (
                     <ChapterPlaceholder chapter={chapter.chapter} />

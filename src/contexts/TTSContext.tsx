@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useRef, useCallback, ReactNode, us
 import { useToast } from '@/hooks/use-toast';
 
 interface TTSContextType {
-  speak: (text: string, id: string) => Promise<void>;
+  speak: (text: string, id: string, language?: string) => void;
   stop: () => void;
   isPlaying: boolean;
   isLoading: boolean;
@@ -19,6 +19,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
   // Update progress based on audio element
@@ -57,20 +58,36 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         audioRef.current.src = '';
         audioRef.current = null;
       }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
   }, []);
 
   const stop = useCallback(() => {
+    // Abort any pending fetch
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      // Revoke any existing blob URL
+      if (audioRef.current.src.startsWith('blob:')) {
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+      audioRef.current.src = '';
     }
     setIsPlaying(false);
+    setIsLoading(false);
     setCurrentId(null);
     setProgress(0);
   }, []);
 
-  const speak = useCallback(async (text: string, id: string) => {
+  // Synchronous function - no async/await to maintain user gesture context
+  const speak = useCallback((text: string, id: string, language: string = 'en') => {
     // If clicking the same item that's playing, stop it
     if (currentId === id && isPlaying) {
       stop();
@@ -80,66 +97,68 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     // Stop any current playback
     stop();
     
-    // Create audio element IMMEDIATELY on user interaction to satisfy autoplay policy
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-    const audio = audioRef.current;
-    
-    // Play a silent data URL immediately to "unlock" audio context
-    // This must happen synchronously with user gesture
-    audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-    try {
-      await audio.play();
-      audio.pause();
-    } catch (e) {
-      // Ignore unlock errors
-    }
+    // Create audio element synchronously on user gesture
+    const audio = new Audio();
+    audioRef.current = audio;
     
     setIsLoading(true);
     setCurrentId(id);
     
-    try {
-      // Strip markdown for cleaner TTS
-      const cleanText = text
-        .replace(/#{1,6}\s/g, '')
-        .replace(/\*\*([^*]+)\*\*/g, '$1')
-        .replace(/\*([^*]+)\*/g, '$1')
-        .replace(/`([^`]+)`/g, '$1')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-        .replace(/^\s*[-*+]\s/gm, '')
-        .replace(/^\s*\d+\.\s/gm, '')
-        .trim();
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
-      console.log('[TTS] Fetching audio, text length:', cleanText.length);
+    // Strip markdown for cleaner TTS
+    const cleanText = text
+      .replace(/#{1,6}\s/g, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/^\s*[-*+]\s/gm, '')
+      .replace(/^\s*\d+\.\s/gm, '')
+      .trim();
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ text: cleanText }),
-        }
-      );
-      
+    console.log('[TTS] Fetching audio, text length:', cleanText.length, 'language:', language);
+
+    // Fetch audio - this is async but we've already created the Audio element
+    fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text: cleanText, language }),
+        signal: abortController.signal,
+      }
+    )
+    .then(async (response) => {
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `HTTP ${response.status}`);
       }
-      
-      // Get audio as blob and create URL
-      const blob = await response.blob();
+      return response.blob();
+    })
+    .then((blob) => {
       console.log('[TTS] Received blob, size:', blob.size, 'type:', blob.type);
       
-      // Create blob URL for HTMLAudioElement
+      if (blob.size === 0) {
+        throw new Error('Received empty audio file');
+      }
+      
       const audioUrl = URL.createObjectURL(blob);
       console.log('[TTS] Created blob URL:', audioUrl);
       
-      // Set up event handlers before setting src
-      audio.onloadedmetadata = () => {
+      // Check if we were aborted while fetching
+      if (abortController.signal.aborted) {
+        URL.revokeObjectURL(audioUrl);
+        return;
+      }
+      
+      // Set up event handlers
+      audio.onloadeddata = () => {
         console.log('[TTS] Audio loaded - duration:', audio.duration);
       };
       
@@ -157,9 +176,10 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         URL.revokeObjectURL(audioUrl);
       };
       
-      audio.onerror = (e) => {
-        console.error('[TTS] Audio error:', e, audio.error);
+      audio.onerror = () => {
+        console.error('[TTS] Audio error:', audio.error);
         setIsLoading(false);
+        setIsPlaying(false);
         setCurrentId(null);
         URL.revokeObjectURL(audioUrl);
         toast({
@@ -174,18 +194,32 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       audio.volume = 1.0;
       
       console.log('[TTS] Starting playback...');
-      await audio.play();
-      
-    } catch (err) {
+      audio.play().catch((err) => {
+        console.error('[TTS] Play failed:', err);
+        setIsLoading(false);
+        setCurrentId(null);
+        URL.revokeObjectURL(audioUrl);
+        toast({
+          title: 'TTS Error',
+          description: 'Could not play audio. Try tapping again.',
+          variant: 'destructive',
+        });
+      });
+    })
+    .catch((err) => {
+      if (err.name === 'AbortError') {
+        console.log('[TTS] Request aborted');
+        return;
+      }
       console.error('[TTS] Error:', err);
       setIsLoading(false);
       setCurrentId(null);
       toast({
         title: 'TTS Error',
-        description: err instanceof Error ? err.message : 'Failed to play audio',
+        description: err instanceof Error ? err.message : 'Failed to generate audio',
         variant: 'destructive',
       });
-    }
+    });
   }, [currentId, isPlaying, stop, toast]);
 
   return (

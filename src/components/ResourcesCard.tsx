@@ -21,6 +21,7 @@ interface ResourcesCardProps {
   onRetry?: () => void;
   scrollToType?: Resource['type'] | null;
   onScrollComplete?: () => void;
+  currentLanguage?: string;
 }
 
 const resourceIcons = {
@@ -60,9 +61,10 @@ interface ExpandableResourceProps {
   index: number;
   onAddToNotes: (text: string) => void;
   onSearch?: (query: string) => void;
+  currentLanguage?: string;
 }
 
-function ExpandableResource({ resource, index, onAddToNotes, onSearch }: ExpandableResourceProps) {
+function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLanguage }: ExpandableResourceProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [isLoadingFull, setIsLoadingFull] = useState(false);
@@ -142,6 +144,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
         <PlayButton 
           text={displayContent}
           id={`resource-${resource.type}-${index}`}
+          language={currentLanguage}
         />
         <CopyButton text={`${resource.title}\n\n${displayContent}`} />
       </div>
@@ -289,7 +292,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch }: Expanda
   );
 }
 
-export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry, scrollToType, onScrollComplete }: ResourcesCardProps) {
+export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry, scrollToType, onScrollComplete, currentLanguage }: ResourcesCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeType, setActiveType] = useState<string | null>(null);
@@ -595,6 +598,7 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
                       index={index}
                       onAddToNotes={onAddToNotes}
                       onSearch={onSearch}
+                      currentLanguage={currentLanguage}
                     />
                   ))}
                 </div>

@@ -245,6 +245,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
                     <PlayButton 
                       text={message.content}
                       id={`chat-${message.id}`}
+                      language={currentLanguage?.id}
                     />
                   )}
                   <CopyButton text={message.content} />
