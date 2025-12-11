@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw, Mic, Square } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Send, Sparkles, Globe, Languages, Loader2, RotateCcw, Mic, Square, Phone, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Message, ResourceLink } from '@/types';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CopyButton } from '@/components/CopyButton';
 import { ScriptureReferenceText } from '@/components/ScriptureReferenceText';
 import { PlayButton } from '@/components/PlayButton';
+import { VoiceConversation } from '@/components/VoiceConversation';
 
 interface ChatCardProps {
   messages: Message[];
@@ -30,6 +31,7 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
   const [input, setInput] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [showVoiceMode, setShowVoiceMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { resetSession } = useResetSession();
@@ -196,6 +198,14 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
                 )}
               </button>
               <button
+                type="button"
+                onClick={() => setShowVoiceMode(true)}
+                className="p-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent transition-all duration-200"
+                title="Voice conversation"
+              >
+                <Phone className="w-5 h-5" />
+              </button>
+              <button
                 type="submit"
                 disabled={!input.trim() || isLoading}
                 className={cn(
@@ -210,6 +220,36 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
             </div>
           </form>
         </div>
+
+        {/* Voice conversation mode overlay */}
+        <AnimatePresence>
+          {showVoiceMode && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-background z-50 flex flex-col"
+            >
+              {/* Header with close button */}
+              <div className="flex items-center justify-between p-4 border-b border-border/30">
+                <h3 className="text-lg font-medium text-foreground">Voice Conversation</h3>
+                <button
+                  onClick={() => setShowVoiceMode(false)}
+                  className="p-2 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {/* Voice conversation component */}
+              <VoiceConversation
+                language={currentLanguage?.id}
+                onScriptureReference={onScriptureClick}
+                onClose={() => setShowVoiceMode(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -425,6 +465,14 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
               )}
             </button>
             <button
+              type="button"
+              onClick={() => setShowVoiceMode(true)}
+              className="p-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent transition-all duration-200"
+              title="Voice conversation"
+            >
+              <Phone className="w-5 h-5" />
+            </button>
+            <button
               type="submit"
               disabled={!input.trim() || isLoading}
               className={cn(
@@ -481,6 +529,36 @@ export function ChatCard({ messages, onSendMessage, onResourceClick, onScripture
           </motion.div>
         </motion.div>
       )}
+
+      {/* Voice conversation mode overlay */}
+      <AnimatePresence>
+        {showVoiceMode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-background z-50 flex flex-col"
+          >
+            {/* Header with close button */}
+            <div className="flex items-center justify-between p-4 border-b border-border/30">
+              <h3 className="text-lg font-medium text-foreground">Voice Conversation</h3>
+              <button
+                onClick={() => setShowVoiceMode(false)}
+                className="p-2 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Voice conversation component */}
+            <VoiceConversation
+              language={currentLanguage?.id}
+              onScriptureReference={onScriptureClick}
+              onClose={() => setShowVoiceMode(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.text-to-speech]
 verify_jwt = false
+
+[functions.realtime-voice-token]
+verify_jwt = false
