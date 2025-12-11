@@ -139,9 +139,9 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
       transition={{ delay: index * 0.05 }}
       className="glass-card rounded-xl overflow-hidden group relative"
     >
-      {/* Action buttons - stop propagation to prevent triggering card expansion */}
+      {/* Action buttons - only capture events when visible (on hover) */}
       <div 
-        className="absolute top-3 right-3 z-10 flex items-center gap-0.5"
+        className="absolute top-3 right-3 z-10 flex items-center gap-0.5 pointer-events-none group-hover:pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <PlayButton 
