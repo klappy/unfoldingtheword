@@ -53,9 +53,10 @@ export interface TranslationAcademy {
   content: string;
 }
 
-// Get the current language from version preferences or fallback to primary
+// Get the current language from resource preferences or fallback to primary
 function getCurrentLanguage(): string {
-  const prefsJson = localStorage.getItem('bible-study-version-preferences');
+  // Support both new and old localStorage keys for backward compatibility
+  const prefsJson = localStorage.getItem('bible-study-resource-preferences') || localStorage.getItem('bible-study-version-preferences');
   if (prefsJson) {
     try {
       const prefs = JSON.parse(prefsJson);
@@ -67,9 +68,10 @@ function getCurrentLanguage(): string {
   return localStorage.getItem('bible-study-language') || 'en';
 }
 
-// Get the current organization from version preferences or fallback to primary
+// Get the current organization from resource preferences or fallback to primary
 function getCurrentOrganization(): string {
-  const prefsJson = localStorage.getItem('bible-study-version-preferences');
+  // Support both new and old localStorage keys for backward compatibility
+  const prefsJson = localStorage.getItem('bible-study-resource-preferences') || localStorage.getItem('bible-study-version-preferences');
   if (prefsJson) {
     try {
       const prefs = JSON.parse(prefsJson);
@@ -81,9 +83,10 @@ function getCurrentOrganization(): string {
   return localStorage.getItem('bible-study-organization') || 'unfoldingWord';
 }
 
-// Get the current scripture resource from version preferences (ult, ust, ulb, udb)
+// Get the current scripture resource from resource preferences (ult, ust, ulb, udb)
 function getCurrentResource(): string {
-  const prefsJson = localStorage.getItem('bible-study-version-preferences');
+  // Support both new and old localStorage keys for backward compatibility
+  const prefsJson = localStorage.getItem('bible-study-resource-preferences') || localStorage.getItem('bible-study-version-preferences');
   if (prefsJson) {
     try {
       const prefs = JSON.parse(prefsJson);

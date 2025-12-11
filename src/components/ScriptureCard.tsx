@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FallbackBadge } from '@/components/FallbackBadge';
 import { FallbackState } from '@/hooks/useScriptureData';
-import { VersionSelector } from '@/components/VersionSelector';
-import { ScriptureVersion } from '@/hooks/useLanguage';
+import { ResourceSelector } from '@/components/ResourceSelector';
+import { ScriptureResource } from '@/hooks/useLanguage';
 import { cn } from '@/lib/utils';
 import { useVisibleChapters } from '@/hooks/useVisibleChapters';
 import { PlayButton } from '@/components/PlayButton';
@@ -23,9 +23,9 @@ interface ScriptureCardProps {
   fallbackState?: FallbackState;
   onTranslateRequest?: () => void;
   isTranslating?: boolean;
-  // Version selector props
-  versionPreferences?: ScriptureVersion[];
-  onVersionSelect?: (version: ScriptureVersion) => void;
+  // Resource selector props
+  resourcePreferences?: ScriptureResource[];
+  onResourceSelect?: (resource: ScriptureResource) => void;
   currentLanguage?: string;
 }
 
@@ -134,11 +134,11 @@ export function ScriptureCard({
   fallbackState, 
   onTranslateRequest, 
   isTranslating,
-  versionPreferences = [],
-  onVersionSelect,
+  resourcePreferences = [],
+  onResourceSelect,
   currentLanguage = 'en',
 }: ScriptureCardProps) {
-  const [isVersionSelectorOpen, setIsVersionSelectorOpen] = useState(false);
+  const [isResourceSelectorOpen, setIsResourceSelectorOpen] = useState(false);
   const [isContentReady, setIsContentReady] = useState(false);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const passageIdRef = useRef<string | null>(null);
@@ -411,18 +411,18 @@ export function ScriptureCard({
           className="px-6 pb-3 bg-background/95 backdrop-blur-sm z-10"
         >
           <button
-            onClick={() => onVersionSelect && setIsVersionSelectorOpen(true)}
+            onClick={() => onResourceSelect && setIsResourceSelectorOpen(true)}
             className={cn(
               "flex items-center justify-between w-full text-left",
-              onVersionSelect && "hover:bg-primary/5 -mx-2 px-2 py-1 rounded-lg transition-colors"
+              onResourceSelect && "hover:bg-primary/5 -mx-2 px-2 py-1 rounded-lg transition-colors"
             )}
-            disabled={!onVersionSelect}
+            disabled={!onResourceSelect}
           >
             <div>
               <div className="flex items-center gap-2 text-primary">
                 <Book className="w-4 h-4" />
                 <span className="text-sm font-medium">{passage.book.book}</span>
-                {onVersionSelect && <ChevronDown className="w-3 h-3 text-primary/60" />}
+                {onResourceSelect && <ChevronDown className="w-3 h-3 text-primary/60" />}
               </div>
               <span className="text-xs text-muted-foreground">{passage.translation}</span>
             </div>
@@ -438,13 +438,13 @@ export function ScriptureCard({
           </button>
         </motion.div>
 
-        {/* Version Selector */}
-        {onVersionSelect && (
-          <VersionSelector
-            isOpen={isVersionSelectorOpen}
-            onClose={() => setIsVersionSelectorOpen(false)}
-            versionPreferences={versionPreferences}
-            onVersionSelect={onVersionSelect}
+        {/* Resource Selector */}
+        {onResourceSelect && (
+          <ResourceSelector
+            isOpen={isResourceSelectorOpen}
+            onClose={() => setIsResourceSelectorOpen(false)}
+            resourcePreferences={resourcePreferences}
+            onResourceSelect={onResourceSelect}
             currentLanguage={currentLanguage}
             currentReference={passage?.reference}
           />

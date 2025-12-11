@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 const LANGUAGE_KEY = 'bible-study-language';
 const ORGANIZATION_KEY = 'bible-study-organization';
-const VERSION_PREFERENCES_KEY = 'bible-study-version-preferences';
+const RESOURCE_PREFERENCES_KEY = 'bible-study-resource-preferences';
 
 export interface LanguageOption {
   id: string;
@@ -18,7 +18,7 @@ export interface OrganizationOption {
   description?: string;
 }
 
-export interface ScriptureVersion {
+export interface ScriptureResource {
   language: string;
   organization: string;
   resource?: string; // e.g., 'ult', 'ust', 'ulb', 'udb'
@@ -49,7 +49,7 @@ export function useLanguage() {
   const [organization, setOrganizationState] = useState<string | null>(null);
   const [availableLanguages, setAvailableLanguages] = useState<LanguageOption[]>([]);
   const [availableOrganizations, setAvailableOrganizations] = useState<OrganizationOption[]>([]);
-  const [versionPreferences, setVersionPreferencesState] = useState<ScriptureVersion[]>([]);
+  const [resourcePreferences, setResourcePreferencesState] = useState<ScriptureResource[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [needsSelection, setNeedsSelection] = useState(false);
@@ -145,29 +145,30 @@ export function useLanguage() {
     return fetchOwnersForLanguage(langId);
   }, [fetchOwnersForLanguage]);
 
-  // Initialize language, organization, and version preferences from localStorage
+  // Initialize language, organization, and resource preferences from localStorage
   useEffect(() => {
     const savedLanguage = localStorage.getItem(LANGUAGE_KEY);
     const savedOrganization = localStorage.getItem(ORGANIZATION_KEY);
-    const savedPreferences = localStorage.getItem(VERSION_PREFERENCES_KEY);
+    // Support both old and new keys for backward compatibility
+    const savedPreferences = localStorage.getItem(RESOURCE_PREFERENCES_KEY) || localStorage.getItem('bible-study-version-preferences');
     
     if (savedLanguage && savedOrganization) {
       setLanguageState(savedLanguage);
       setOrganizationState(savedOrganization);
       setNeedsSelection(false);
       
-      // Load version preferences or initialize with defaults
+      // Load resource preferences or initialize with defaults
       if (savedPreferences) {
         try {
-          setVersionPreferencesState(JSON.parse(savedPreferences));
+          setResourcePreferencesState(JSON.parse(savedPreferences));
         } catch {
           // Initialize with primary + English fallback
-          const defaultPrefs = buildDefaultVersionPreferences(savedLanguage, savedOrganization);
-          setVersionPreferencesState(defaultPrefs);
+          const defaultPrefs = buildDefaultResourcePreferences(savedLanguage, savedOrganization);
+          setResourcePreferencesState(defaultPrefs);
         }
       } else {
-        const defaultPrefs = buildDefaultVersionPreferences(savedLanguage, savedOrganization);
-        setVersionPreferencesState(defaultPrefs);
+        const defaultPrefs = buildDefaultResourcePreferences(savedLanguage, savedOrganization);
+        setResourcePreferencesState(defaultPrefs);
       }
     } else {
       setNeedsSelection(true);
@@ -191,10 +192,10 @@ export function useLanguage() {
     setOrganization(orgId);
     setNeedsSelection(false);
     
-    // Initialize version preferences with primary + English fallback
-    const defaultPrefs = buildDefaultVersionPreferences(langId, orgId);
-    setVersionPreferencesState(defaultPrefs);
-    localStorage.setItem(VERSION_PREFERENCES_KEY, JSON.stringify(defaultPrefs));
+    // Initialize resource preferences with primary + English fallback
+    const defaultPrefs = buildDefaultResourcePreferences(langId, orgId);
+    setResourcePreferencesState(defaultPrefs);
+    localStorage.setItem(RESOURCE_PREFERENCES_KEY, JSON.stringify(defaultPrefs));
   }, [setLanguage, setOrganization]);
 
   const getCurrentLanguage = useCallback((): LanguageOption | null => {
@@ -234,28 +235,28 @@ export function useLanguage() {
     };
   }, [organization, availableOrganizations]);
 
-  // Set version preferences (ordered list)
-  const setVersionPreferences = useCallback((versions: ScriptureVersion[]) => {
-    setVersionPreferencesState(versions);
-    localStorage.setItem(VERSION_PREFERENCES_KEY, JSON.stringify(versions));
+  // Set resource preferences (ordered list)
+  const setResourcePreferences = useCallback((resources: ScriptureResource[]) => {
+    setResourcePreferencesState(resources);
+    localStorage.setItem(RESOURCE_PREFERENCES_KEY, JSON.stringify(resources));
   }, []);
 
-  // Get the active (first) version preference
-  const getActiveVersion = useCallback((): ScriptureVersion | null => {
-    return versionPreferences.length > 0 ? versionPreferences[0] : null;
-  }, [versionPreferences]);
+  // Get the active (first) resource preference
+  const getActiveResource = useCallback((): ScriptureResource | null => {
+    return resourcePreferences.length > 0 ? resourcePreferences[0] : null;
+  }, [resourcePreferences]);
 
-  // Reorder version preferences (move to top)
-  const setActiveVersion = useCallback((version: ScriptureVersion) => {
-    // Filter out matching version (by language, org, AND resource)
-    const filtered = versionPreferences.filter(
-      v => !(v.language === version.language && 
-             v.organization === version.organization && 
-             v.resource === version.resource)
+  // Reorder resource preferences (move to top)
+  const setActiveResource = useCallback((resource: ScriptureResource) => {
+    // Filter out matching resource (by language, org, AND resource type)
+    const filtered = resourcePreferences.filter(
+      r => !(r.language === resource.language && 
+             r.organization === resource.organization && 
+             r.resource === resource.resource)
     );
-    const newPrefs = [version, ...filtered];
-    setVersionPreferences(newPrefs);
-  }, [versionPreferences, setVersionPreferences]);
+    const newPrefs = [resource, ...filtered];
+    setResourcePreferences(newPrefs);
+  }, [resourcePreferences, setResourcePreferences]);
 
   return {
     language,
@@ -270,16 +271,16 @@ export function useLanguage() {
     needsSelection,
     getCurrentLanguage,
     getCurrentOrganization,
-    versionPreferences,
-    setVersionPreferences,
-    getActiveVersion,
-    setActiveVersion,
+    resourcePreferences,
+    setResourcePreferences,
+    getActiveResource,
+    setActiveResource,
   };
 }
 
-// Helper to build default version preferences
-function buildDefaultVersionPreferences(langId: string, orgId: string): ScriptureVersion[] {
-  const prefs: ScriptureVersion[] = [];
+// Helper to build default resource preferences
+function buildDefaultResourcePreferences(langId: string, orgId: string): ScriptureResource[] {
+  const prefs: ScriptureResource[] = [];
   
   // Primary selection
   prefs.push({
