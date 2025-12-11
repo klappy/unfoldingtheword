@@ -38,30 +38,45 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const playbackSpeedRef = useRef<VoicePlaybackSpeed>(playbackSpeed);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    playbackSpeedRef.current = playbackSpeed;
+  }, [playbackSpeed]);
 
   // Update playback speed
   const setPlaybackSpeed = useCallback((speed: VoicePlaybackSpeed) => {
     setPlaybackSpeedState(speed);
+    playbackSpeedRef.current = speed;
     localStorage.setItem(VOICE_SPEED_KEY, speed.toString());
     if (audioElRef.current) {
       audioElRef.current.playbackRate = speed;
+      console.log('[Voice] Playback speed updated to:', speed);
     }
   }, []);
 
   // Get current resource preferences from localStorage
   const getResourcePrefs = useCallback(() => {
     const prefsJson = localStorage.getItem('bible-study-resource-preferences') || localStorage.getItem('bible-study-version-preferences');
+    console.log('[Voice] Reading resource prefs from localStorage:', prefsJson);
     if (prefsJson) {
       try {
         const prefs = JSON.parse(prefsJson);
-        if (prefs.length > 0) {
+        console.log('[Voice] Parsed resource prefs:', prefs);
+        if (Array.isArray(prefs) && prefs.length > 0) {
+          // Find the first preference with a resource field, or use the first one
+          const activePref = prefs.find((p: any) => p.resource) || prefs[0];
+          console.log('[Voice] Active preference:', activePref);
           return {
-            language: prefs[0].language || 'en',
-            organization: prefs[0].organization || 'unfoldingWord',
-            resource: prefs[0].resource || 'ult',
+            language: activePref.language || 'en',
+            organization: activePref.organization || 'unfoldingWord',
+            resource: activePref.resource || 'ult',
           };
         }
-      } catch {}
+      } catch (e) {
+        console.error('[Voice] Error parsing resource prefs:', e);
+      }
     }
     return { language: 'en', organization: 'unfoldingWord', resource: 'ult' };
   }, []);
@@ -269,12 +284,14 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       // Set up audio element for remote audio
       audioElRef.current = document.createElement('audio');
       audioElRef.current.autoplay = true;
-      audioElRef.current.playbackRate = playbackSpeed;
+      audioElRef.current.playbackRate = playbackSpeedRef.current;
+      console.log('[Voice] Initial playback speed:', playbackSpeedRef.current);
       
       pcRef.current.ontrack = (e) => {
         if (audioElRef.current) {
           audioElRef.current.srcObject = e.streams[0];
-          audioElRef.current.playbackRate = playbackSpeed;
+          audioElRef.current.playbackRate = playbackSpeedRef.current;
+          console.log('[Voice] Applied playback speed on track:', playbackSpeedRef.current);
         }
       };
       
