@@ -1,6 +1,9 @@
 import { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
+export const PLAYBACK_SPEEDS = [0.5, 0.7, 1, 1.2, 1.5, 2] as const;
+export type PlaybackSpeed = typeof PLAYBACK_SPEEDS[number];
+
 interface TTSContextType {
   speak: (text: string, id: string, language?: string) => void;
   stop: () => void;
@@ -8,19 +11,39 @@ interface TTSContextType {
   isLoading: boolean;
   currentId: string | null;
   progress: number;
+  playbackSpeed: PlaybackSpeed;
+  setPlaybackSpeed: (speed: PlaybackSpeed) => void;
 }
 
 const TTSContext = createContext<TTSContextType | null>(null);
+
+// Persist speed preference
+const SPEED_STORAGE_KEY = 'tts-playback-speed';
 
 export function TTSProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [playbackSpeed, setPlaybackSpeedState] = useState<PlaybackSpeed>(() => {
+    const stored = localStorage.getItem(SPEED_STORAGE_KEY);
+    return stored && PLAYBACK_SPEEDS.includes(Number(stored) as PlaybackSpeed) 
+      ? Number(stored) as PlaybackSpeed 
+      : 1;
+  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
+
+  const setPlaybackSpeed = useCallback((speed: PlaybackSpeed) => {
+    setPlaybackSpeedState(speed);
+    localStorage.setItem(SPEED_STORAGE_KEY, String(speed));
+    // Apply to current audio if playing
+    if (audioRef.current) {
+      audioRef.current.playbackRate = speed;
+    }
+  }, []);
 
   // Update progress based on audio element
   const updateProgress = useCallback(() => {
@@ -190,11 +213,12 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         });
       };
       
-      // Set source and play
+      // Set source, speed, and play
       audio.src = audioUrl;
       audio.volume = 1.0;
+      audio.playbackRate = playbackSpeed;
       
-      console.log('[TTS] Starting playback...');
+      console.log('[TTS] Starting playback at', playbackSpeed + 'x speed...');
       audio.play().catch((err) => {
         console.error('[TTS] Play failed:', err);
         setIsLoading(false);
@@ -221,10 +245,10 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         variant: 'destructive',
       });
     });
-  }, [currentId, isPlaying, stop, toast]);
+  }, [currentId, isPlaying, stop, toast, playbackSpeed]);
 
   return (
-    <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress }}>
+    <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress, playbackSpeed, setPlaybackSpeed }}>
       {children}
     </TTSContext.Provider>
   );
