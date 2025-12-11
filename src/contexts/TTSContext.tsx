@@ -17,23 +17,26 @@ export function TTSProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const durationRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const { toast } = useToast();
 
-  // Update progress based on audio currentTime
+  // Update progress
   const updateProgress = useCallback(() => {
-    if (audioRef.current && audioRef.current.duration > 0 && !isNaN(audioRef.current.duration)) {
-      const currentProgress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
+    if (audioContextRef.current && durationRef.current > 0 && isPlaying) {
+      const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
+      const currentProgress = Math.min((elapsed / durationRef.current) * 100, 100);
       setProgress(currentProgress);
-    }
-    if (isPlaying) {
-      animationFrameRef.current = requestAnimationFrame(updateProgress);
+      
+      if (currentProgress < 100) {
+        animationFrameRef.current = requestAnimationFrame(updateProgress);
+      }
     }
   }, [isPlaying]);
 
-  // Start/stop progress tracking
   useEffect(() => {
     if (isPlaying) {
       animationFrameRef.current = requestAnimationFrame(updateProgress);
@@ -50,56 +53,40 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     };
   }, [isPlaying, updateProgress]);
 
-  // Create a persistent audio element
+  // Cleanup on unmount
   useEffect(() => {
-    audioRef.current = new Audio();
-    
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentId(null);
-      setProgress(0);
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-    };
-    
-    const handleError = (e: Event) => {
-      const audio = e.target as HTMLAudioElement;
-      console.error('[TTS] Audio error:', audio.error?.message || 'Unknown error');
-      setIsPlaying(false);
-      setCurrentId(null);
-      setProgress(0);
-    };
-    
-    audioRef.current.addEventListener('ended', handleEnded);
-    audioRef.current.addEventListener('error', handleError);
-    
     return () => {
-      if (audioRef.current) {
-        audioRef.current.removeEventListener('ended', handleEnded);
-        audioRef.current.removeEventListener('error', handleError);
-        audioRef.current.pause();
-        audioRef.current.src = '';
+      if (sourceNodeRef.current) {
+        try { sourceNodeRef.current.stop(); } catch {}
       }
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
     };
   }, []);
 
   const stop = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.stop();
+      } catch {}
+      sourceNodeRef.current = null;
     }
     setIsPlaying(false);
     setCurrentId(null);
     setProgress(0);
+  }, []);
+
+  // Initialize or resume AudioContext - MUST be called in click handler
+  const initAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    // Resume if suspended (required for mobile)
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
   }, []);
 
   const speak = useCallback(async (text: string, id: string) => {
@@ -111,6 +98,9 @@ export function TTSProvider({ children }: { children: ReactNode }) {
 
     // Stop any current playback
     stop();
+    
+    // IMPORTANT: Initialize AudioContext immediately on user gesture
+    const audioContext = initAudioContext();
     
     setIsLoading(true);
     setCurrentId(id);
@@ -127,9 +117,8 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         .replace(/^\s*\d+\.\s/gm, '')
         .trim();
 
-      console.log('[TTS] Fetching audio for text length:', cleanText.length);
+      console.log('[TTS] Fetching audio, text length:', cleanText.length);
 
-      // Use direct fetch for binary response handling
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
         {
@@ -147,57 +136,36 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         throw new Error(errorText || `HTTP ${response.status}`);
       }
       
-      // Get response as blob directly
-      const blob = await response.blob();
+      // Get audio as ArrayBuffer for Web Audio API
+      const arrayBuffer = await response.arrayBuffer();
+      console.log('[TTS] Received audio buffer, size:', arrayBuffer.byteLength);
       
-      console.log('[TTS] Audio blob received, size:', blob.size, 'type:', blob.type);
+      // Decode audio data
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      console.log('[TTS] Decoded audio, duration:', audioBuffer.duration);
       
-      // Clean up previous URL
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-      }
+      durationRef.current = audioBuffer.duration;
       
-      const audioUrl = URL.createObjectURL(blob);
-      objectUrlRef.current = audioUrl;
+      // Create and configure source node
+      const sourceNode = audioContext.createBufferSource();
+      sourceNode.buffer = audioBuffer;
+      sourceNode.connect(audioContext.destination);
       
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        
-        // Wait for audio to be ready
-        await new Promise<void>((resolve, reject) => {
-          const audio = audioRef.current!;
-          const timeoutId = setTimeout(() => {
-            cleanup();
-            reject(new Error('Audio load timeout'));
-          }, 10000);
-          
-          const cleanup = () => {
-            clearTimeout(timeoutId);
-            audio.removeEventListener('canplaythrough', onCanPlay);
-            audio.removeEventListener('error', onError);
-          };
-          
-          const onCanPlay = () => {
-            cleanup();
-            resolve();
-          };
-          
-          const onError = () => {
-            cleanup();
-            const errorMsg = audio.error?.message || 'Unknown audio error';
-            reject(new Error(errorMsg));
-          };
-          
-          audio.addEventListener('canplaythrough', onCanPlay);
-          audio.addEventListener('error', onError);
-          audio.load();
-        });
-        
-        console.log('[TTS] Audio loaded, playing...');
-        await audioRef.current.play();
-        setIsPlaying(true);
-        console.log('[TTS] Audio playing');
-      }
+      sourceNode.onended = () => {
+        setIsPlaying(false);
+        setCurrentId(null);
+        setProgress(0);
+        sourceNodeRef.current = null;
+      };
+      
+      sourceNodeRef.current = sourceNode;
+      startTimeRef.current = audioContext.currentTime;
+      
+      // Start playback
+      sourceNode.start(0);
+      setIsPlaying(true);
+      console.log('[TTS] Audio playing');
+      
     } catch (err) {
       console.error('[TTS] Error:', err);
       setCurrentId(null);
@@ -209,7 +177,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentId, isPlaying, stop, toast]);
+  }, [currentId, isPlaying, stop, toast, initAudioContext]);
 
   return (
     <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress }}>
