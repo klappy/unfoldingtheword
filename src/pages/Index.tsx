@@ -68,8 +68,10 @@ const Index = () => {
     }, [loadScriptureData, navigateToCard]),
     onToolCall: useCallback((toolName: string, args: any) => {
       console.log('[Index] Voice tool call:', toolName, args);
-      // Navigate to resources card when voice AI fetches resources (not scripture or notes)
-      if (toolName !== 'get_scripture_passage' && !toolName.includes('note')) {
+      // Navigate immediately based on tool type
+      if (toolName === 'get_scripture_passage') {
+        navigateToCard('scripture');
+      } else if (!toolName.includes('note')) {
         navigateToCard('resources');
       }
     }, [navigateToCard]),
