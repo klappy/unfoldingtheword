@@ -12,9 +12,10 @@ interface NotesCardProps {
   onAddNote: (content: string) => void;
   onDeleteNote: (id: string) => void;
   t: (key: keyof TranslationStrings) => string;
+  currentLanguage?: string;
 }
 
-export function NotesCard({ notes, onAddNote, onDeleteNote, t }: NotesCardProps) {
+export function NotesCard({ notes, onAddNote, onDeleteNote, t, currentLanguage }: NotesCardProps) {
   const [newNote, setNewNote] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -75,7 +76,7 @@ export function NotesCard({ notes, onAddNote, onDeleteNote, t }: NotesCardProps)
               </p>
               
               <div className="absolute top-3 right-3 flex items-center gap-1">
-                <PlayButton text={note.content} id={`note-${note.id}`} />
+                <PlayButton text={note.content} id={`note-${note.id}`} language={currentLanguage} />
                 <CopyButton text={note.content} />
                 <button
                   onClick={() => onDeleteNote(note.id)}

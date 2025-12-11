@@ -7,6 +7,7 @@ interface PlayButtonProps {
   id: string;
   className?: string;
   size?: 'sm' | 'md';
+  language?: string;
 }
 
 // Circular progress ring component
@@ -49,7 +50,7 @@ function ProgressRing({ progress, size }: { progress: number; size: number }) {
   );
 }
 
-export function PlayButton({ text, id, className, size = 'sm' }: PlayButtonProps) {
+export function PlayButton({ text, id, className, size = 'sm', language = 'en' }: PlayButtonProps) {
   const { speak, isPlaying, isLoading, currentId, progress } = useTTS();
   const isActive = currentId === id;
   
@@ -59,7 +60,7 @@ export function PlayButton({ text, id, className, size = 'sm' }: PlayButtonProps
   
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    speak(text, id);
+    speak(text, id, language);
   };
 
   return (

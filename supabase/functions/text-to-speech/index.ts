@@ -5,13 +5,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Language codes to natural language names for instructions
+const LANGUAGE_NAMES: Record<string, string> = {
+  'en': 'English',
+  'es': 'Spanish', 'es-419': 'Latin American Spanish',
+  'pt': 'Portuguese', 'pt-br': 'Brazilian Portuguese',
+  'fr': 'French',
+  'hi': 'Hindi',
+  'id': 'Indonesian',
+  'ar': 'Arabic',
+  'zh': 'Chinese', 'zh-cn': 'Mandarin Chinese',
+  'ru': 'Russian',
+  'de': 'German',
+  'ja': 'Japanese',
+  'ko': 'Korean',
+  'sw': 'Swahili',
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { text, voice = 'alloy' } = await req.json();
+    const { text, voice = 'nova', language = 'en' } = await req.json();
     
     if (!text) {
       throw new Error('No text provided');
@@ -25,7 +42,16 @@ serve(async (req) => {
     // Truncate text to OpenAI's 4096 character limit
     const truncatedText = text.slice(0, 4096);
     
-    console.log(`[TTS] Generating speech for ${truncatedText.length} characters, voice: ${voice}`);
+    // Build instructions for language and tone
+    const langName = LANGUAGE_NAMES[language.toLowerCase()] || LANGUAGE_NAMES[language.split('-')[0]] || 'the given language';
+    const isEnglish = language.toLowerCase().startsWith('en');
+    
+    // For non-English, instruct to speak naturally in that language
+    const instructions = isEnglish 
+      ? 'Speak clearly and naturally with a warm, friendly tone.'
+      : `Speak naturally in ${langName} with native pronunciation, accent, and intonation. Use a warm, friendly tone appropriate for the language and culture.`;
+    
+    console.log(`[TTS] Generating speech: ${truncatedText.length} chars, voice: ${voice}, lang: ${language}, instructions: ${instructions.substring(0, 50)}...`);
 
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
@@ -34,9 +60,10 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'tts-1',
+        model: 'gpt-4o-mini-tts',
         input: truncatedText,
         voice: voice,
+        instructions: instructions,
         response_format: 'mp3',
       }),
     });
@@ -51,7 +78,6 @@ serve(async (req) => {
     const audioData = await response.arrayBuffer();
     console.log('[TTS] Successfully generated audio, size:', audioData.byteLength);
 
-    // Return audio as complete response (not stream)
     return new Response(audioData, {
       headers: {
         ...corsHeaders,

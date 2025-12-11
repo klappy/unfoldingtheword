@@ -290,6 +290,7 @@ const Index = () => {
             onRetry={() => scripture?.reference && loadScriptureData(scripture.reference)}
             scrollToType={scrollToResourceType}
             onScrollComplete={() => setScrollToResourceType(null)}
+            currentLanguage={language}
           />
         );
       case 'notes':
@@ -299,6 +300,7 @@ const Index = () => {
             onAddNote={(content) => handleAddToNotes(content)}
             onDeleteNote={handleDeleteNote}
             t={t}
+            currentLanguage={language}
           />
         );
       default:
