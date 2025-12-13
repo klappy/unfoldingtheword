@@ -92,49 +92,43 @@ async function replayToolCall(
         break;
       }
 
-      case 'search_resources': {
-        const resourceTypes = args.resource_types || ['tn', 'tq', 'tw', 'ta'];
-        const resources: Resource[] = [];
-        
-        for (const resourceType of resourceTypes) {
-          let url = `${MCP_BASE_URL}/api/search?query=${encodeURIComponent(args.query)}&resource=${resourceType}`;
-          url += `&language=${encodeURIComponent(prefs.language)}`;
-          url += `&organization=${encodeURIComponent(prefs.organization)}`;
-          
-          const response = await fetch(url);
-          if (response.ok) {
-            const data = await response.json();
-            if (data.hits && Array.isArray(data.hits)) {
-              resources.push(...data.hits.map((r: any) => ({
-                id: r.id || `${resourceType}-${Math.random()}`,
-                type: getResourceType(resourceType),
-                title: r.title || r.term || args.query,
-                content: r.content || r.definition || '',
-                reference: r.reference,
-              })));
-            }
-          }
-        }
-        result.resources = resources;
-        break;
-      }
-
-      case 'get_translation_notes':
-      case 'get_translation_questions': {
-        const endpoint = tool === 'get_translation_notes' ? 'fetch-translation-notes' : 'fetch-translation-questions';
-        let url = `${MCP_BASE_URL}/api/${endpoint}?reference=${encodeURIComponent(args.reference)}`;
+      case 'get_translation_notes': {
+        let url = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(args.reference)}`;
         url += `&language=${encodeURIComponent(prefs.language)}`;
         url += `&organization=${encodeURIComponent(prefs.organization)}`;
+        if (args.filter) url += `&filter=${encodeURIComponent(args.filter)}`;
         
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           if (Array.isArray(data)) {
             result.resources = data.map((r: any) => ({
-              id: r.id || `${tool}-${Math.random()}`,
-              type: tool === 'get_translation_notes' ? 'translation-note' : 'translation-question',
-              title: r.title || r.question || args.reference,
-              content: r.content || r.response || '',
+              id: r.id || `tn-${Math.random()}`,
+              type: 'translation-note',
+              title: r.title || args.reference,
+              content: r.content || '',
+              reference: r.reference || args.reference,
+            }));
+          }
+        }
+        break;
+      }
+
+      case 'get_translation_questions': {
+        let url = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(args.reference)}`;
+        url += `&language=${encodeURIComponent(prefs.language)}`;
+        url += `&organization=${encodeURIComponent(prefs.organization)}`;
+        if (args.filter) url += `&filter=${encodeURIComponent(args.filter)}`;
+        
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            result.resources = data.map((r: any) => ({
+              id: r.id || `tq-${Math.random()}`,
+              type: 'translation-question',
+              title: r.question || args.reference,
+              content: r.response || '',
               reference: r.reference || args.reference,
             }));
           }
@@ -143,7 +137,10 @@ async function replayToolCall(
       }
 
       case 'get_translation_word': {
-        const url = `${MCP_BASE_URL}/api/fetch-translation-word?term=${encodeURIComponent(args.term)}`;
+        let url = `${MCP_BASE_URL}/api/fetch-translation-word?term=${encodeURIComponent(args.term)}`;
+        // Support reference parameter for scoped lookups
+        if (args.reference) url += `&reference=${encodeURIComponent(args.reference)}`;
+        
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();

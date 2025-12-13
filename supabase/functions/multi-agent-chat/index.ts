@@ -18,29 +18,39 @@ CRITICAL RULE - ONLY USE TOOLS:
 - NEVER make up or invent scripture verses, translation notes, or any content
 - ONLY share what the tools return to you
 
-INTENT ROUTING (very important):
-- LOCATE queries ("find X in Y", "where does X appear"): Use get_scripture_passage with 'filter' parameter
-- UNDERSTAND queries ("what does X mean", "explain X"): Use search_resources with tw/ta resources
-- READ queries ("John 3:16", "read Romans 8"): Use get_scripture_passage without filter
+INTENT ROUTING - USE FILTER PARAMETER:
+Every resource tool supports a 'filter' parameter to find specific terms:
+- "find love in Romans" → get_scripture_passage(reference="Romans", filter="love")
+- "find notes about grace in NT" → get_translation_notes(reference="NT", filter="grace")
+- "questions about faith in John" → get_translation_questions(reference="John", filter="faith")
+- "word 'redeem' in Exodus" → get_translation_word(term="redeem", reference="Exodus")
+
+WITHOUT FILTER (just reading):
+- "John 3:16" → get_scripture_passage(reference="John 3:16")
+- "notes for Romans 8" → get_translation_notes(reference="Romans 8")
+
+REFERENCE SCOPES (all tools support these):
+- Verse: "John 3:16"
+- Chapter: "Romans 8"
+- Book: "Romans"
+- Testament: "NT", "OT"
+- Section: "Gospels", "Pentateuch"
+- Full: "Bible" (searches both testaments)
 
 CONVERSATION STYLE:
 - Speak naturally, like a helpful friend who knows the library
 - Keep responses brief - 2-4 sentences, then let the user explore
-- For LOCATE results: ONLY mention counts if the tool returned structured matches. If no structured data was returned, DO NOT invent or guess match counts.
+- For filter results: ONLY mention counts if the tool returned structured matches
 
 CRITICAL - NO HALLUCINATED STATISTICS:
 - NEVER say "I found X occurrences" unless the tool actually returned that exact count
-- If the search tool returns an error or empty results, say "I couldn't find results for that search"
-- If you only have partial data, be honest about the limitation
+- If the tool returns an error or empty results, say "I couldn't find results for that search"
 
 WHAT YOU MUST NOT DO:
 - Never answer questions from your training data
 - Never interpret scripture or give theological opinions
 - Never act as a pastor or counselor
 - Never make up content if tools return nothing
-
-WHEN TOOLS RETURN NOTHING:
-Say: "I searched but didn't find any resources on that specific topic. Would you like to try a different scripture reference or topic?"
 
 RESOURCE NAMES (CRITICAL):
 - When you mention ULT, you MUST say exactly: "UnfoldingWord® Literal Text (ULT)".
@@ -77,68 +87,36 @@ const mcpTools = [
   {
     type: "function",
     function: {
-      name: "search_resources",
-      description: `Use for UNDERSTANDING concepts - when user asks what something MEANS, not where it APPEARS.
-
-USE THIS TOOL WHEN:
-- "What does justification mean?" → search for definitions in translation words/academy
-- "Explain grace" → search for theological explanations
-- "Tell me about redemption" → search for concept explanations
-
-DO NOT USE THIS for finding WHERE a term appears in scripture - use get_scripture_passage with filter instead.
-
-Resource types:
-- tw: Translation Words - biblical term definitions
-- ta: Translation Academy - translation concepts and background
-- tn: Translation Notes - passage-specific explanations  
-- tq: Translation Questions - comprehension questions`,
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Concept or topic to understand" },
-          resource_types: { 
-            type: "array", 
-            items: { type: "string", enum: ["tn", "tq", "tw", "ta"] },
-            description: "tw=words, ta=academy, tn=notes, tq=questions"
-          }
-        },
-        required: ["query"],
-        additionalProperties: false
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
       name: "get_scripture_passage",
       description: `Get scripture text OR locate term occurrences in scripture.
 
-WHEN TO USE 'filter' PARAMETER:
+USE 'filter' PARAMETER WHEN:
 - User asks WHERE a word appears: "find love in Romans", "where is grace mentioned in NT", "find Boaz in the Bible"
 - User wants to LOCATE occurrences of a term across scripture
-- The MCP server will return structured matches with book, chapter, verse, and text for each occurrence
+- Returns structured matches with book, chapter, verse, and text for each occurrence
 
-WHEN TO OMIT 'filter':
+OMIT 'filter' WHEN:
 - User wants to READ a specific passage: "John 3:16", "read Romans 8"
 
-REFERENCE SCOPES:
+REFERENCE SCOPES (all supported by MCP):
 - Specific verse: "John 3:16"
 - Chapter: "Romans 8" 
 - Book: "Romans"
 - Testament: "NT", "OT", "New Testament", "Old Testament"
-- Section: "Gospels", "Pauline Epistles"
+- Section: "Gospels", "Pentateuch", "Pauline Epistles"
+- Full Bible: "Bible" (will search both OT and NT)
 
-The MCP server handles all reference parsing including localized book names (Spanish, Portuguese, etc.) and abbreviations.`,
+The MCP server handles all reference parsing including localized book names.`,
       parameters: {
         type: "object",
         properties: {
           reference: { 
             type: "string", 
-            description: "Scripture reference: 'John 3:16', 'Romans 8', book name, or scope like 'NT', 'OT', 'Gospels', 'Bible'" 
+            description: "Scripture scope: 'John 3:16', 'Romans', 'NT', 'OT', 'Gospels', 'Bible'" 
           },
           filter: {
             type: "string",
-            description: "Word/phrase to search for. Use this for 'find X in Y' queries. Returns structured matches."
+            description: "Word/phrase to find. Returns structured matches with counts and breakdowns."
           }
         },
         required: ["reference"],
@@ -150,11 +128,28 @@ The MCP server handles all reference parsing including localized book names (Spa
     type: "function",
     function: {
       name: "get_translation_notes",
-      description: "Get translation notes explaining difficult passages and terms for a scripture reference.",
+      description: `Get translation notes for a scripture scope. Can filter for specific terms.
+
+USE 'filter' PARAMETER WHEN:
+- User wants notes containing a specific term: "find notes about love in Romans"
+- User wants to locate where a concept is discussed in notes
+
+REFERENCE SCOPES (all supported):
+- Verse: "John 3:16"
+- Chapter: "Romans 8"
+- Book: "Romans"
+- Testament: "NT", "OT"`,
       parameters: {
         type: "object",
         properties: {
-          reference: { type: "string", description: "Scripture reference like 'John 3:16' or 'Romans 8'" }
+          reference: { 
+            type: "string", 
+            description: "Scripture scope: verse, chapter, book, or testament" 
+          },
+          filter: {
+            type: "string",
+            description: "Optional term to find within notes"
+          }
         },
         required: ["reference"],
         additionalProperties: false
@@ -165,11 +160,28 @@ The MCP server handles all reference parsing including localized book names (Spa
     type: "function",
     function: {
       name: "get_translation_questions",
-      description: "Get comprehension and checking questions for scripture passages.",
+      description: `Get translation/comprehension questions for a scripture scope. Can filter for specific terms.
+
+USE 'filter' PARAMETER WHEN:
+- User wants questions about a specific topic: "questions about faith in Romans"
+- User wants to find where a concept appears in questions
+
+REFERENCE SCOPES (all supported):
+- Verse: "John 3:16"
+- Chapter: "Romans 8"
+- Book: "Romans"
+- Testament: "NT", "OT"`,
       parameters: {
         type: "object",
         properties: {
-          reference: { type: "string", description: "Scripture reference like 'John 3:16' or 'Romans 8'" }
+          reference: { 
+            type: "string", 
+            description: "Scripture scope: verse, chapter, book, or testament" 
+          },
+          filter: {
+            type: "string",
+            description: "Optional term to find within questions"
+          }
         },
         required: ["reference"],
         additionalProperties: false
@@ -180,11 +192,22 @@ The MCP server handles all reference parsing including localized book names (Spa
     type: "function",
     function: {
       name: "get_translation_word",
-      description: "Get detailed information about a biblical term - definition, translation suggestions, and Bible references.",
+      description: `Get detailed information about a biblical term - definition, translation suggestions, and Bible references.
+
+USE 'reference' PARAMETER WHEN:
+- User wants word usage in a specific scope: "word 'love' in Romans"
+- User wants to see where a term is used in a book/testament`,
       parameters: {
         type: "object",
         properties: {
-          term: { type: "string", description: "Translation word term ID like 'love', 'faith', 'grace'" }
+          term: { 
+            type: "string", 
+            description: "Translation word term like 'love', 'faith', 'grace'" 
+          },
+          reference: {
+            type: "string",
+            description: "Optional scripture scope to filter word occurrences"
+          }
         },
         required: ["term"],
         additionalProperties: false
@@ -227,43 +250,19 @@ The MCP server handles all reference parsing including localized book names (Spa
   }
 ];
 
-// Fetch resources from MCP server using SEARCH endpoint (for keyword searches)
-async function fetchMcpResourcesSearch(query: string, resourceTypes: string[] = ['tn', 'tq', 'tw', 'ta'], language?: string, organization?: string): Promise<any[]> {
-  const results: any[] = [];
-  
-  for (const resourceType of resourceTypes) {
-    try {
-      let url = `${MCP_BASE_URL}/api/search?query=${encodeURIComponent(query)}&resource=${resourceType}`;
-      if (language) url += `&language=${encodeURIComponent(language)}`;
-      if (organization) url += `&organization=${encodeURIComponent(organization)}`;
-      console.log(`Searching MCP resources: ${url}`);
-      
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.hits && Array.isArray(data.hits)) {
-          results.push(...data.hits.map((r: any) => ({ ...r, resourceType })));
-        }
-      } else {
-        console.log(`MCP search returned ${response.status} for ${resourceType}`);
-      }
-    } catch (error) {
-      console.error(`Error searching ${resourceType} resources:`, error);
-    }
-  }
-  
-  return results;
-}
+// Removed: fetchMcpResourcesSearch - replaced by filter-based discovery on each endpoint
 
-// Fetch verse-specific resources from MCP server using FETCH endpoints (for scripture references)
-async function fetchVerseResources(reference: string, language?: string, organization?: string): Promise<any[]> {
+// Fetch verse-specific resources from MCP server using FETCH endpoints
+// Now supports optional 'filter' parameter to find specific terms within resources
+async function fetchVerseResources(reference: string, language?: string, organization?: string, filter?: string): Promise<any[]> {
   const results: any[] = [];
   const langParam = language ? `&language=${encodeURIComponent(language)}` : '';
   const orgParam = organization ? `&organization=${encodeURIComponent(organization)}` : '';
+  const filterParam = filter ? `&filter=${encodeURIComponent(filter)}` : '';
   
   // Fetch translation notes
   try {
-    const notesUrl = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(reference)}${langParam}${orgParam}`;
+    const notesUrl = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(reference)}${langParam}${orgParam}${filterParam}`;
     console.log(`Fetching translation notes: ${notesUrl}`);
     const notesResponse = await fetch(notesUrl);
     if (notesResponse.ok) {
@@ -287,7 +286,7 @@ async function fetchVerseResources(reference: string, language?: string, organiz
 
   // Fetch translation questions
   try {
-    const questionsUrl = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(reference)}${langParam}${orgParam}`;
+    const questionsUrl = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(reference)}${langParam}${orgParam}${filterParam}`;
     console.log(`Fetching translation questions: ${questionsUrl}`);
     const questionsResponse = await fetch(questionsUrl);
     if (questionsResponse.ok) {
@@ -309,31 +308,33 @@ async function fetchVerseResources(reference: string, language?: string, organiz
     console.error('Error fetching translation questions:', error);
   }
 
-  // Fetch word links
-  try {
-    const wordLinksUrl = `${MCP_BASE_URL}/api/fetch-translation-word-links?reference=${encodeURIComponent(reference)}${langParam}${orgParam}`;
-    console.log(`Fetching word links: ${wordLinksUrl}`);
-    const wordLinksResponse = await fetch(wordLinksUrl);
-    if (wordLinksResponse.ok) {
-      const contentType = wordLinksResponse.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await wordLinksResponse.json();
-        if (Array.isArray(data)) {
-          results.push(...data.map((r: any) => ({ ...r, resourceType: 'tw' })));
-        }
-      } else {
-        const text = await wordLinksResponse.text();
-        if (text && text.trim()) {
-          const wordLinks = parseMarkdownWordLinks(text, reference);
-          results.push(...wordLinks.map((w: any) => ({ ...w, resourceType: 'tw' })));
+  // Fetch word links (only when not filtering - filter on tw uses fetch-translation-word with reference)
+  if (!filter) {
+    try {
+      const wordLinksUrl = `${MCP_BASE_URL}/api/fetch-translation-word-links?reference=${encodeURIComponent(reference)}${langParam}${orgParam}`;
+      console.log(`Fetching word links: ${wordLinksUrl}`);
+      const wordLinksResponse = await fetch(wordLinksUrl);
+      if (wordLinksResponse.ok) {
+        const contentType = wordLinksResponse.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await wordLinksResponse.json();
+          if (Array.isArray(data)) {
+            results.push(...data.map((r: any) => ({ ...r, resourceType: 'tw' })));
+          }
+        } else {
+          const text = await wordLinksResponse.text();
+          if (text && text.trim()) {
+            const wordLinks = parseMarkdownWordLinks(text, reference);
+            results.push(...wordLinks.map((w: any) => ({ ...w, resourceType: 'tw' })));
+          }
         }
       }
+    } catch (error) {
+      console.error('Error fetching word links:', error);
     }
-  } catch (error) {
-    console.error('Error fetching word links:', error);
   }
 
-  console.log(`Fetched ${results.length} verse-specific resources for ${reference}`);
+  console.log(`Fetched ${results.length} resources for ${reference}${filter ? ` with filter "${filter}"` : ''}`);
   return results;
 }
 
@@ -754,12 +755,7 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
     // Store the tool call signature (recipe, not results)
     toolCallSignatures.push({ tool: functionName, args });
     
-    if (functionName === 'search_resources') {
-      const results = await fetchMcpResourcesSearch(args.query, args.resource_types, userPrefs?.language, userPrefs?.organization);
-      resources.push(...results);
-      searchQuery = args.query;
-      navigationHint = 'resources';
-    } else if (functionName === 'get_scripture_passage') {
+    if (functionName === 'get_scripture_passage') {
       // MCP supports testament scopes (OT, NT) and book references directly - let the AI use them
       console.log(`Processing tool call: ${functionName}`, { reference: args.reference, filter: args.filter });
       const result = await fetchScripturePassage(args.reference, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
@@ -771,14 +767,27 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
       scriptureReference = args.reference;
       navigationHint = args.filter ? 'search' : 'scripture';
       if (args.filter) searchQuery = args.filter;
-    } else if (functionName === 'get_translation_notes' || functionName === 'get_translation_questions') {
-      const results = await fetchVerseResources(args.reference, userPrefs?.language, userPrefs?.organization);
-      resources.push(...results);
+    } else if (functionName === 'get_translation_notes') {
+      // Now supports filter parameter
+      const results = await fetchVerseResources(args.reference, userPrefs?.language, userPrefs?.organization, args.filter);
+      // Filter to only tn resources
+      resources.push(...results.filter((r: any) => r.resourceType === 'tn'));
       scriptureReference = args.reference;
       navigationHint = 'resources';
+      if (args.filter) searchQuery = args.filter;
+    } else if (functionName === 'get_translation_questions') {
+      // Now supports filter parameter
+      const results = await fetchVerseResources(args.reference, userPrefs?.language, userPrefs?.organization, args.filter);
+      // Filter to only tq resources
+      resources.push(...results.filter((r: any) => r.resourceType === 'tq'));
+      scriptureReference = args.reference;
+      navigationHint = 'resources';
+      if (args.filter) searchQuery = args.filter;
     } else if (functionName === 'get_translation_word') {
       try {
-        const url = `${MCP_BASE_URL}/api/fetch-translation-word?term=${encodeURIComponent(args.term)}`;
+        // Now supports reference parameter for scoped word lookups
+        let url = `${MCP_BASE_URL}/api/fetch-translation-word?term=${encodeURIComponent(args.term)}`;
+        if (args.reference) url += `&reference=${encodeURIComponent(args.reference)}`;
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -889,12 +898,9 @@ User's organization: ${userPrefs?.organization || 'unfoldingWord'}`;
     searchMatches = result.searchMatches;
     toolCalls = result.toolCallSignatures;
   } else {
-    console.log("No tool calls, falling back to direct search");
-    resources = await fetchMcpResourcesSearch(userMessage, undefined, userPrefs?.language, userPrefs?.organization);
-    searchQuery = userMessage;
-    navigationHint = 'resources';
-    // Create a synthetic tool call for the fallback search
-    toolCalls = [{ tool: 'search_resources', args: { query: userMessage } }];
+    // No tool calls - AI should always use tools, but if not, we just proceed with empty resources
+    console.log("No tool calls from AI - proceeding with empty resources");
+    navigationHint = null;
   }
 
   return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, searchMatches, toolCalls };
