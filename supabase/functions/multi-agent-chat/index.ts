@@ -1237,6 +1237,10 @@ serve(async (req) => {
     }
 
     console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}, navigation: ${navigationHint}, matches: ${searchMatches.length}`);
+    console.log(`Resource types breakdown: tn=${resources.filter(r=>r.resourceType==='tn').length}, tq=${resources.filter(r=>r.resourceType==='tq').length}, tw=${resources.filter(r=>r.resourceType==='tw').length}`);
+    if (resources.length > 0) {
+      console.log(`First resource sample: ${JSON.stringify(resources[0]).substring(0, 300)}`);
+    }
 
     const noteResources = resources.filter(r => r.resourceType === 'tn');
     const questionResources = resources.filter(r => r.resourceType === 'tq');
