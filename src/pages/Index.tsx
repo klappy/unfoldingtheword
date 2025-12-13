@@ -257,6 +257,8 @@ const Index = () => {
           if (convId) {
             await updateConversation(convId, { scriptureReference: scriptureRef });
           }
+          // Navigate to scripture card after loading
+          navigateToCard('scripture');
         } catch (error) {
           console.error('[Index] Failed to load scripture:', error);
         }
@@ -270,8 +272,15 @@ const Index = () => {
       }
     }
 
-    if (result?.searchQuery) {
-      await loadKeywordResources(result.searchQuery);
+    if (result) {
+      const { searchQuery, scriptureReference, navigationHint } = result as any;
+      if (navigationHint === 'search' && scriptureReference && searchQuery) {
+        await loadFilteredSearch(scriptureReference, searchQuery);
+        navigateToCard('search');
+      } else if (searchQuery) {
+        await loadKeywordResources(searchQuery);
+        navigateToCard('resources');
+      }
     }
   }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName]);
 

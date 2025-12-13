@@ -17,8 +17,8 @@ interface ResourceSelectorProps {
 
 // Known scripture resource types
 const SCRIPTURE_RESOURCES = [
-  { id: 'ult', name: 'Literal Text (ULT)', description: 'Word-for-word translation' },
-  { id: 'ust', name: 'Simplified Text (UST)', description: 'Meaning-focused translation' },
+  { id: 'ult', name: 'UnfoldingWord® Literal Text (ULT)', description: 'Word-for-word translation' },
+  { id: 'ust', name: 'UnfoldingWord® Simplified Text (UST)', description: 'Meaning-focused translation' },
   { id: 'ulb', name: 'Unlocked Literal Bible', description: 'Legacy literal translation' },
   { id: 'udb', name: 'Unlocked Dynamic Bible', description: 'Legacy dynamic translation' },
 ];

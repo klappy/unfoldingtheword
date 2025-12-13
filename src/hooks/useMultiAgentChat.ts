@@ -12,6 +12,7 @@ interface ChatMetadata {
   };
   total_resources: number;
   mcp_resources: any[];
+  navigation_hint: 'scripture' | 'resources' | 'search' | 'notes' | null;
 }
 
 interface UseMultiAgentChatOptions {
@@ -241,6 +242,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
       return {
         scriptureReference: metadata?.scripture_reference || null,
         searchQuery: metadata?.search_query || null,
+        navigationHint: metadata?.navigation_hint || null,
         newMessages: [finalAssistantMessage], // Return for persistence
       };
     } catch (err) {
