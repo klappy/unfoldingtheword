@@ -339,12 +339,19 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       dcRef.current.addEventListener('message', handleDataChannelMessage);
       
       dcRef.current.onopen = () => {
-        console.log('Voice data channel opened');
+        console.log('[Voice] Data channel opened');
+        // Set connected immediately since data channel is ready
+        setStatus('connected');
       };
       
       dcRef.current.onclose = () => {
-        console.log('Voice data channel closed');
+        console.log('[Voice] Data channel closed');
         setStatus('idle');
+      };
+      
+      dcRef.current.onerror = (err) => {
+        console.error('[Voice] Data channel error:', err);
+        setStatus('error');
       };
       
       const offer = await pcRef.current.createOffer();
