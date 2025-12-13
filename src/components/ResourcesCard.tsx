@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { useState, useCallback, useRef, useEffect, memo, type FC } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';

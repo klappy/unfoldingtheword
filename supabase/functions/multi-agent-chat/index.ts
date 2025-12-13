@@ -751,10 +751,14 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
       navigationHint = 'resources';
     } else if (functionName === 'get_scripture_passage') {
       const result = await fetchScripturePassage(args.reference, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
-      scriptureText = result.text;
+      // Only update scripture text if we got something (don't overwrite with null)
+      if (result.text) {
+        scriptureText = result.text;
+      }
       scriptureReference = args.reference;
-      isFilterSearch = result.isFilterSearch;
-      searchMatches = result.matches;
+      isFilterSearch = isFilterSearch || result.isFilterSearch;
+      // Aggregate matches from multiple tool calls instead of overwriting
+      searchMatches = [...searchMatches, ...result.matches];
       navigationHint = args.filter ? 'search' : 'scripture';
       if (args.filter) searchQuery = args.filter;
     } else if (functionName === 'get_translation_notes' || functionName === 'get_translation_questions') {
