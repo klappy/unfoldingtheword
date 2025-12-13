@@ -93,11 +93,11 @@ const Index = () => {
   // Compute content state for dynamic card visibility
   const contentState = useMemo(() => ({
     hasHistory: conversations.length > 0,
-    hasSearch: searchResults !== null,
+    hasSearch: searchResults !== null || resourceFilterInfo !== null,
     hasScripture: scripture !== null,
     hasResources: resources.length > 0,
     hasNotes: notes.length > 0,
-  }), [conversations.length, searchResults, scripture, resources.length, notes.length]);
+  }), [conversations.length, searchResults, scripture, resources.length, notes.length, resourceFilterInfo]);
 
   // Use card visibility hook
   const {
@@ -320,21 +320,22 @@ const Index = () => {
     if (result) {
       const { toolCalls, navigationHint, scriptureReference, searchQuery, searchMatches, searchResource } = result;
       
-      // Always update search results when search intent is detected (clears stale results if empty)
+      // Always update scripture search results when search intent is detected (clears stale results if empty)
       if (navigationHint === 'search' && searchQuery) {
         const ref = scriptureReference || scripture?.reference || 'Bible';
         if (searchMatches && searchMatches.length > 0) {
           console.log('[Index] Setting search results from metadata:', { ref, searchQuery, count: searchMatches.length });
           setSearchResultsFromMetadata(ref, searchQuery, searchMatches, searchResource || undefined);
         } else {
-          // Clear old results and show empty state for this new search
           console.log('[Index] Clearing stale search results for new search:', { ref, searchQuery });
           clearSearchResults();
         }
       }
 
-      // Track resource-level search filters for resources card
-      if (navigationHint === 'resources' && searchQuery) {
+      const isFilterResourcesSearch = navigationHint === 'resources' && !!searchQuery;
+
+      // Track resource-level search filters for resources/notes queries
+      if (isFilterResourcesSearch && searchQuery) {
         setResourceFilterInfo({
           query: searchQuery,
           reference: scriptureReference || scripture?.reference || null,
@@ -349,8 +350,8 @@ const Index = () => {
         mcpReplay.replayToolCalls(toolCalls);
       }
       
-      // Defer navigation to search card until search results are ready
-      if (navigationHint === 'search') {
+      // Defer navigation to search card until search results or resource filters are ready
+      if (navigationHint === 'search' || isFilterResourcesSearch) {
         setPendingSearchNavigation(true);
       } else if (navigationHint === 'scripture') {
         navigateToCard('scripture');
@@ -526,6 +527,9 @@ const Index = () => {
             results={searchResults}
             onClearSearch={handleClearSearch}
             onVerseClick={handleSearchVerseClick}
+            filterQuery={resourceFilterInfo?.query || undefined}
+            filterReference={resourceFilterInfo?.reference || undefined}
+            resourceMatchCount={resourceFilterInfo ? resources.length : undefined}
           />
         );
       case 'scripture':
@@ -571,8 +575,6 @@ const Index = () => {
             scrollToType={scrollToResourceType}
             onScrollComplete={() => setScrollToResourceType(null)}
             currentLanguage={language}
-            filterQuery={resourceFilterInfo?.query || null}
-            filterReference={resourceFilterInfo?.reference || null}
           />
         );
       case 'notes':
