@@ -43,7 +43,7 @@ const Index = () => {
   const [showVoiceMode, setShowVoiceMode] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
-
+  const [pendingSearchNavigation, setPendingSearchNavigation] = useState(false);
   const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, navigateToVerse, clearData: clearScriptureData, setScripture, setResources, setSearchResults } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
@@ -132,6 +132,16 @@ const Index = () => {
     visibleCards, 
     onSwipeUp: handleSwipeUp 
   });
+
+  // Ensure we only navigate to search once results are ready and card is visible
+  useEffect(() => {
+    if (pendingSearchNavigation && searchResults) {
+      console.log('[Index] Navigating to search card after results ready');
+      navigateToCard('search');
+      setPendingSearchNavigation(false);
+    }
+  }, [pendingSearchNavigation, searchResults, navigateToCard]);
+
 
   // Voice conversation - managed at top level so it persists across card navigation
   const voiceConversation = useVoiceConversation({
@@ -306,7 +316,14 @@ const Index = () => {
     }
 
     if (result) {
-      const { toolCalls, navigationHint, scriptureReference } = result;
+      const { toolCalls, navigationHint, scriptureReference, searchQuery, searchMatches, searchResource } = result;
+      
+      // If we have structured search matches from orchestrator, set search results immediately
+      if (navigationHint === 'search' && searchMatches && searchMatches.length > 0 && searchQuery) {
+        const ref = scriptureReference || scripture?.reference || 'Bible';
+        console.log('[Index] Setting search results from metadata:', { ref, searchQuery, count: searchMatches.length });
+        setSearchResultsFromMetadata(ref, searchQuery, searchMatches, searchResource || undefined);
+      }
       
       // Replay tool calls to populate UI state (scripture, resources, search)
       if (toolCalls && toolCalls.length > 0) {
@@ -314,9 +331,9 @@ const Index = () => {
         mcpReplay.replayToolCalls(toolCalls);
       }
       
-      // Navigate based on navigation hint
+      // Defer navigation to search card until search results are ready
       if (navigationHint === 'search') {
-        navigateToCard('search');
+        setPendingSearchNavigation(true);
       } else if (navigationHint === 'scripture') {
         navigateToCard('scripture');
       } else if (navigationHint === 'resources') {
@@ -330,7 +347,8 @@ const Index = () => {
         await updateConversation(convId, { scriptureReference });
       }
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName, navigateToCard, mcpReplay]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName, navigateToCard, mcpReplay, scripture?.reference, setSearchResultsFromMetadata, setPendingSearchNavigation]);
+
 
   // Map ResourceLink type to Resource type for scrolling
   const getResourceTypeFromLink = (linkType: ResourceLink['type']): Resource['type'] | null => {
