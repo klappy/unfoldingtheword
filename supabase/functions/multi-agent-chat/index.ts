@@ -760,35 +760,14 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
       searchQuery = args.query;
       navigationHint = 'resources';
     } else if (functionName === 'get_scripture_passage') {
-      // Normalize broad scopes to individual books (MCP doesn't support OT/NT/Bible as scopes)
-      let references = [args.reference];
-      const refLower = (args.reference || '').toLowerCase().trim();
-      
-      // NT books for expansion
-      const NT_BOOKS = ['Matthew', 'Mark', 'Luke', 'John', 'Acts', 'Romans', '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians', 'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy', 'Titus', 'Philemon', 'Hebrews', 'James', '1 Peter', '2 Peter', '1 John', '2 John', '3 John', 'Jude', 'Revelation'];
-      const OT_BOOKS = ['Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy', 'Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel', '1 Kings', '2 Kings', '1 Chronicles', '2 Chronicles', 'Ezra', 'Nehemiah', 'Esther', 'Job', 'Psalms', 'Proverbs', 'Ecclesiastes', 'Song of Solomon', 'Isaiah', 'Jeremiah', 'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel', 'Amos', 'Obadiah', 'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'];
-      
-      if (refLower === 'bible' || refLower === 'the bible' || refLower === 'whole bible') {
-        references = [...OT_BOOKS, ...NT_BOOKS];
-        console.log(`Normalized "Bible" reference to all ${references.length} books`);
-      } else if (refLower === 'nt' || refLower === 'new testament' || refLower === 'the new testament') {
-        references = NT_BOOKS;
-        console.log(`Normalized "NT" reference to ${references.length} NT books`);
-      } else if (refLower === 'ot' || refLower === 'old testament' || refLower === 'the old testament') {
-        references = OT_BOOKS;
-        console.log(`Normalized "OT" reference to ${references.length} OT books`);
+      // MCP supports testament scopes (OT, NT) and book references directly - let the AI use them
+      console.log(`Processing tool call: ${functionName}`, { reference: args.reference, filter: args.filter });
+      const result = await fetchScripturePassage(args.reference, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
+      if (result.text) {
+        scriptureText = scriptureText ? scriptureText + '\n\n' + result.text : result.text;
       }
-      
-      for (const ref of references) {
-        const result = await fetchScripturePassage(ref, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
-        // Only update scripture text if we got something (don't overwrite with null)
-        if (result.text) {
-          scriptureText = scriptureText ? scriptureText + '\n\n' + result.text : result.text;
-        }
-        isFilterSearch = isFilterSearch || result.isFilterSearch;
-        // Aggregate matches from multiple tool calls instead of overwriting
-        searchMatches = [...searchMatches, ...result.matches];
-      }
+      isFilterSearch = isFilterSearch || result.isFilterSearch;
+      searchMatches = [...searchMatches, ...result.matches];
       scriptureReference = args.reference;
       navigationHint = args.filter ? 'search' : 'scripture';
       if (args.filter) searchQuery = args.filter;
