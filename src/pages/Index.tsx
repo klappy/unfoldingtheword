@@ -46,6 +46,7 @@ const Index = () => {
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
   const [pendingSearchNavigation, setPendingSearchNavigation] = useState(false);
   const [resourceFilterInfo, setResourceFilterInfo] = useState<{ query: string; reference?: string | null } | null>(null);
+  const [resourceSearchResults, setResourceSearchResults] = useState<Resource[] | null>(null);
   const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, navigateToVerse, clearData: clearScriptureData, setScripture, setResources, setSearchResults } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
@@ -70,8 +71,19 @@ const Index = () => {
     if (mcpReplay.scripture && !mcpReplay.isLoading) {
       setScripture(mcpReplay.scripture);
     }
-    if (mcpReplay.resources.length > 0 && !mcpReplay.isLoading) {
-      setResources(mcpReplay.resources);
+    if (!mcpReplay.isLoading) {
+      if (mcpReplay.resources.length > 0) {
+        if (resourceFilterInfo) {
+          // In a filtered resource search, keep results separate from base resources
+          setResourceSearchResults(mcpReplay.resources);
+        } else {
+          // For unfiltered tool calls, update global resources
+          setResources(mcpReplay.resources);
+        }
+      } else if (resourceFilterInfo) {
+        // No resources returned for a filtered search
+        setResourceSearchResults([]);
+      }
     }
     if (mcpReplay.searchResults && !mcpReplay.isLoading) {
       // Build breakdown from matches
@@ -88,7 +100,7 @@ const Index = () => {
         breakdown: { byBook },
       });
     }
-  }, [mcpReplay.scripture, mcpReplay.resources, mcpReplay.searchResults, mcpReplay.isLoading, setScripture, setResources, setSearchResults]);
+  }, [mcpReplay.scripture, mcpReplay.resources, mcpReplay.searchResults, mcpReplay.isLoading, setScripture, setResources, setSearchResults, resourceFilterInfo, setResourceSearchResults]);
 
   // Compute content state for dynamic card visibility
   const contentState = useMemo(() => ({
@@ -437,7 +449,7 @@ const Index = () => {
     }
     
     navigateToCard('chat');
-  }, [loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard, mcpReplay, setResourceFilterInfo]);
+  }, [loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard, mcpReplay, setResourceFilterInfo, setResourceSearchResults]);
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
@@ -445,8 +457,9 @@ const Index = () => {
     setCurrentConversationId(null);
     clearSearchResults();
     setResourceFilterInfo(null);
+    setResourceSearchResults(null);
     navigateToCard('chat');
-  }, [clearMessages, clearScriptureData, setCurrentConversationId, clearSearchResults, navigateToCard, setResourceFilterInfo]);
+  }, [clearMessages, clearScriptureData, setCurrentConversationId, clearSearchResults, navigateToCard, setResourceFilterInfo, setResourceSearchResults]);
 
   const handleVerseSelect = useCallback((reference: string) => {
     console.log('[Index] Verse selected:', reference);
@@ -480,7 +493,9 @@ const Index = () => {
   // Clear search results
   const handleClearSearch = useCallback(() => {
     clearSearchResults();
-  }, [clearSearchResults]);
+    setResourceFilterInfo(null);
+    setResourceSearchResults(null);
+  }, [clearSearchResults, setResourceFilterInfo, setResourceSearchResults]);
 
   const renderCard = useCallback((card: CardType) => {
     switch (card) {
@@ -529,8 +544,8 @@ const Index = () => {
             onVerseClick={handleSearchVerseClick}
             filterQuery={resourceFilterInfo?.query || undefined}
             filterReference={resourceFilterInfo?.reference || undefined}
-            resourceMatchCount={resourceFilterInfo ? resources.length : undefined}
-            resourceResults={resourceFilterInfo ? resources : undefined}
+            resourceMatchCount={resourceFilterInfo ? resourceSearchResults?.length : undefined}
+            resourceResults={resourceFilterInfo ? resourceSearchResults || undefined : undefined}
           />
         );
       case 'scripture':
