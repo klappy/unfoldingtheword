@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,21 +8,49 @@ const corsHeaders = {
 
 const MCP_BASE_URL = 'https://translation-helps-mcp.pages.dev';
 
+// Shared conversational prompt - used by both text and voice
+const CONVERSATIONAL_SYSTEM_PROMPT = `You are a Bible study resource finder. You help users discover scripture and translation resources by using the tools provided. You speak naturally and conversationally.
+
+CRITICAL RULE - ONLY USE TOOLS:
+- You MUST use the provided tools to find information
+- You NEVER answer from your own knowledge or training data
+- If tools return no results, say "I couldn't find resources on that topic. Could you try a different search?"
+- NEVER make up or invent scripture verses, translation notes, or any content
+- ONLY share what the tools return to you
+
+CONVERSATION STYLE:
+- Speak naturally, like a helpful friend who knows the library
+- Use transitions: "Let me look that up for you...", "I found something helpful..."
+- Keep responses brief - 2-4 sentences, then let the user explore
+- Offer to help more: "Would you like me to find more about that?" or "Should I look up the translation notes?"
+
+WHAT YOU MUST NOT DO:
+- Never answer questions from your training data
+- Never interpret scripture or give theological opinions
+- Never act as a pastor or counselor
+- Never make up content if tools return nothing
+
+WHEN TOOLS RETURN NOTHING:
+Say: "I searched but didn't find any resources on that specific topic. Would you like to try a different scripture reference or topic?"
+
+PASTORAL SENSITIVITY:
+If someone seems distressed, respond with warmth and compassion, search for comforting scripture using the tools, and gently suggest speaking with a pastor or trusted friend.`;
+
 // Tool definitions for MCP resource fetching
 const mcpTools = [
   {
     type: "function",
     function: {
       name: "search_resources",
-      description: "Search for translation resources (notes, questions, word studies, academy articles) by topic or scripture reference",
+      description: "Use for UNDERSTANDING concepts. AI semantic search across translation notes, questions, word studies, and academy articles. Use when user asks 'what does X mean', 'explain X', or asks about a biblical topic.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Search query - can be a topic, scripture reference, or keyword" },
+          query: { type: "string", description: "Search query - topic, concept, or keyword" },
           resource_types: { 
             type: "array", 
             items: { type: "string", enum: ["tn", "tq", "tw", "ta"] },
-            description: "Resource types to search: tn=translation notes, tq=translation questions, tw=translation words, ta=translation academy"
+            description: "Resource types: tn=notes, tq=questions, tw=words, ta=academy"
           }
         },
         required: ["query"],
@@ -33,20 +62,99 @@ const mcpTools = [
     type: "function",
     function: {
       name: "get_scripture_passage",
-      description: "Get the text of a specific scripture passage. Can optionally filter to find all occurrences of a word/phrase within the passage or scope.",
+      description: "Get scripture text OR locate term occurrences. Use 'filter' when user wants to FIND WHERE a word/phrase appears (e.g., 'find grace in Ephesians'). Omit 'filter' when user just wants to READ a passage.",
       parameters: {
         type: "object",
         properties: {
           reference: { 
             type: "string", 
-            description: "Scripture reference like 'John 3:16', 'Romans 8:1-4', a book name like 'Romans', or a scope like 'NT', 'OT', 'Gospels', 'Pentateuch'" 
+            description: "Scripture reference like 'John 3:16', 'Romans 8:1-4', book name like 'Romans', or scope like 'NT', 'OT', 'Gospels'" 
           },
           filter: {
             type: "string",
-            description: "Optional word or phrase to search for within the reference scope. Use this for 'find all verses about X in Y' queries."
+            description: "Optional word/phrase to search for within the reference scope. Use for 'find all verses about X in Y' queries."
           }
         },
         required: ["reference"],
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_translation_notes",
+      description: "Get translation notes explaining difficult passages and terms for a scripture reference.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference: { type: "string", description: "Scripture reference like 'John 3:16' or 'Romans 8'" }
+        },
+        required: ["reference"],
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_translation_questions",
+      description: "Get comprehension and checking questions for scripture passages.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference: { type: "string", description: "Scripture reference like 'John 3:16' or 'Romans 8'" }
+        },
+        required: ["reference"],
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_translation_word",
+      description: "Get detailed information about a biblical term - definition, translation suggestions, and Bible references.",
+      parameters: {
+        type: "object",
+        properties: {
+          term: { type: "string", description: "Translation word term ID like 'love', 'faith', 'grace'" }
+        },
+        required: ["term"],
+        additionalProperties: false
+      }
+    }
+  },
+  // Note management tools
+  {
+    type: "function",
+    function: {
+      name: "create_note",
+      description: "Create a note for the user. Read content back to confirm before saving.",
+      parameters: {
+        type: "object",
+        properties: {
+          content: { type: "string", description: "The note content to save" },
+          source_reference: { type: "string", description: "Optional scripture reference" }
+        },
+        required: ["content"],
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_notes",
+      description: "Retrieve user's saved notes. Can filter by scope: 'all', 'book', 'chapter', 'verse'.",
+      parameters: {
+        type: "object",
+        properties: {
+          scope: { type: "string", enum: ["all", "book", "chapter", "verse"], description: "Scope level for filtering" },
+          reference: { type: "string", description: "Scripture reference for filtering (e.g., 'John 3')" },
+          limit: { type: "number", description: "Maximum notes to return (default 10)" }
+        },
+        required: [],
         additionalProperties: false
       }
     }
@@ -54,12 +162,14 @@ const mcpTools = [
 ];
 
 // Fetch resources from MCP server using SEARCH endpoint (for keyword searches)
-async function fetchMcpResourcesSearch(query: string, resourceTypes: string[] = ['tn', 'tq', 'tw', 'ta']): Promise<any[]> {
+async function fetchMcpResourcesSearch(query: string, resourceTypes: string[] = ['tn', 'tq', 'tw', 'ta'], language?: string, organization?: string): Promise<any[]> {
   const results: any[] = [];
   
   for (const resourceType of resourceTypes) {
     try {
-      const url = `${MCP_BASE_URL}/api/search?query=${encodeURIComponent(query)}&resource=${resourceType}`;
+      let url = `${MCP_BASE_URL}/api/search?query=${encodeURIComponent(query)}&resource=${resourceType}`;
+      if (language) url += `&language=${encodeURIComponent(language)}`;
+      if (organization) url += `&organization=${encodeURIComponent(organization)}`;
       console.log(`Searching MCP resources: ${url}`);
       
       const response = await fetch(url);
@@ -80,12 +190,14 @@ async function fetchMcpResourcesSearch(query: string, resourceTypes: string[] = 
 }
 
 // Fetch verse-specific resources from MCP server using FETCH endpoints (for scripture references)
-async function fetchVerseResources(reference: string): Promise<any[]> {
+async function fetchVerseResources(reference: string, language?: string, organization?: string): Promise<any[]> {
   const results: any[] = [];
+  const langParam = language ? `&language=${encodeURIComponent(language)}` : '';
+  const orgParam = organization ? `&organization=${encodeURIComponent(organization)}` : '';
   
   // Fetch translation notes
   try {
-    const notesUrl = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(reference)}`;
+    const notesUrl = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(reference)}${langParam}${orgParam}`;
     console.log(`Fetching translation notes: ${notesUrl}`);
     const notesResponse = await fetch(notesUrl);
     if (notesResponse.ok) {
@@ -98,7 +210,6 @@ async function fetchVerseResources(reference: string): Promise<any[]> {
       } else {
         const text = await notesResponse.text();
         if (text && text.trim()) {
-          // Parse markdown notes
           const notes = parseMarkdownNotes(text, reference);
           results.push(...notes.map((n: any) => ({ ...n, resourceType: 'tn' })));
         }
@@ -110,7 +221,7 @@ async function fetchVerseResources(reference: string): Promise<any[]> {
 
   // Fetch translation questions
   try {
-    const questionsUrl = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(reference)}`;
+    const questionsUrl = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(reference)}${langParam}${orgParam}`;
     console.log(`Fetching translation questions: ${questionsUrl}`);
     const questionsResponse = await fetch(questionsUrl);
     if (questionsResponse.ok) {
@@ -134,7 +245,7 @@ async function fetchVerseResources(reference: string): Promise<any[]> {
 
   // Fetch word links
   try {
-    const wordLinksUrl = `${MCP_BASE_URL}/api/fetch-translation-word-links?reference=${encodeURIComponent(reference)}`;
+    const wordLinksUrl = `${MCP_BASE_URL}/api/fetch-translation-word-links?reference=${encodeURIComponent(reference)}${langParam}${orgParam}`;
     console.log(`Fetching word links: ${wordLinksUrl}`);
     const wordLinksResponse = await fetch(wordLinksUrl);
     if (wordLinksResponse.ok) {
@@ -163,12 +274,10 @@ async function fetchVerseResources(reference: string): Promise<any[]> {
 // Parse markdown notes into structured array
 function parseMarkdownNotes(content: string, reference: string): any[] {
   const notes: any[] = [];
-  // Split by note blocks (usually separated by blank lines or headers)
   const lines = content.split('\n');
   let currentNote: any = null;
   
   for (const line of lines) {
-    // Check for note header pattern: # Note or ## Reference
     if (line.startsWith('#')) {
       if (currentNote && currentNote.content) {
         notes.push(currentNote);
@@ -187,7 +296,6 @@ function parseMarkdownNotes(content: string, reference: string): any[] {
     notes.push(currentNote);
   }
   
-  // If no structured notes found, treat whole content as one note
   if (notes.length === 0 && content.trim()) {
     notes.push({
       reference: reference,
@@ -233,7 +341,6 @@ function parseMarkdownWordLinks(content: string, reference: string): any[] {
   const lines = content.split('\n');
   
   for (const line of lines) {
-    // Match patterns like: **word** - definition or [word](link)
     const linkMatch = line.match(/\[([^\]]+)\]\(([^)]+)\)/);
     const boldMatch = line.match(/\*\*([^*]+)\*\*/);
     
@@ -261,7 +368,6 @@ function parseMarkdownWordLinks(content: string, reference: string): any[] {
 function detectPastoralIntent(message: string): boolean {
   const lowerMessage = message.toLowerCase();
   
-  // Keywords indicating emotional distress or support-seeking
   const pastoralKeywords = [
     'lonely', 'depressed', 'depression', 'anxious', 'anxiety', 'scared', 'afraid',
     'hurting', 'hurt', 'pain', 'suffering', 'struggling', 'lost', 'hopeless',
@@ -271,19 +377,15 @@ function detectPastoralIntent(message: string): boolean {
     'tempted', 'temptation', 'sin', 'guilt', 'shame', 'forgive', 'forgiveness',
     'angry', 'anger', 'rage', 'bitter', 'resentment', 'hate', 'hatred',
     'comfort', 'peace', 'healing', 'hope', 'strength', 'courage',
-    'marriage', 'relationship', 'family', 'children', 'parents',
-    'job', 'money', 'finances', 'health', 'illness', 'sick', 'disease',
     "can't go on", "don't know what to do", 'overwhelmed', 'exhausted'
   ];
   
-  // Check for pastoral keywords
   for (const keyword of pastoralKeywords) {
     if (lowerMessage.includes(keyword)) {
       return true;
     }
   }
   
-  // Patterns indicating personal struggle
   const pastoralPatterns = [
     /i('m| am) (feeling|so|very|really)\s/,
     /my (heart|soul|spirit|life)\s/,
@@ -303,10 +405,13 @@ function detectPastoralIntent(message: string): boolean {
   return false;
 }
 
-async function fetchScripturePassage(reference: string): Promise<string | null> {
+async function fetchScripturePassage(reference: string, filter?: string, language?: string, organization?: string, resource?: string): Promise<{ text: string | null, isFilterSearch: boolean }> {
   try {
-    // Pass the reference directly to the MCP server - it handles all the mapping
-    const url = `${MCP_BASE_URL}/api/fetch-scripture?reference=${encodeURIComponent(reference)}`;
+    let url = `${MCP_BASE_URL}/api/fetch-scripture?reference=${encodeURIComponent(reference)}`;
+    if (filter) url += `&filter=${encodeURIComponent(filter)}`;
+    if (language) url += `&language=${encodeURIComponent(language)}`;
+    if (organization) url += `&organization=${encodeURIComponent(organization)}`;
+    if (resource) url += `&resource=${encodeURIComponent(resource)}`;
     console.log(`Fetching scripture: ${url}`);
     
     const response = await fetch(url);
@@ -314,10 +419,9 @@ async function fetchScripturePassage(reference: string): Promise<string | null> 
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const data = await response.json();
-        return data.text || data.passage || data.content || JSON.stringify(data);
+        return { text: data.text || data.passage || data.content || JSON.stringify(data), isFilterSearch: !!filter };
       } else {
-        // Markdown response
-        return await response.text();
+        return { text: await response.text(), isFilterSearch: !!filter };
       }
     } else {
       console.log(`Scripture fetch returned ${response.status}`);
@@ -325,17 +429,14 @@ async function fetchScripturePassage(reference: string): Promise<string | null> 
   } catch (error) {
     console.error('Error fetching scripture:', error);
   }
-  return null;
+  return { text: null, isFilterSearch: false };
 }
 
-// Detect if input is a scripture reference (book, chapter, verse patterns)
-// Must be specific - require known book names or book+chapter patterns
+// Detect if input is a scripture reference
 function isScriptureReference(input: string): boolean {
   const trimmed = input.trim().toLowerCase();
   
-  // List of known Bible book names (and common abbreviations) - English + Spanish + Portuguese
   const bibleBooks = [
-    // English
     'genesis', 'gen', 'exodus', 'exod', 'ex', 'leviticus', 'lev', 'numbers', 'num', 
     'deuteronomy', 'deut', 'joshua', 'josh', 'judges', 'judg', 'ruth', 
     '1 samuel', '2 samuel', '1samuel', '2samuel', '1sam', '2sam', '1 sam', '2 sam',
@@ -358,7 +459,7 @@ function isScriptureReference(input: string): boolean {
     'james', 'jas', '1 peter', '2 peter', '1peter', '2peter', '1pet', '2pet', '1 pet', '2 pet',
     '1 john', '2 john', '3 john', '1john', '2john', '3john', '1jn', '2jn', '3jn',
     'jude', 'revelation', 'rev',
-    // Spanish book names
+    // Spanish
     'génesis', 'gén', 'éxodo', 'éx', 'levítico', 'lv', 'números', 'nm', 
     'deuteronomio', 'dt', 'josué', 'jos', 'jueces', 'jue', 'rut',
     '1 samuel', '2 samuel', '1 reyes', '2 reyes', '1 crónicas', '2 crónicas',
@@ -377,7 +478,7 @@ function isScriptureReference(input: string): boolean {
     '1 timoteo', '2 timoteo', 'tito', 'ti', 'filemón', 'flm', 'hebreos', 'he',
     'santiago', 'stg', '1 pedro', '2 pedro', '1p', '2p',
     '1 juan', '2 juan', '3 juan', 'judas', 'apocalipsis', 'ap',
-    // Portuguese book names
+    // Portuguese
     'gênesis', 'êxodo', 'levítico', 'números', 'deuteronômio',
     'josué', 'juízes', 'rute',
     '1 samuel', '2 samuel', '1 reis', '2 reis', '1 crônicas', '2 crônicas',
@@ -395,48 +496,100 @@ function isScriptureReference(input: string): boolean {
     'judas', 'apocalipse'
   ];
   
-  // Check if input starts with a known book name
   const startsWithBook = bibleBooks.some(book => {
     return trimmed === book || 
            trimmed.startsWith(book + ' ') || 
            trimmed.startsWith(book + ':');
   });
   
-  // Also match patterns like "Book Chapter" or "Book Chapter:Verse"
   const bookChapterPattern = /^(\d?\s*[a-záéíóúüñâêôãõç]+)\s+(\d+)(\s*:\s*\d+(-\d+)?)?$/i;
   const matchesPattern = bookChapterPattern.test(trimmed);
   
-  // Only consider it a scripture reference if it matches a known book
   return startsWithBook || (matchesPattern && bibleBooks.some(book => trimmed.toLowerCase().startsWith(book.split(' ')[0])));
 }
 
+// Classify user intent using AI
+async function classifyIntent(userMessage: string, OPENAI_API_KEY: string): Promise<'locate' | 'understand' | 'read' | 'note'> {
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{
+          role: "system",
+          content: `Classify the user's intent. Respond with ONLY one word:
+- "locate" if they want to FIND WHERE a word/phrase appears in scripture (e.g., "find verses about love in Romans", "where does Paul mention grace", "¿dónde está 'gracia' en Romanos?")
+- "understand" if they want to LEARN ABOUT a concept, get definitions, or ask complex questions (e.g., "what does justification mean", "explain redemption", "qu'est-ce que signifie la rédemption?")
+- "read" if they want to READ a specific scripture passage (e.g., "John 3:16", "Romans 8", "read me Matthew 5")
+- "note" if they want to manage notes (create, read, update, delete notes)
+
+This works in ANY language - classify based on intent patterns, not keywords.`
+        }, {
+          role: "user",
+          content: userMessage
+        }],
+        max_tokens: 10,
+      }),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const intent = data.choices?.[0]?.message?.content?.toLowerCase().trim();
+      if (intent === 'locate' || intent === 'understand' || intent === 'note') {
+        return intent;
+      }
+    }
+  } catch (error) {
+    console.error("Error classifying intent:", error);
+  }
+  return 'read';
+}
+
 // Direct scripture/resource fetch without AI (for scripture references)
-async function fetchDirectResources(reference: string): Promise<{
+async function fetchDirectResources(reference: string, userPrefs?: { language?: string; organization?: string; resource?: string }): Promise<{
   resources: any[],
   scriptureText: string | null,
   scriptureReference: string,
-  searchQuery: string | null
+  searchQuery: string | null,
+  navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null
 }> {
   console.log(`Direct fetch for scripture reference: ${reference}`);
   
-  // Fetch verse-specific resources and scripture in parallel
-  const [resources, scriptureText] = await Promise.all([
-    fetchVerseResources(reference),
-    fetchScripturePassage(reference)
+  const [resources, scriptureResult] = await Promise.all([
+    fetchVerseResources(reference, userPrefs?.language, userPrefs?.organization),
+    fetchScripturePassage(reference, undefined, userPrefs?.language, userPrefs?.organization, userPrefs?.resource)
   ]);
   
   return {
     resources,
-    scriptureText,
+    scriptureText: scriptureResult.text,
     scriptureReference: reference,
-    searchQuery: null // Not a search, just a direct reference
+    searchQuery: null,
+    navigationHint: 'scripture'
   };
 }
 
 // Process tool calls from AI response
-async function processToolCalls(toolCalls: any[]): Promise<{ resources: any[], scriptureText: string | null }> {
+async function processToolCalls(toolCalls: any[], userPrefs?: { language?: string; organization?: string; resource?: string; deviceId?: string }): Promise<{ 
+  resources: any[], 
+  scriptureText: string | null, 
+  scriptureReference: string | null, 
+  searchQuery: string | null,
+  navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null,
+  isFilterSearch: boolean,
+  noteResult?: string
+}> {
   const resources: any[] = [];
   let scriptureText: string | null = null;
+  let scriptureReference: string | null = null;
+  let searchQuery: string | null = null;
+  let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
+  let isFilterSearch = false;
+  let noteResult: string | undefined;
   
   for (const toolCall of toolCalls) {
     const functionName = toolCall.function.name;
@@ -445,37 +598,82 @@ async function processToolCalls(toolCalls: any[]): Promise<{ resources: any[], s
     console.log(`Processing tool call: ${functionName}`, args);
     
     if (functionName === 'search_resources') {
-      const results = await fetchMcpResourcesSearch(args.query, args.resource_types);
+      const results = await fetchMcpResourcesSearch(args.query, args.resource_types, userPrefs?.language, userPrefs?.organization);
       resources.push(...results);
+      searchQuery = args.query;
+      navigationHint = 'resources';
     } else if (functionName === 'get_scripture_passage') {
-      scriptureText = await fetchScripturePassage(args.reference);
+      const result = await fetchScripturePassage(args.reference, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
+      scriptureText = result.text;
+      scriptureReference = args.reference;
+      isFilterSearch = result.isFilterSearch;
+      navigationHint = args.filter ? 'search' : 'scripture';
+      if (args.filter) searchQuery = args.filter;
+    } else if (functionName === 'get_translation_notes' || functionName === 'get_translation_questions') {
+      const results = await fetchVerseResources(args.reference, userPrefs?.language, userPrefs?.organization);
+      resources.push(...results);
+      scriptureReference = args.reference;
+      navigationHint = 'resources';
+    } else if (functionName === 'get_translation_word') {
+      try {
+        const url = `${MCP_BASE_URL}/api/fetch-translation-word?term=${encodeURIComponent(args.term)}`;
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          resources.push({ ...data, resourceType: 'tw', term: args.term });
+        }
+      } catch (error) {
+        console.error('Error fetching translation word:', error);
+      }
+      navigationHint = 'resources';
+    } else if (functionName === 'create_note' || functionName === 'get_notes' || functionName === 'update_note' || functionName === 'delete_note') {
+      navigationHint = 'notes';
+      // Note operations handled in streaming response
     }
   }
   
-  return { resources, scriptureText };
+  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, isFilterSearch, noteResult };
 }
 
-// Call OpenAI with tool calling for keyword/topic searches
-async function callAIWithTools(userMessage: string, conversationHistory: any[], scriptureContext?: string): Promise<{
+// Call OpenAI with tool calling
+async function callAIWithTools(userMessage: string, conversationHistory: any[], scriptureContext?: string, intentHint?: 'locate' | 'understand' | 'note', userPrefs?: { language?: string; organization?: string; resource?: string }): Promise<{
   resources: any[],
   scriptureText: string | null,
   scriptureReference: string | null,
-  searchQuery: string | null
+  searchQuery: string | null,
+  navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null
 }> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  const systemPrompt = `You are a Bible study assistant. Your job is to find relevant resources to answer user questions about topics and keywords.
+  // Build intent-specific guidance
+  let intentGuidance = '';
+  if (intentHint === 'locate') {
+    intentGuidance = `
+The user wants to FIND WHERE specific terms appear in scripture.
+Use get_scripture_passage with the 'filter' parameter.
+Extract the search term and the scripture scope from the user's message.
+Example: "find love in Romans" → get_scripture_passage(reference="Romans", filter="love")`;
+  } else if (intentHint === 'understand') {
+    intentGuidance = `
+The user wants to LEARN and UNDERSTAND a concept.
+Use search_resources to find translation notes, word studies, and academy articles.
+Do NOT use filter - use semantic search for conceptual understanding.`;
+  } else if (intentHint === 'note') {
+    intentGuidance = `
+The user wants to manage their notes (create, read, update, or delete).
+Use the appropriate note tool based on their request.`;
+  }
 
-IMPORTANT: You must ALWAYS use the provided tools to search for resources before answering. Never answer from your own knowledge - only from MCP resources.
+  const systemPrompt = `${CONVERSATIONAL_SYSTEM_PROMPT}
+${intentGuidance}
 
-Available tools:
-- search_resources: Search for translation notes, questions, word studies, and academy articles
-- get_scripture_passage: Get the text of a scripture passage (only if user mentions one)
+Available tools: search_resources, get_scripture_passage (with optional filter), get_translation_notes, get_translation_questions, get_translation_word, create_note, get_notes
 
-The user is searching for a topic or keyword. Use search_resources to find relevant translation resources.`;
+User's language preference: ${userPrefs?.language || 'en'}
+User's organization: ${userPrefs?.organization || 'unfoldingWord'}`;
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -513,31 +711,23 @@ The user is searching for a topic or keyword. Use search_resources to find relev
   let scriptureText: string | null = null;
   let scriptureReference: string | null = null;
   let searchQuery: string | null = null;
+  let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
 
-  // Process tool calls if present
   if (message?.tool_calls && message.tool_calls.length > 0) {
-    const result = await processToolCalls(message.tool_calls);
+    const result = await processToolCalls(message.tool_calls, userPrefs);
     resources = result.resources;
     scriptureText = result.scriptureText;
-    
-    // Extract reference and query from tool calls
-    for (const toolCall of message.tool_calls) {
-      const args = JSON.parse(toolCall.function.arguments);
-      if (toolCall.function.name === 'get_scripture_passage') {
-        scriptureReference = args.reference;
-      }
-      if (toolCall.function.name === 'search_resources') {
-        searchQuery = args.query;
-      }
-    }
+    scriptureReference = result.scriptureReference;
+    searchQuery = result.searchQuery;
+    navigationHint = result.navigationHint;
   } else {
-    // Fallback: do a basic search with the user's message
     console.log("No tool calls, falling back to direct search");
-    resources = await fetchMcpResourcesSearch(userMessage);
+    resources = await fetchMcpResourcesSearch(userMessage, undefined, userPrefs?.language, userPrefs?.organization);
     searchQuery = userMessage;
+    navigationHint = 'resources';
   }
 
-  return { resources, scriptureText, scriptureReference, searchQuery };
+  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint };
 }
 
 // Generate a streaming response based on fetched resources
@@ -553,7 +743,6 @@ async function* generateStreamingResponse(
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  // Always add language instruction if responseLanguage is specified and not English
   const isEnglish = !responseLanguage || 
     responseLanguage.toLowerCase() === 'en' || 
     responseLanguage.toLowerCase() === 'english';
@@ -562,20 +751,11 @@ async function* generateStreamingResponse(
     ? `\n\n**CRITICAL LANGUAGE REQUIREMENT**: You MUST respond ENTIRELY in ${responseLanguage}. Every single word of your response must be in ${responseLanguage}. Do NOT respond in English under any circumstances.`
     : '';
 
-  // Group resources by type
   const noteResources = resources.filter(r => r.resourceType === 'tn');
   const questionResources = resources.filter(r => r.resourceType === 'tq');
   const wordResources = resources.filter(r => r.resourceType === 'tw');
   const academyResources = resources.filter(r => r.resourceType === 'ta');
 
-  console.log(`Resource breakdown: notes=${noteResources.length}, questions=${questionResources.length}, words=${wordResources.length}, academy=${academyResources.length}`);
-  
-  // Log sample resource to understand structure
-  if (resources.length > 0) {
-    console.log("Sample resource structure:", JSON.stringify(resources[0], null, 2));
-  }
-
-  // Build resource context - handle different property names from MCP API
   const formatResource = (r: any): string => {
     const title = r.title || r.reference || r.term || r.word || 'Resource';
     const content = r.content || r.snippet || r.text || r.note || r.response || r.definition || r.question || '';
@@ -587,45 +767,31 @@ AVAILABLE RESOURCES FROM MCP SERVER (use ONLY these to answer):
 
 ${scriptureText ? `SCRIPTURE TEXT:\n${scriptureText}\n` : ''}
 
-${noteResources.length > 0 ? `TRANSLATION NOTES (${noteResources.length} total):\n${noteResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
+${noteResources.length > 0 ? `TRANSLATION NOTES (${noteResources.length}):\n${noteResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 
-${questionResources.length > 0 ? `TRANSLATION QUESTIONS (${questionResources.length} total):\n${questionResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
+${questionResources.length > 0 ? `TRANSLATION QUESTIONS (${questionResources.length}):\n${questionResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 
-${wordResources.length > 0 ? `WORD STUDIES (${wordResources.length} total):\n${wordResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
+${wordResources.length > 0 ? `WORD STUDIES (${wordResources.length}):\n${wordResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 
-${academyResources.length > 0 ? `ACADEMY ARTICLES (${academyResources.length} total):\n${academyResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
+${academyResources.length > 0 ? `ACADEMY ARTICLES (${academyResources.length}):\n${academyResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 `;
 
-  // Detect user intent - pastoral/support needs vs research/study
   const isPastoralQuery = detectPastoralIntent(userMessage);
-  
-  const roleClarity = `
-YOUR ROLE: You are a Bible translation resource assistant. Your purpose is to:
-- Help users FIND relevant scripture passages and translation resources
-- PARAPHRASE and SUMMARIZE resource content to help users understand
-- Guide users to explore the resources themselves (swipe right to view)
-
-YOU DO NOT:
-- Directly interpret scripture or provide your own theological opinions
-- Act as a pastor, counselor, or spiritual authority
-- Give advice on life decisions beyond pointing to relevant scripture
-
-When asked to interpret scripture, kindly explain that your role is to help find and summarize resources, and encourage the user to study the passages and resources themselves or consult with their faith community.`;
 
   const pastoralTone = isPastoralQuery ? `
 IMPORTANT - PASTORAL SENSITIVITY:
 The user appears to be seeking comfort or support. Respond with warmth and compassion while still pointing to relevant resources. 
 - Acknowledge their feelings briefly
 - Share a relevant scripture or resource that might bring comfort
-- Remind them that while you can find helpful resources, speaking with a pastor, counselor, or trusted friend may also be valuable
+- Remind them that speaking with a pastor or trusted friend may also be valuable
 Keep your response gentle and supportive.` : '';
 
-  const systemPrompt = `${roleClarity}
+  const systemPrompt = `${CONVERSATIONAL_SYSTEM_PROMPT}
 ${pastoralTone}
 
 You must ONLY use the resources provided below to answer. Do NOT use your own knowledge.
 
-Keep responses SHORT - 2-4 sentences summarizing what was found. The user can swipe right to see full resources.
+Keep responses SHORT - 2-4 sentences summarizing what was found. Sound natural and conversational, not robotic.
 
 ${resourceContext}
 
@@ -688,12 +854,24 @@ If no relevant resources are found, say so honestly and suggest what to search f
         const content = parsed.choices?.[0]?.delta?.content;
         if (content) yield content;
       } catch {
-        // Incomplete JSON, put back and wait
         buffer = line + "\n" + buffer;
         break;
       }
     }
   }
+}
+
+// Strip markdown for voice-friendly text
+function stripMarkdownForVoice(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // Bold
+    .replace(/\*([^*]+)\*/g, '$1')      // Italic
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')  // Links
+    .replace(/#+\s*/g, '')              // Headers
+    .replace(/```[^`]*```/g, '')        // Code blocks
+    .replace(/`([^`]+)`/g, '$1')        // Inline code
+    .replace(/\n+/g, ' ')               // Multiple newlines
+    .trim();
 }
 
 serve(async (req) => {
@@ -702,49 +880,77 @@ serve(async (req) => {
   }
 
   try {
-    const { message, conversationHistory = [], scriptureContext, responseLanguage, stream = true } = await req.json();
+    const { 
+      message, 
+      conversationHistory = [], 
+      scriptureContext, 
+      responseLanguage, 
+      stream = true,
+      // Voice mode support
+      isVoiceRequest = false,
+      userPrefs = {}
+    } = await req.json();
     
     console.log("Received message:", message);
     console.log("Scripture context:", scriptureContext);
     console.log("Response language:", responseLanguage);
-    console.log("Streaming:", stream);
+    console.log("Is voice request:", isVoiceRequest);
+    console.log("User prefs:", userPrefs);
+
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
+    }
 
     let resources: any[];
     let scriptureText: string | null;
     let scriptureReference: string | null;
     let searchQuery: string | null;
+    let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
 
-    // Check if input is a scripture reference - if so, direct fetch first
-    if (isScriptureReference(message)) {
+    // Classify intent using AI (works for any language)
+    const isReference = isScriptureReference(message);
+    let intentHint: 'locate' | 'understand' | 'note' | undefined;
+    
+    if (!isReference) {
+      const classifiedIntent = await classifyIntent(message, OPENAI_API_KEY);
+      // Only use intent hint if it's not 'read' (read is handled by isScriptureReference)
+      if (classifiedIntent !== 'read') {
+        intentHint = classifiedIntent;
+      }
+      console.log("Classified intent:", classifiedIntent, "using hint:", intentHint);
+    }
+
+    if (isReference) {
       console.log("Detected scripture reference, using direct fetch");
-      const result = await fetchDirectResources(message);
+      const result = await fetchDirectResources(message, userPrefs);
       resources = result.resources;
       scriptureText = result.scriptureText;
       scriptureReference = result.scriptureReference;
       searchQuery = null;
+      navigationHint = result.navigationHint;
       
-      // Fallback to search if no resources found from direct fetch
       if (resources.length === 0 && !scriptureText) {
         console.log("No resources from direct fetch, falling back to search");
-        const searchResult = await callAIWithTools(message, conversationHistory, scriptureContext);
+        const searchResult = await callAIWithTools(message, conversationHistory, scriptureContext, undefined, userPrefs);
         resources = searchResult.resources;
         scriptureText = searchResult.scriptureText;
         scriptureReference = searchResult.scriptureReference || scriptureReference;
         searchQuery = searchResult.searchQuery;
+        navigationHint = searchResult.navigationHint;
       }
     } else {
-      // Use AI with tools for keyword/topic searches
-      console.log("Using AI search for keyword/topic");
-      const result = await callAIWithTools(message, conversationHistory, scriptureContext);
+      console.log("Using AI search with intent:", intentHint);
+      const result = await callAIWithTools(message, conversationHistory, scriptureContext, intentHint, userPrefs);
       resources = result.resources;
       scriptureText = result.scriptureText;
       scriptureReference = result.scriptureReference;
       searchQuery = result.searchQuery;
+      navigationHint = result.navigationHint;
     }
 
-    console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}`);
+    console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}, navigation: ${navigationHint}`);
 
-    // Calculate resource counts
     const noteResources = resources.filter(r => r.resourceType === 'tn');
     const questionResources = resources.filter(r => r.resourceType === 'tq');
     const wordResources = resources.filter(r => r.resourceType === 'tw');
@@ -757,11 +963,9 @@ serve(async (req) => {
       academy: academyResources.length
     };
 
-    // If streaming is requested, return SSE stream
     if (stream) {
       const encoder = new TextEncoder();
       
-      // Create a readable stream
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
@@ -772,11 +976,13 @@ serve(async (req) => {
               search_query: searchQuery || message,
               resource_counts: resourceCounts,
               total_resources: resources.length,
-              mcp_resources: resources
+              mcp_resources: resources,
+              navigation_hint: navigationHint
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n\n`));
             
             // Stream the AI response
+            let fullContent = '';
             const generator = generateStreamingResponse(
               message,
               resources,
@@ -786,10 +992,16 @@ serve(async (req) => {
             );
             
             for await (const chunk of generator) {
+              fullContent += chunk;
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: chunk })}\n\n`));
             }
             
-            // Send done event
+            // For voice requests, send voice-optimized response at the end
+            if (isVoiceRequest) {
+              const voiceResponse = stripMarkdownForVoice(fullContent);
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'voice_response', content: voiceResponse })}\n\n`));
+            }
+            
             controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
             controller.close();
           } catch (error) {
@@ -810,7 +1022,7 @@ serve(async (req) => {
       });
     }
 
-    // Non-streaming fallback - collect all content
+    // Non-streaming response
     let content = "";
     const generator = generateStreamingResponse(
       message,
@@ -828,17 +1040,18 @@ serve(async (req) => {
       content = "I couldn't find specific resources for your question. Try asking about a specific Bible passage or topic.";
     }
 
-    // Build the response with a single consolidated message
     const response = {
       scripture_reference: scriptureReference,
       search_query: searchQuery || message,
       content,
+      voice_response: stripMarkdownForVoice(content),
       resource_counts: resourceCounts,
       total_resources: resources.length,
-      mcp_resources: resources
+      mcp_resources: resources,
+      navigation_hint: navigationHint
     };
 
-    console.log(`Sending consolidated response with ${resources.length} total resources`);
+    console.log(`Sending response with ${resources.length} resources, navigation: ${navigationHint}`);
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
