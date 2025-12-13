@@ -278,15 +278,19 @@ const Index = () => {
 
     if (result) {
       const { searchQuery, scriptureReference, navigationHint, searchMatches } = result as any;
-      if (navigationHint === 'search' && scriptureReference && searchQuery) {
-        // Use search matches from metadata if available, otherwise fall back to client search
-        if (searchMatches && searchMatches.length > 0) {
-          setSearchResultsFromMetadata(scriptureReference, searchQuery, searchMatches);
-        } else {
-          await loadFilteredSearch(scriptureReference, searchQuery);
-        }
+
+      // If the backend already found concrete scripture matches, trust those first
+      if (searchMatches && searchMatches.length > 0 && scriptureReference && searchQuery) {
+        setSearchResultsFromMetadata(scriptureReference, searchQuery, searchMatches);
         navigateToCard('search');
-      } else if (searchQuery) {
+      }
+      // Otherwise, if the AI is hinting at a scripture search, run the client-side filtered search
+      else if (navigationHint === 'search' && scriptureReference && searchQuery) {
+        await loadFilteredSearch(scriptureReference, searchQuery);
+        navigateToCard('search');
+      }
+      // Fallback: generic keyword search across resources
+      else if (searchQuery) {
         await loadKeywordResources(searchQuery);
         navigateToCard('resources');
       }
