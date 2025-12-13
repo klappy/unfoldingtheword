@@ -43,7 +43,7 @@ const Index = () => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
 
-  const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, clearData: clearScriptureData } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
     onBugReport: addBugReport,
@@ -140,8 +140,12 @@ const Index = () => {
     onNavigate: useCallback(async (hint: 'scripture' | 'resources' | 'search' | 'notes', metadata?: any) => {
       console.log('[Index] Voice navigate:', hint, metadata);
       if (hint === 'search' && metadata?.scripture_reference && metadata?.search_query) {
-        // Load search results before navigating
-        await loadFilteredSearch(metadata.scripture_reference, metadata.search_query);
+        // Use search matches from metadata if available
+        if (metadata?.search_matches && metadata.search_matches.length > 0) {
+          setSearchResultsFromMetadata(metadata.scripture_reference, metadata.search_query, metadata.search_matches);
+        } else {
+          await loadFilteredSearch(metadata.scripture_reference, metadata.search_query);
+        }
         navigateToCard('search');
       } else if (hint === 'scripture') {
         // Scripture loading handled by onScriptureReference
@@ -150,7 +154,7 @@ const Index = () => {
       } else if (hint === 'notes') {
         navigateToCard('notes');
       }
-    }, [navigateToCard, loadFilteredSearch]),
+    }, [navigateToCard, loadFilteredSearch, setSearchResultsFromMetadata]),
     onError: (error) => {
       console.error('[Index] Voice error:', error);
     },
@@ -273,16 +277,21 @@ const Index = () => {
     }
 
     if (result) {
-      const { searchQuery, scriptureReference, navigationHint } = result as any;
+      const { searchQuery, scriptureReference, navigationHint, searchMatches } = result as any;
       if (navigationHint === 'search' && scriptureReference && searchQuery) {
-        await loadFilteredSearch(scriptureReference, searchQuery);
+        // Use search matches from metadata if available, otherwise fall back to client search
+        if (searchMatches && searchMatches.length > 0) {
+          setSearchResultsFromMetadata(scriptureReference, searchQuery, searchMatches);
+        } else {
+          await loadFilteredSearch(scriptureReference, searchQuery);
+        }
         navigateToCard('search');
       } else if (searchQuery) {
         await loadKeywordResources(searchQuery);
         navigateToCard('resources');
       }
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, loadFilteredSearch, setSearchResultsFromMetadata, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName, navigateToCard]);
 
   // Map ResourceLink type to Resource type for scrolling
   const getResourceTypeFromLink = (linkType: ResourceLink['type']): Resource['type'] | null => {
