@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { CardType } from '@/types';
 
 const CARD_DISMISS_PREFS_KEY = 'bible-study-card-dismiss-prefs';
+const CARD_SHOWN_ONCE_KEY = 'bible-study-cards-shown-once';
 
 interface ContentState {
   hasHistory: boolean;
@@ -21,7 +22,7 @@ const DEFAULT_PREFS: DismissPrefs = {
   neverAskAgain: [],
 };
 
-// Cards that have content by default
+// Cards that are always visible
 const ALWAYS_VISIBLE: CardType[] = ['chat'];
 
 // Full card order when all are visible
@@ -37,16 +38,48 @@ export function useCardVisibility(contentState: ContentState) {
     }
   });
 
-  // Persist to localStorage
+  // Track which cards have EVER had content (sticky visibility)
+  const [shownOnce, setShownOnce] = useState<Set<CardType>>(() => {
+    try {
+      const saved = localStorage.getItem(CARD_SHOWN_ONCE_KEY);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Persist dismiss prefs to localStorage
   useEffect(() => {
     localStorage.setItem(CARD_DISMISS_PREFS_KEY, JSON.stringify(dismissPrefs));
   }, [dismissPrefs]);
 
-  // Compute which cards are visible based on content and dismiss state
+  // Persist shown-once state
+  useEffect(() => {
+    localStorage.setItem(CARD_SHOWN_ONCE_KEY, JSON.stringify([...shownOnce]));
+  }, [shownOnce]);
+
+  // Mark cards as shown when they have content
+  useEffect(() => {
+    const updates: CardType[] = [];
+    if (contentState.hasHistory && !shownOnce.has('history')) updates.push('history');
+    if (contentState.hasSearch && !shownOnce.has('search')) updates.push('search');
+    if (contentState.hasScripture && !shownOnce.has('scripture')) updates.push('scripture');
+    if (contentState.hasResources && !shownOnce.has('resources')) updates.push('resources');
+    if (contentState.hasNotes && !shownOnce.has('notes')) updates.push('notes');
+    
+    if (updates.length > 0) {
+      setShownOnce(prev => {
+        const next = new Set(prev);
+        updates.forEach(card => next.add(card));
+        return next;
+      });
+    }
+  }, [contentState, shownOnce]);
+
+  // Compute which cards are visible - KEEP stale content visible
   const visibleCards = useMemo<CardType[]>(() => {
     const contentCards: CardType[] = [];
 
-    // Check each card in order
     for (const card of FULL_CARD_ORDER) {
       // Always show chat
       if (ALWAYS_VISIBLE.includes(card)) {
@@ -59,8 +92,10 @@ export function useCardVisibility(contentState: ContentState) {
         continue;
       }
 
-      // Check if card has content
+      // Show card if it CURRENTLY has content OR has EVER had content (sticky)
       let hasContent = false;
+      let wasShownOnce = shownOnce.has(card);
+      
       switch (card) {
         case 'history':
           hasContent = contentState.hasHistory;
@@ -79,15 +114,16 @@ export function useCardVisibility(contentState: ContentState) {
           break;
       }
 
-      if (hasContent) {
+      // Keep card visible if it has content OR was shown before (keeps stale content)
+      if (hasContent || wasShownOnce) {
         contentCards.push(card);
       }
     }
 
     return contentCards;
-  }, [contentState, dismissPrefs.dismissed]);
+  }, [contentState, dismissPrefs.dismissed, shownOnce]);
 
-  // Dismiss a card
+  // Dismiss a card - also remove from shownOnce
   const dismissCard = useCallback((card: CardType, neverAskAgain: boolean = false) => {
     setDismissPrefs(prev => ({
       dismissed: prev.dismissed.includes(card) ? prev.dismissed : [...prev.dismissed, card],
@@ -95,6 +131,12 @@ export function useCardVisibility(contentState: ContentState) {
         ? [...prev.neverAskAgain, card] 
         : prev.neverAskAgain,
     }));
+    // Also remove from shownOnce so it won't reappear until it has content again
+    setShownOnce(prev => {
+      const next = new Set(prev);
+      next.delete(card);
+      return next;
+    });
   }, []);
 
   // Restore a dismissed card
@@ -118,7 +160,6 @@ export function useCardVisibility(contentState: ContentState) {
   // Get hidden cards that could be restored
   const hiddenCards = useMemo(() => {
     return dismissPrefs.dismissed.filter(card => {
-      // Only include cards that would have content
       switch (card) {
         case 'history': return contentState.hasHistory;
         case 'search': return contentState.hasSearch;
@@ -130,6 +171,12 @@ export function useCardVisibility(contentState: ContentState) {
     });
   }, [dismissPrefs.dismissed, contentState]);
 
+  // Clear stale state (for reset)
+  const clearShownOnce = useCallback(() => {
+    setShownOnce(new Set());
+    localStorage.removeItem(CARD_SHOWN_ONCE_KEY);
+  }, []);
+
   return {
     visibleCards,
     hiddenCards,
@@ -137,5 +184,6 @@ export function useCardVisibility(contentState: ContentState) {
     restoreCard,
     shouldConfirmDismiss,
     isCardVisible,
+    clearShownOnce,
   };
 }

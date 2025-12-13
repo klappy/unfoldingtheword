@@ -20,6 +20,27 @@ interface UseMultiAgentChatOptions {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/multi-agent-chat`;
 
+// Get current resource preferences from localStorage
+function getResourcePrefs() {
+  const prefsJson = localStorage.getItem('bible-study-resource-preferences') || localStorage.getItem('bible-study-version-preferences');
+  if (prefsJson) {
+    try {
+      const prefs = JSON.parse(prefsJson);
+      if (Array.isArray(prefs) && prefs.length > 0) {
+        const activePref = prefs.find((p: any) => p.resource) || prefs[0];
+        return {
+          language: activePref.language || 'en',
+          organization: activePref.organization || 'unfoldingWord',
+          resource: activePref.resource || 'ult',
+        };
+      }
+    } catch (e) {
+      console.error('[Chat] Error parsing resource prefs:', e);
+    }
+  }
+  return { language: 'en', organization: 'unfoldingWord', resource: 'ult' };
+}
+
 export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,6 +74,9 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         content: m.content,
       }));
 
+      // Get current user preferences for resources
+      const userPrefs = getResourcePrefs();
+
       const response = await fetch(CHAT_URL, {
         method: 'POST',
         headers: {
@@ -64,6 +88,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
           conversationHistory,
           scriptureContext,
           responseLanguage,
+          userPrefs, // Pass user preferences for resource selection
           stream: true,
         }),
       });
