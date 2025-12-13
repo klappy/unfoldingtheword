@@ -98,6 +98,11 @@ USE 'filter' PARAMETER WHEN:
 OMIT 'filter' WHEN:
 - User wants to READ a specific passage: "John 3:16", "read Romans 8"
 
+USE 'resource' PARAMETER WHEN:
+- User explicitly mentions UST, ULT, or another translation: "read John 3:16 in UST", "search the UST for love"
+- ULT = Unfoldng Word Literal Text (more literal translation)
+- UST = Unfoldng Word Simplified Text (easier to understand)
+
 REFERENCE SCOPES (all supported by MCP):
 - Specific verse: "John 3:16"
 - Chapter: "Romans 8" 
@@ -117,6 +122,11 @@ The MCP server handles all reference parsing including localized book names.`,
           filter: {
             type: "string",
             description: "Word/phrase to find. Returns structured matches with counts and breakdowns."
+          },
+          resource: {
+            type: "string",
+            enum: ["ult", "ust"],
+            description: "Scripture translation to use: 'ult' (literal) or 'ust' (simplified). Only specify if user explicitly requests a specific translation."
           }
         },
         required: ["reference"],
@@ -815,9 +825,10 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
     toolCallSignatures.push({ tool: functionName, args });
     
     if (functionName === 'get_scripture_passage') {
-      // MCP supports testament scopes (OT, NT) and book references directly - let the AI use them
-      console.log(`Processing tool call: ${functionName}`, { reference: args.reference, filter: args.filter });
-      const result = await fetchScripturePassage(args.reference, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
+      // Use resource from tool args if AI specified one, otherwise fall back to user prefs
+      const effectiveResource = args.resource || userPrefs?.resource;
+      console.log(`Processing tool call: ${functionName}`, { reference: args.reference, filter: args.filter, resource: effectiveResource });
+      const result = await fetchScripturePassage(args.reference, args.filter, userPrefs?.language, userPrefs?.organization, effectiveResource);
       if (result.text) {
         scriptureText = scriptureText ? scriptureText + '\n\n' + result.text : result.text;
       }
