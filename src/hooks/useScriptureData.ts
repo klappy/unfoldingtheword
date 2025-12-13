@@ -539,7 +539,8 @@ export function useScriptureData() {
   const setSearchResultsFromMetadata = useCallback((
     reference: string,
     filter: string,
-    matches: { book: string; chapter: number; verse: number; text: string }[]
+    matches: { book: string; chapter: number; verse: number; text: string }[],
+    resource?: string
   ) => {
     const byBook: Record<string, number> = {};
     const byTestament: Record<string, number> = {};
@@ -563,11 +564,31 @@ export function useScriptureData() {
       query: `${filter} in ${reference}`,
       filter,
       reference,
+      resource,
       totalMatches: matches.length,
       breakdown: { byTestament, byBook },
       matches,
     });
   }, []);
+
+  // Navigate to a specific verse without reloading the book (fast scroll)
+  const navigateToVerse = useCallback((reference: string): boolean => {
+    const parsed = parseReference(reference);
+    if (!parsed) return false;
+
+    // Check if we already have this book loaded
+    if (scripture?.book && scripture.book.book.toLowerCase() === parsed.book.toLowerCase()) {
+      // Just update the target chapter/verse - no reload needed
+      setScripture(prev => prev ? {
+        ...prev,
+        reference,
+        targetChapter: parsed.chapter,
+        targetVerse: parsed.verse,
+      } : null);
+      return true; // Indicate fast navigation was used
+    }
+    return false; // Book not loaded, caller should use loadScriptureData
+  }, [scripture?.book]);
 
   return {
     scripture,
@@ -585,6 +606,7 @@ export function useScriptureData() {
     clearVerseFilter,
     clearSearchResults,
     setSearchResultsFromMetadata,
+    navigateToVerse,
     clearData,
   };
 }

@@ -43,7 +43,7 @@ const Index = () => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
 
-  const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, navigateToVerse, clearData: clearScriptureData } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
     onBugReport: addBugReport,
@@ -277,11 +277,11 @@ const Index = () => {
     }
 
     if (result) {
-      const { searchQuery, scriptureReference, navigationHint, searchMatches } = result as any;
+      const { searchQuery, scriptureReference, navigationHint, searchMatches, searchResource } = result as any;
 
       // If the backend already found concrete scripture matches, trust those first
       if (searchMatches && searchMatches.length > 0 && scriptureReference && searchQuery) {
-        setSearchResultsFromMetadata(scriptureReference, searchQuery, searchMatches);
+        setSearchResultsFromMetadata(scriptureReference, searchQuery, searchMatches, searchResource);
         navigateToCard('search');
       }
       // Otherwise, if the AI is hinting at a scripture search, run the client-side filtered search
@@ -360,12 +360,22 @@ const Index = () => {
     navigateToCard('scripture');
   }, [loadScriptureData, navigateToCard]);
 
-  // Handle search result verse click
+  // Handle search result verse click - fast scroll if same book, otherwise full load
   const handleSearchVerseClick = useCallback(async (reference: string) => {
     console.log('[Index] Search result verse clicked:', reference);
+    
+    // Try fast navigation first (same book already loaded)
+    const fastNav = navigateToVerse(reference);
+    if (fastNav) {
+      console.log('[Index] Using fast navigation to:', reference);
+      navigateToCard('scripture');
+      return;
+    }
+    
+    // Different book - need full load
     await loadScriptureData(reference);
     navigateToCard('scripture');
-  }, [loadScriptureData, navigateToCard]);
+  }, [navigateToVerse, loadScriptureData, navigateToCard]);
 
   // Clear search results
   const handleClearSearch = useCallback(() => {

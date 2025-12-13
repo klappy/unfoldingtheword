@@ -94,6 +94,7 @@ export interface SearchResults {
   query: string;
   filter?: string;
   reference?: string;  // scope: 'Romans', 'NT', 'Gospels', etc.
+  resource?: string;   // which resource was searched (e.g., 'ult', 'ust')
   totalMatches: number;
   breakdown: {
     byTestament?: Record<string, number>;
