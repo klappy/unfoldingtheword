@@ -45,6 +45,7 @@ const Index = () => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
   const [pendingSearchNavigation, setPendingSearchNavigation] = useState(false);
+  const [resourceFilterInfo, setResourceFilterInfo] = useState<{ query: string; reference?: string | null } | null>(null);
   const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, navigateToVerse, clearData: clearScriptureData, setScripture, setResources, setSearchResults } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
@@ -331,6 +332,16 @@ const Index = () => {
           clearSearchResults();
         }
       }
+
+      // Track resource-level search filters for resources card
+      if (navigationHint === 'resources' && searchQuery) {
+        setResourceFilterInfo({
+          query: searchQuery,
+          reference: scriptureReference || scripture?.reference || null,
+        });
+      } else {
+        setResourceFilterInfo(null);
+      }
       
       // Replay tool calls to populate UI state (scripture, resources, search)
       if (toolCalls && toolCalls.length > 0) {
@@ -401,21 +412,40 @@ const Index = () => {
     if (lastAssistantWithTools?.toolCalls) {
       console.log('[Index] Replaying tool calls from history:', lastAssistantWithTools.toolCalls);
       mcpReplay.replayToolCalls(lastAssistantWithTools.toolCalls);
+
+      const toolCalls = lastAssistantWithTools.toolCalls as any[];
+      const filterTool = toolCalls.find(tc =>
+        (tc.tool === 'get_translation_notes' || tc.tool === 'get_translation_questions') &&
+        tc.args?.filter
+      );
+
+      if (filterTool) {
+        setResourceFilterInfo({
+          query: filterTool.args.filter,
+          reference: filterTool.args.reference || item.scriptureReference || null,
+        });
+      } else {
+        setResourceFilterInfo(null);
+      }
     } else if (item.scriptureReference) {
       // Fallback for old conversations without tool calls
       await loadScriptureData(item.scriptureReference);
+      setResourceFilterInfo(null);
+    } else {
+      setResourceFilterInfo(null);
     }
     
     navigateToCard('chat');
-  }, [loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard, mcpReplay]);
+  }, [loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard, mcpReplay, setResourceFilterInfo]);
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
     clearScriptureData();
     setCurrentConversationId(null);
     clearSearchResults();
+    setResourceFilterInfo(null);
     navigateToCard('chat');
-  }, [clearMessages, clearScriptureData, setCurrentConversationId, clearSearchResults, navigateToCard]);
+  }, [clearMessages, clearScriptureData, setCurrentConversationId, clearSearchResults, navigateToCard, setResourceFilterInfo]);
 
   const handleVerseSelect = useCallback((reference: string) => {
     console.log('[Index] Verse selected:', reference);
@@ -541,6 +571,8 @@ const Index = () => {
             scrollToType={scrollToResourceType}
             onScrollComplete={() => setScrollToResourceType(null)}
             currentLanguage={language}
+            filterQuery={resourceFilterInfo?.query || null}
+            filterReference={resourceFilterInfo?.reference || null}
           />
         );
       case 'notes':

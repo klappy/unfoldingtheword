@@ -22,6 +22,8 @@ interface ResourcesCardProps {
   scrollToType?: Resource['type'] | null;
   onScrollComplete?: () => void;
   currentLanguage?: string;
+  filterQuery?: string | null;
+  filterReference?: string | null;
 }
 
 const resourceIcons = {
@@ -318,7 +320,7 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
 // Memoize to prevent re-renders during swipe animations
 const MemoizedExpandableResource = memo(ExpandableResource);
 
-function ResourcesCardInner({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry, scrollToType, onScrollComplete, currentLanguage }: ResourcesCardProps) {
+function ResourcesCardInner({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry, scrollToType, onScrollComplete, currentLanguage, filterQuery, filterReference }: ResourcesCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeType, setActiveType] = useState<string | null>(null);
@@ -563,6 +565,21 @@ function ResourcesCardInner({ resources, onAddToNotes, onSearch, onClearVerseFil
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Resource search filter summary */}
+      {filterQuery && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="px-4 pb-2"
+        >
+          <div className="flex items-center justify-between bg-accent/10 rounded-lg px-3 py-2">
+            <span className="text-xs text-accent font-medium">
+              Search: "{filterQuery}"{filterReference ? ` in ${filterReference}` : ''} • {resources.length} match{resources.length === 1 ? '' : 'es'}
+            </span>
           </div>
         </motion.div>
       )}
