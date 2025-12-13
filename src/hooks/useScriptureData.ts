@@ -535,6 +535,40 @@ export function useScriptureData() {
     setSearchResults(null);
   }, []);
 
+  // Set search results directly from orchestrator metadata
+  const setSearchResultsFromMetadata = useCallback((
+    reference: string,
+    filter: string,
+    matches: { book: string; chapter: number; verse: number; text: string }[]
+  ) => {
+    const byBook: Record<string, number> = {};
+    const byTestament: Record<string, number> = {};
+    
+    const OT_BOOKS = new Set([
+      'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy',
+      'Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel', '1 Kings', '2 Kings',
+      '1 Chronicles', '2 Chronicles', 'Ezra', 'Nehemiah', 'Esther', 'Job',
+      'Psalms', 'Proverbs', 'Ecclesiastes', 'Song of Solomon', 'Isaiah', 'Jeremiah',
+      'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel', 'Amos', 'Obadiah',
+      'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'
+    ]);
+    
+    for (const match of matches) {
+      byBook[match.book] = (byBook[match.book] || 0) + 1;
+      const testament = OT_BOOKS.has(match.book) ? 'OT' : 'NT';
+      byTestament[testament] = (byTestament[testament] || 0) + 1;
+    }
+    
+    setSearchResults({
+      query: `${filter} in ${reference}`,
+      filter,
+      reference,
+      totalMatches: matches.length,
+      breakdown: { byTestament, byBook },
+      matches,
+    });
+  }, []);
+
   return {
     scripture,
     resources,
@@ -550,6 +584,7 @@ export function useScriptureData() {
     filterByVerse,
     clearVerseFilter,
     clearSearchResults,
+    setSearchResultsFromMetadata,
     clearData,
   };
 }

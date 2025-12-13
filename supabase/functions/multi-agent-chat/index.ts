@@ -433,7 +433,20 @@ function detectPastoralIntent(message: string): boolean {
   return false;
 }
 
-async function fetchScripturePassage(reference: string, filter?: string, language?: string, organization?: string, resource?: string): Promise<{ text: string | null, isFilterSearch: boolean }> {
+interface ScriptureSearchMatch {
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
+interface ScripturePassageResult {
+  text: string | null;
+  isFilterSearch: boolean;
+  matches: ScriptureSearchMatch[];
+}
+
+async function fetchScripturePassage(reference: string, filter?: string, language?: string, organization?: string, resource?: string): Promise<ScripturePassageResult> {
   try {
     let url = `${MCP_BASE_URL}/api/fetch-scripture?reference=${encodeURIComponent(reference)}`;
     if (filter) url += `&filter=${encodeURIComponent(filter)}`;
@@ -445,19 +458,70 @@ async function fetchScripturePassage(reference: string, filter?: string, languag
     const response = await fetch(url);
     if (response.ok) {
       const contentType = response.headers.get('content-type') || '';
+      let text: string | null = null;
+      let rawData: any = null;
+      
       if (contentType.includes('application/json')) {
-        const data = await response.json();
-        return { text: data.text || data.passage || data.content || JSON.stringify(data), isFilterSearch: !!filter };
+        rawData = await response.json();
+        text = rawData.text || rawData.passage || rawData.content || rawData.markdown || JSON.stringify(rawData);
       } else {
-        return { text: await response.text(), isFilterSearch: !!filter };
+        text = await response.text();
       }
+      
+      // If this is a filter search, parse the text to extract matching verses
+      const matches: ScriptureSearchMatch[] = [];
+      if (filter && text) {
+        // Parse the scripture text to find verses containing the filter term
+        const filterLower = filter.toLowerCase();
+        const lines = text.split('\n');
+        let currentBook = reference.split(/\s+\d/)[0] || reference;
+        
+        for (const line of lines) {
+          // Match verse patterns like "3:16 For God so loved..." or "16. For God so loved..."
+          const verseMatch = line.match(/^(\d+):(\d+)\s+(.+)/) || line.match(/^(\d+)\.\s+(.+)/);
+          if (verseMatch) {
+            const chapter = verseMatch[1] ? parseInt(verseMatch[1], 10) : 1;
+            const verse = verseMatch[2] ? parseInt(verseMatch[2], 10) : parseInt(verseMatch[1], 10);
+            const verseText = verseMatch[3] || verseMatch[2] || '';
+            
+            if (verseText.toLowerCase().includes(filterLower)) {
+              matches.push({
+                book: currentBook,
+                chapter,
+                verse,
+                text: verseText.trim()
+              });
+            }
+          }
+          // Also try to match bold/highlighted patterns from MCP response
+          if (line.toLowerCase().includes(filterLower)) {
+            const refMatch = line.match(/\*\*([^*]+)\*\*/) || line.match(/`([^`]+)`/);
+            if (refMatch) {
+              // Try to extract reference from the line
+              const refPart = line.match(/(\d+):(\d+)/);
+              if (refPart) {
+                matches.push({
+                  book: currentBook,
+                  chapter: parseInt(refPart[1], 10),
+                  verse: parseInt(refPart[2], 10),
+                  text: line.replace(/\*\*/g, '').trim()
+                });
+              }
+            }
+          }
+        }
+        
+        console.log(`Parsed ${matches.length} matching verses for filter "${filter}"`);
+      }
+      
+      return { text, isFilterSearch: !!filter, matches };
     } else {
       console.log(`Scripture fetch returned ${response.status}`);
     }
   } catch (error) {
     console.error('Error fetching scripture:', error);
   }
-  return { text: null, isFilterSearch: false };
+  return { text: null, isFilterSearch: false, matches: [] };
 }
 
 // Detect if input is a scripture reference
@@ -610,6 +674,7 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
   searchQuery: string | null,
   navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null,
   isFilterSearch: boolean,
+  searchMatches: ScriptureSearchMatch[],
   noteResult?: string
 }> {
   const resources: any[] = [];
@@ -618,6 +683,7 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
   let searchQuery: string | null = null;
   let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
   let isFilterSearch = false;
+  let searchMatches: ScriptureSearchMatch[] = [];
   let noteResult: string | undefined;
   
   for (const toolCall of toolCalls) {
@@ -636,6 +702,7 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
       scriptureText = result.text;
       scriptureReference = args.reference;
       isFilterSearch = result.isFilterSearch;
+      searchMatches = result.matches;
       navigationHint = args.filter ? 'search' : 'scripture';
       if (args.filter) searchQuery = args.filter;
     } else if (functionName === 'get_translation_notes' || functionName === 'get_translation_questions') {
@@ -661,7 +728,7 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
     }
   }
   
-  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, isFilterSearch, noteResult };
+  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, isFilterSearch, searchMatches, noteResult };
 }
 
 // Call OpenAI with tool calling
@@ -670,7 +737,8 @@ async function callAIWithTools(userMessage: string, conversationHistory: any[], 
   scriptureText: string | null,
   scriptureReference: string | null,
   searchQuery: string | null,
-  navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null
+  navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null,
+  searchMatches: ScriptureSearchMatch[]
 }> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) {
@@ -741,6 +809,7 @@ User's organization: ${userPrefs?.organization || 'unfoldingWord'}`;
   let scriptureReference: string | null = null;
   let searchQuery: string | null = null;
   let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
+  let searchMatches: ScriptureSearchMatch[] = [];
 
   if (message?.tool_calls && message.tool_calls.length > 0) {
     const result = await processToolCalls(message.tool_calls, userPrefs);
@@ -749,6 +818,7 @@ User's organization: ${userPrefs?.organization || 'unfoldingWord'}`;
     scriptureReference = result.scriptureReference;
     searchQuery = result.searchQuery;
     navigationHint = result.navigationHint;
+    searchMatches = result.searchMatches;
   } else {
     console.log("No tool calls, falling back to direct search");
     resources = await fetchMcpResourcesSearch(userMessage, undefined, userPrefs?.language, userPrefs?.organization);
@@ -756,7 +826,7 @@ User's organization: ${userPrefs?.organization || 'unfoldingWord'}`;
     navigationHint = 'resources';
   }
 
-  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint };
+  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, searchMatches };
 }
 
 // Generate a streaming response based on fetched resources
@@ -936,6 +1006,7 @@ serve(async (req) => {
     let scriptureReference: string | null;
     let searchQuery: string | null;
     let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
+    let searchMatches: ScriptureSearchMatch[] = [];
 
     // Extract resource override from message (e.g., "in the ULT", "in the UST")
     const { cleanedMessage, resourceOverride } = extractResourceFromMessage(message);
@@ -979,6 +1050,7 @@ serve(async (req) => {
         scriptureReference = searchResult.scriptureReference || scriptureReference;
         searchQuery = searchResult.searchQuery;
         navigationHint = searchResult.navigationHint;
+        searchMatches = searchResult.searchMatches;
       }
     } else {
       console.log("Using AI search with intent:", intentHint);
@@ -988,9 +1060,10 @@ serve(async (req) => {
       scriptureReference = result.scriptureReference;
       searchQuery = result.searchQuery;
       navigationHint = result.navigationHint;
+      searchMatches = result.searchMatches;
     }
 
-    console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}, navigation: ${navigationHint}`);
+    console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}, navigation: ${navigationHint}, matches: ${searchMatches.length}`);
 
     const noteResources = resources.filter(r => r.resourceType === 'tn');
     const questionResources = resources.filter(r => r.resourceType === 'tq');
@@ -1018,7 +1091,8 @@ serve(async (req) => {
               resource_counts: resourceCounts,
               total_resources: resources.length,
               mcp_resources: resources,
-              navigation_hint: navigationHint
+              navigation_hint: navigationHint,
+              search_matches: searchMatches // Include actual search matches for SearchCard
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n\n`));
             

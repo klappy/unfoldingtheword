@@ -1,6 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Message, ResourceLink } from '@/types';
 
+interface SearchMatch {
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
 interface ChatMetadata {
   scripture_reference: string | null;
   search_query: string | null;
@@ -13,6 +20,7 @@ interface ChatMetadata {
   total_resources: number;
   mcp_resources: any[];
   navigation_hint: 'scripture' | 'resources' | 'search' | 'notes' | null;
+  search_matches?: SearchMatch[];
 }
 
 interface UseMultiAgentChatOptions {
@@ -243,6 +251,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         scriptureReference: metadata?.scripture_reference || null,
         searchQuery: metadata?.search_query || null,
         navigationHint: metadata?.navigation_hint || null,
+        searchMatches: metadata?.search_matches || [],
         newMessages: [finalAssistantMessage], // Return for persistence
       };
     } catch (err) {
