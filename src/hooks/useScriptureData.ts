@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { ScripturePassage, Resource, ScriptureBook } from '@/types';
+import { ScripturePassage, Resource, ScriptureBook, SearchResults } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import {
   fetchScripture,
@@ -10,6 +10,7 @@ import {
   fetchTranslationWordLinks,
   fetchTranslationWord,
   searchResources,
+  searchScripture,
   BookData,
   FallbackInfo,
 } from '@/services/translationHelpsApi';
@@ -43,6 +44,7 @@ export function useScriptureData() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [allResources, setAllResources] = useState<Resource[]>([]); // Store all resources for filtering
   const [verseFilter, setVerseFilter] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isResourcesLoading, setIsResourcesLoading] = useState(false); // Separate loading state for resources
   const [error, setError] = useState<string | null>(null);
@@ -513,9 +515,40 @@ export function useScriptureData() {
     setResources(filtered.length > 0 ? filtered : allResources);
   }, [allResources]);
 
+  // Load filtered search results (e.g., "find love in Romans")
+  const loadFilteredSearch = useCallback(async (reference: string, filter: string) => {
+    console.log('[useScriptureData] Loading filtered search:', filter, 'in', reference);
+    setIsLoading(true);
+    
+    try {
+      const results = await searchScripture(reference, filter);
+      console.log('[useScriptureData] Search results:', results);
+      setSearchResults(results);
+    } catch (err) {
+      console.error('[useScriptureData] Filtered search failed:', err);
+      // Set empty results on error
+      setSearchResults({
+        query: `${filter} in ${reference}`,
+        filter,
+        reference,
+        totalMatches: 0,
+        breakdown: { byTestament: {}, byBook: {} },
+        matches: [],
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Clear search results
+  const clearSearchResults = useCallback(() => {
+    setSearchResults(null);
+  }, []);
+
   return {
     scripture,
     resources,
+    searchResults,
     isLoading,
     isResourcesLoading,
     error,
@@ -523,8 +556,10 @@ export function useScriptureData() {
     fallbackState,
     loadScriptureData,
     loadKeywordResources,
+    loadFilteredSearch,
     filterByVerse,
     clearVerseFilter,
+    clearSearchResults,
     clearData,
   };
 }
