@@ -112,7 +112,7 @@ const Index = () => {
       
       // Pass resource directly to loadScriptureData - avoids race condition with localStorage
       await loadScriptureData(reference, resource);
-      // Navigate to scripture card when voice AI fetches scripture
+      // Navigate AFTER data loads to prevent blank card
       navigateToCard('scripture');
     }, [loadScriptureData, navigateToCard]),
     onToolCall: useCallback(async (toolName: string, args: any) => {
@@ -392,13 +392,11 @@ const Index = () => {
             resourcePreferences={resourcePreferences}
             onResourceSelect={async (resource) => {
               setActiveResource(resource);
-              // Clear and reload scripture with new resource
+              // Reload scripture with new resource - don't clear, just overlay with loading
               if (scripture?.reference) {
                 const ref = scripture.reference;
-                clearScriptureData(); // Clear first to force skeleton
-                // Small delay to ensure localStorage update propagates
-                await new Promise(resolve => setTimeout(resolve, 50));
-                loadScriptureData(ref);
+                // Don't clear - keep stale content visible while loading
+                loadScriptureData(ref, resource.resource);
               }
             }}
             currentLanguage={language || 'en'}

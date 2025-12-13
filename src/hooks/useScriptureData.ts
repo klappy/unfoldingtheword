@@ -125,18 +125,8 @@ export function useScriptureData() {
 
     const { book, chapter, verse } = parsed;
     
-    // Check if loading a different book - need skeleton
-    const currentBook = scripture?.book?.book;
-    const isDifferentBook = !currentBook || currentBook.toLowerCase() !== book.toLowerCase();
-    
-    // Clear scripture BEFORE setting loading to ensure skeleton shows
-    // Always clear on first load or different book
-    if (isDifferentBook || !scripture) {
-      console.log('[useScriptureData] Clearing scripture for skeleton (first load or different book)');
-      setScripture(null);
-    }
-    
-    // NOW set loading state - this will trigger skeleton since passage is null
+    // Set loading state - but DON'T clear scripture (keep stale content visible)
+    // This prevents the card from vanishing during resource switches
     setIsLoading(true);
     setIsResourcesLoading(true);
     setError(null);
