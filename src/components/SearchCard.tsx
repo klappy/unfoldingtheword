@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Search, Book, X, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -40,11 +41,22 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
     ? resourceResults.filter(r => {
         const query = filterQuery.toLowerCase();
         return (
-          r.title?.toLowerCase().includes(query) ||
-          r.content?.toLowerCase().includes(query)
+          (r.title && r.title.toLowerCase().includes(query)) ||
+          (r.content && r.content.toLowerCase().includes(query))
         );
       })
     : resourceResults;
+
+  // Debug log to verify filtering behavior
+  useEffect(() => {
+    if (resourceResults) {
+      console.log('[SearchCard] Resource filter debug', {
+        filterQuery,
+        totalResources: resourceResults.length,
+        filteredResources: filteredResourceResults?.length ?? 0,
+      });
+    }
+  }, [filterQuery, resourceResults, filteredResourceResults]);
 
   // If we have neither scripture search results nor a resource-level filter, show empty state
   if (!results && !filterQuery) {
