@@ -78,7 +78,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     return { language: 'en', organization: 'unfoldingWord', resource: 'ult' };
   }, []);
 
-  // Handle the unified bible_study_assistant tool call
+  // Handle the unified bible_study_assistant tool call with streaming
   const handleBibleStudyAssistant = useCallback(async (args: { request: string; action_hint?: string }): Promise<string> => {
     console.log('[Voice] bible_study_assistant called:', args);
     
@@ -86,48 +86,93 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     const deviceId = localStorage.getItem(DEVICE_ID_KEY);
     
     try {
-      // Call the text orchestrator (multi-agent-chat) with voice mode flag
-      const { data, error } = await supabase.functions.invoke('multi-agent-chat', {
-        body: {
+      // Use fetch with streaming to get response faster
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/multi-agent-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
           message: args.request,
           isVoiceRequest: true,
-          userPrefs: {
-            ...prefs,
-            deviceId
-          },
+          userPrefs: { ...prefs, deviceId },
           responseLanguage: prefs.language,
-          stream: false // Voice needs complete response
-        }
+          stream: true // Use streaming for faster first token
+        })
       });
 
-      if (error) {
-        console.error('[Voice] Orchestrator error:', error);
-        options.onBugReport?.(error.message, `Voice request: ${args.request}`);
-        return "I'm having trouble right now. Could you try again?";
+      if (!response.ok) {
+        throw new Error(`Orchestrator error: ${response.status}`);
       }
 
-      console.log('[Voice] Orchestrator response:', data);
+      if (!response.body) {
+        throw new Error('No response body');
+      }
 
-      // Handle navigation based on response
-      if (data.navigation_hint) {
-        options.onNavigate?.(data.navigation_hint);
-        
-        // Also trigger specific callbacks for UI sync
-        if (data.navigation_hint === 'scripture' && data.scripture_reference) {
-          options.onScriptureReference?.(data.scripture_reference, prefs.resource);
-        } else if (data.navigation_hint === 'notes') {
-          options.onNotesAccessed?.();
+      // Stream and accumulate the response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let metadata: any = null;
+      let content = '';
+      let voiceResponse = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.startsWith(':') || line === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            
+            if (parsed.type === 'metadata') {
+              metadata = parsed;
+              // Handle navigation immediately when metadata arrives
+              if (parsed.navigation_hint) {
+                options.onNavigate?.(parsed.navigation_hint);
+                
+                if (parsed.navigation_hint === 'scripture' && parsed.scripture_reference) {
+                  options.onScriptureReference?.(parsed.scripture_reference, prefs.resource);
+                } else if (parsed.navigation_hint === 'notes') {
+                  options.onNotesAccessed?.();
+                }
+              }
+            } else if (parsed.type === 'content') {
+              content += parsed.content;
+            } else if (parsed.type === 'voice_response') {
+              voiceResponse = parsed.content;
+            }
+          } catch {
+            // Incomplete JSON, put back
+            buffer = line + '\n' + buffer;
+            break;
+          }
         }
       }
+
+      console.log('[Voice] Streamed response complete:', { metadata, contentLength: content.length });
 
       // Notify about tool call for parallel UI updates
       options.onToolCall?.('bible_study_assistant', {
         ...args,
-        response: data
+        response: { ...metadata, content, voice_response: voiceResponse }
       });
 
       // Return voice-optimized response
-      return data.voice_response || data.content || "I found some resources for you.";
+      return voiceResponse || content || "I found some resources for you.";
       
     } catch (error) {
       console.error('[Voice] Error calling orchestrator:', error);
