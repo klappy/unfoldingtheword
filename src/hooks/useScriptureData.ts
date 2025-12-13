@@ -598,5 +598,9 @@ export function useScriptureData() {
     setSearchResultsFromMetadata,
     navigateToVerse,
     clearData,
+    // Expose setters for MCP replay integration
+    setScripture,
+    setResources,
+    setSearchResults,
   };
 }

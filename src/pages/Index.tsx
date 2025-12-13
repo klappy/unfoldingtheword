@@ -1,5 +1,5 @@
-import { useCallback, useState, useMemo } from 'react';
-import { Resource, SearchResults } from '@/types';
+import { useCallback, useState, useMemo, useEffect } from 'react';
+import { Resource, SearchResults, ToolCall } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { useCardVisibility } from '@/hooks/useCardVisibility';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -22,6 +22,7 @@ import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
 import { useNotes } from '@/hooks/useNotes';
 import { useConversations } from '@/hooks/useConversations';
 import { useTranslation, TranslationItem } from '@/hooks/useTranslation';
+import { useMcpReplay } from '@/hooks/useMcpReplay';
 
 const Index = () => {
   const {
@@ -43,11 +44,14 @@ const Index = () => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
 
-  const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, navigateToVerse, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, navigateToVerse, clearData: clearScriptureData, setScripture, setResources, setSearchResults } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
     onBugReport: addBugReport,
   });
+  
+  // MCP replay for tool calls from messages
+  const mcpReplay = useMcpReplay();
 
   const { 
     conversations, 
@@ -58,6 +62,31 @@ const Index = () => {
     saveMessage,
     loadConversationMessages,
   } = useConversations(language || 'en');
+  
+  // Replay tool calls when MCP state changes
+  useEffect(() => {
+    if (mcpReplay.scripture && !mcpReplay.isLoading) {
+      setScripture(mcpReplay.scripture);
+    }
+    if (mcpReplay.resources.length > 0 && !mcpReplay.isLoading) {
+      setResources(mcpReplay.resources);
+    }
+    if (mcpReplay.searchResults && !mcpReplay.isLoading) {
+      // Build breakdown from matches
+      const byBook: Record<string, number> = {};
+      for (const match of mcpReplay.searchResults.matches) {
+        byBook[match.book] = (byBook[match.book] || 0) + 1;
+      }
+      setSearchResults({
+        query: mcpReplay.searchResults.query,
+        reference: mcpReplay.searchResults.reference,
+        matches: mcpReplay.searchResults.matches,
+        resource: mcpReplay.searchResults.resource || 'ult',
+        totalMatches: mcpReplay.searchResults.matches.length,
+        breakdown: { byBook },
+      });
+    }
+  }, [mcpReplay.scripture, mcpReplay.resources, mcpReplay.searchResults, mcpReplay.isLoading, setScripture, setResources, setSearchResults]);
 
   // Compute content state for dynamic card visibility
   const contentState = useMemo(() => ({
@@ -277,25 +306,31 @@ const Index = () => {
     }
 
     if (result) {
-      const { searchQuery, scriptureReference, navigationHint, searchMatches, searchResource } = result as any;
-
-      // If the backend already found concrete scripture matches, trust those first
-      if (searchMatches && searchMatches.length > 0 && scriptureReference && searchQuery) {
-        setSearchResultsFromMetadata(scriptureReference, searchQuery, searchMatches, searchResource);
-        navigateToCard('search');
+      const { toolCalls, navigationHint, scriptureReference } = result;
+      
+      // Replay tool calls to populate UI state (scripture, resources, search)
+      if (toolCalls && toolCalls.length > 0) {
+        console.log('[Index] Replaying tool calls from new message:', toolCalls);
+        mcpReplay.replayToolCalls(toolCalls);
       }
-      // Otherwise, if the AI is hinting at a scripture search, run the client-side filtered search
-      else if (navigationHint === 'search' && scriptureReference && searchQuery) {
-        await loadFilteredSearch(scriptureReference, searchQuery);
+      
+      // Navigate based on navigation hint
+      if (navigationHint === 'search') {
         navigateToCard('search');
-      }
-      // Fallback: generic keyword search across resources
-      else if (searchQuery) {
-        await loadKeywordResources(searchQuery);
+      } else if (navigationHint === 'scripture') {
+        navigateToCard('scripture');
+      } else if (navigationHint === 'resources') {
         navigateToCard('resources');
+      } else if (navigationHint === 'notes') {
+        navigateToCard('notes');
+      }
+      
+      // Update conversation with scripture reference
+      if (scriptureReference && convId) {
+        await updateConversation(convId, { scriptureReference });
       }
     }
-  }, [sendMessage, scripture?.reference, loadScriptureData, loadKeywordResources, loadFilteredSearch, setSearchResultsFromMetadata, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName, navigateToCard]);
+  }, [sendMessage, scripture?.reference, loadScriptureData, currentConversationId, createConversation, saveMessage, updateConversation, language, targetLanguageName, navigateToCard, mcpReplay]);
 
   // Map ResourceLink type to Resource type for scrolling
   const getResourceTypeFromLink = (linkType: ResourceLink['type']): Resource['type'] | null => {
@@ -333,12 +368,21 @@ const Index = () => {
     setMessages(loadedMessages);
     setCurrentConversationId(item.id);
     
-    if (item.scriptureReference) {
+    // Find last assistant message with tool calls and replay them
+    const lastAssistantWithTools = [...loadedMessages].reverse().find(
+      m => m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0
+    );
+    
+    if (lastAssistantWithTools?.toolCalls) {
+      console.log('[Index] Replaying tool calls from history:', lastAssistantWithTools.toolCalls);
+      mcpReplay.replayToolCalls(lastAssistantWithTools.toolCalls);
+    } else if (item.scriptureReference) {
+      // Fallback for old conversations without tool calls
       await loadScriptureData(item.scriptureReference);
     }
     
     navigateToCard('chat');
-  }, [loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard]);
+  }, [loadConversationMessages, setMessages, setCurrentConversationId, loadScriptureData, navigateToCard, mcpReplay]);
 
   const handleNewConversation = useCallback(() => {
     clearMessages();
