@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { CardType } from '@/types';
 
 const CARD_DISMISS_PREFS_KEY = 'bible-study-card-dismiss-prefs';
@@ -48,6 +48,9 @@ export function useCardVisibility(contentState: ContentState) {
     }
   });
 
+  // Track previous content state to detect NEW content arriving
+  const prevContentRef = useRef<ContentState>(contentState);
+
   // Persist dismiss prefs to localStorage
   useEffect(() => {
     localStorage.setItem(CARD_DISMISS_PREFS_KEY, JSON.stringify(dismissPrefs));
@@ -57,6 +60,41 @@ export function useCardVisibility(contentState: ContentState) {
   useEffect(() => {
     localStorage.setItem(CARD_SHOWN_ONCE_KEY, JSON.stringify([...shownOnce]));
   }, [shownOnce]);
+
+  // Auto-restore dismissed cards when NEW content arrives
+  // This makes dismissal temporary - new AI results will bring the card back
+  useEffect(() => {
+    const prev = prevContentRef.current;
+    const cardsToRestore: CardType[] = [];
+
+    // Check if content went from false → true (new content arrived)
+    if (!prev.hasSearch && contentState.hasSearch && dismissPrefs.dismissed.includes('search')) {
+      cardsToRestore.push('search');
+    }
+    if (!prev.hasScripture && contentState.hasScripture && dismissPrefs.dismissed.includes('scripture')) {
+      cardsToRestore.push('scripture');
+    }
+    if (!prev.hasResources && contentState.hasResources && dismissPrefs.dismissed.includes('resources')) {
+      cardsToRestore.push('resources');
+    }
+    if (!prev.hasNotes && contentState.hasNotes && dismissPrefs.dismissed.includes('notes')) {
+      cardsToRestore.push('notes');
+    }
+    // History is less likely to need auto-restore, but include it for completeness
+    if (!prev.hasHistory && contentState.hasHistory && dismissPrefs.dismissed.includes('history')) {
+      cardsToRestore.push('history');
+    }
+
+    if (cardsToRestore.length > 0) {
+      console.log('[useCardVisibility] Auto-restoring dismissed cards due to new content:', cardsToRestore);
+      setDismissPrefs(prefs => ({
+        ...prefs,
+        dismissed: prefs.dismissed.filter(c => !cardsToRestore.includes(c)),
+      }));
+    }
+
+    prevContentRef.current = contentState;
+  }, [contentState, dismissPrefs.dismissed]);
 
   // Mark cards as shown when they have content
   useEffect(() => {
