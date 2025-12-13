@@ -117,10 +117,17 @@ const Index = () => {
     }, [loadScriptureData, navigateToCard]),
     onToolCall: useCallback(async (toolName: string, args: any) => {
       console.log('[Index] Voice tool call:', toolName, args);
-      // Navigate immediately based on tool type
-      if (toolName === 'get_scripture_passage') {
+      // Handle bible_study_assistant responses with search data
+      if (toolName === 'bible_study_assistant' && args.response) {
+        const { navigation_hint, scripture_reference, search_query } = args.response;
+        if (navigation_hint === 'search' && scripture_reference && search_query) {
+          await loadFilteredSearch(scripture_reference, search_query);
+          navigateToCard('search');
+        }
+      }
+      // Legacy tool handling
+      else if (toolName === 'get_scripture_passage') {
         if (args.filter) {
-          // Filter search → load search results and navigate to search card
           await loadFilteredSearch(args.reference, args.filter);
           navigateToCard('search');
         } else {
@@ -128,6 +135,20 @@ const Index = () => {
         }
       } else if (!toolName.includes('note')) {
         navigateToCard('resources');
+      }
+    }, [navigateToCard, loadFilteredSearch]),
+    onNavigate: useCallback(async (hint: 'scripture' | 'resources' | 'search' | 'notes', metadata?: any) => {
+      console.log('[Index] Voice navigate:', hint, metadata);
+      if (hint === 'search' && metadata?.scripture_reference && metadata?.search_query) {
+        // Load search results before navigating
+        await loadFilteredSearch(metadata.scripture_reference, metadata.search_query);
+        navigateToCard('search');
+      } else if (hint === 'scripture') {
+        // Scripture loading handled by onScriptureReference
+      } else if (hint === 'resources') {
+        navigateToCard('resources');
+      } else if (hint === 'notes') {
+        navigateToCard('notes');
       }
     }, [navigateToCard, loadFilteredSearch]),
     onError: (error) => {

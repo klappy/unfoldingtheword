@@ -22,8 +22,8 @@ interface UseVoiceConversationOptions {
   onNoteDeleted?: (id: string) => void;
   onNotesAccessed?: () => void;
   onBugReport?: (errorMessage: string, context: string) => void;
-  // Navigation callback for unified orchestrator
-  onNavigate?: (hint: 'scripture' | 'resources' | 'search' | 'notes') => void;
+  // Navigation callback for unified orchestrator - now includes metadata for search
+  onNavigate?: (hint: 'scripture' | 'resources' | 'search' | 'notes', metadata?: { scripture_reference?: string; search_query?: string }) => void;
 }
 
 export function useVoiceConversation(options: UseVoiceConversationOptions = {}) {
@@ -140,9 +140,12 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
             
             if (parsed.type === 'metadata') {
               metadata = parsed;
-              // Handle navigation immediately when metadata arrives
+              // Handle navigation immediately when metadata arrives - include search data
               if (parsed.navigation_hint) {
-                options.onNavigate?.(parsed.navigation_hint);
+                options.onNavigate?.(parsed.navigation_hint, {
+                  scripture_reference: parsed.scripture_reference,
+                  search_query: parsed.search_query,
+                });
                 
                 if (parsed.navigation_hint === 'scripture' && parsed.scripture_reference) {
                   options.onScriptureReference?.(parsed.scripture_reference, prefs.resource);
