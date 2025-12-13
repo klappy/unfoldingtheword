@@ -318,11 +318,17 @@ const Index = () => {
     if (result) {
       const { toolCalls, navigationHint, scriptureReference, searchQuery, searchMatches, searchResource } = result;
       
-      // If we have structured search matches from orchestrator, set search results immediately
-      if (navigationHint === 'search' && searchMatches && searchMatches.length > 0 && searchQuery) {
+      // Always update search results when search intent is detected (clears stale results if empty)
+      if (navigationHint === 'search' && searchQuery) {
         const ref = scriptureReference || scripture?.reference || 'Bible';
-        console.log('[Index] Setting search results from metadata:', { ref, searchQuery, count: searchMatches.length });
-        setSearchResultsFromMetadata(ref, searchQuery, searchMatches, searchResource || undefined);
+        if (searchMatches && searchMatches.length > 0) {
+          console.log('[Index] Setting search results from metadata:', { ref, searchQuery, count: searchMatches.length });
+          setSearchResultsFromMetadata(ref, searchQuery, searchMatches, searchResource || undefined);
+        } else {
+          // Clear old results and show empty state for this new search
+          console.log('[Index] Clearing stale search results for new search:', { ref, searchQuery });
+          clearSearchResults();
+        }
       }
       
       // Replay tool calls to populate UI state (scripture, resources, search)
