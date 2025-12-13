@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronLeft, ChevronRight, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -145,11 +145,8 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
   }, [handleExpand]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="glass-card rounded-xl overflow-hidden group relative"
+    <div
+      className="glass-card rounded-xl overflow-hidden group relative animate-fade-in"
     >
       {/* Action buttons - positioned separately, prevent click propagation */}
       <div 
@@ -314,11 +311,14 @@ function ExpandableResource({ resource, index, onAddToNotes, onSearch, currentLa
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 
-export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry, scrollToType, onScrollComplete, currentLanguage }: ResourcesCardProps) {
+// Memoize to prevent re-renders during swipe animations
+const MemoizedExpandableResource = memo(ExpandableResource);
+
+function ResourcesCardInner({ resources, onAddToNotes, onSearch, onClearVerseFilter, verseFilter, isLoading, error, onRetry, scrollToType, onScrollComplete, currentLanguage }: ResourcesCardProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeType, setActiveType] = useState<string | null>(null);
@@ -333,12 +333,14 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
   const resourceTypes = ['translation-note', 'translation-question', 'translation-word', 'academy-article'] as const;
   const availableTypes = resourceTypes.filter(type => groupedResources[type]?.length > 0);
 
-  // Track which section is in view
+  // Track which section is in view - throttled for performance
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || availableTypes.length === 0) return;
 
-    const handleScroll = () => {
+    let ticking = false;
+    
+    const updateActiveType = () => {
       const containerRect = container.getBoundingClientRect();
       let currentType: string | null = null;
       let closestDistance = Infinity;
@@ -347,10 +349,8 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
         const section = sectionRefs.current[type];
         if (section) {
           const sectionRect = section.getBoundingClientRect();
-          // Distance from section top to container top
           const distance = sectionRect.top - containerRect.top;
           
-          // Find the section closest to (but not below) the top of the container
           if (distance <= 50 && Math.abs(distance) < closestDistance) {
             closestDistance = Math.abs(distance);
             currentType = type;
@@ -358,7 +358,6 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
         }
       }
 
-      // If nothing is close to the top, use the first visible section
       if (!currentType) {
         for (const type of availableTypes) {
           const section = sectionRefs.current[type];
@@ -373,12 +372,18 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
       }
 
       setActiveType(currentType || availableTypes[0]);
+      ticking = false;
     };
 
-    // Set initial active type
-    setActiveType(availableTypes[0]);
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(updateActiveType);
+        ticking = true;
+      }
+    };
 
-    container.addEventListener('scroll', handleScroll);
+    setActiveType(availableTypes[0]);
+    container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [availableTypes.join(',')]);
 
@@ -618,7 +623,7 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
                 {/* Resources in this section */}
                 <div className="space-y-3">
                   {typeResources.map((resource, index) => (
-                    <ExpandableResource
+                    <MemoizedExpandableResource
                       key={resource.id}
                       resource={resource}
                       index={index}
@@ -636,3 +641,6 @@ export function ResourcesCard({ resources, onAddToNotes, onSearch, onClearVerseF
     </div>
   );
 }
+
+// Memoize the entire card to prevent re-renders during swipe
+export const ResourcesCard = memo(ResourcesCardInner);

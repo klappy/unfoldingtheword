@@ -55,15 +55,16 @@ export function SwipeContainer({
     >
       {/* Previous card (left) - only visible when dragging right */}
       {isDragging && dragOffset > 0 && (
-        <motion.div
+        <div
           className="absolute inset-0"
           style={{ 
-            x: `calc(-100% + ${dragOffset}px)`,
+            transform: `translateX(calc(-100% + ${dragOffset}px))`,
             opacity: peekOpacity,
+            willChange: 'transform, opacity',
           }}
         >
           {prevCardContent}
-        </motion.div>
+        </div>
       )}
 
       {/* Current card (center) */}
@@ -85,15 +86,16 @@ export function SwipeContainer({
 
       {/* Next card (right) - only visible when dragging left */}
       {isDragging && dragOffset < 0 && (
-        <motion.div
+        <div
           className="absolute inset-0"
           style={{ 
-            x: `calc(100% + ${dragOffset}px)`,
+            transform: `translateX(calc(100% + ${dragOffset}px))`,
             opacity: peekOpacity,
+            willChange: 'transform, opacity',
           }}
         >
           {nextCardContent}
-        </motion.div>
+        </div>
       )}
 
       {/* Page indicators - positioned to not overlap with input */}
