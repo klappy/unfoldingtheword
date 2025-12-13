@@ -26,7 +26,12 @@ INTENT ROUTING (very important):
 CONVERSATION STYLE:
 - Speak naturally, like a helpful friend who knows the library
 - Keep responses brief - 2-4 sentences, then let the user explore
-- For LOCATE results: briefly mention how many occurrences were found and in which books
+- For LOCATE results: ONLY mention counts if the tool returned structured matches. If no structured data was returned, DO NOT invent or guess match counts.
+
+CRITICAL - NO HALLUCINATED STATISTICS:
+- NEVER say "I found X occurrences" unless the tool actually returned that exact count
+- If the search tool returns an error or empty results, say "I couldn't find results for that search"
+- If you only have partial data, be honest about the limitation
 
 WHAT YOU MUST NOT DO:
 - Never answer questions from your training data
@@ -755,15 +760,25 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
       searchQuery = args.query;
       navigationHint = 'resources';
     } else if (functionName === 'get_scripture_passage') {
-      const result = await fetchScripturePassage(args.reference, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
-      // Only update scripture text if we got something (don't overwrite with null)
-      if (result.text) {
-        scriptureText = result.text;
+      // Normalize "Bible" to OT + NT searches
+      let references = [args.reference];
+      const refLower = (args.reference || '').toLowerCase().trim();
+      if (refLower === 'bible' || refLower === 'the bible' || refLower === 'whole bible') {
+        references = ['OT', 'NT'];
+        console.log(`Normalized "Bible" reference to OT + NT searches`);
+      }
+      
+      for (const ref of references) {
+        const result = await fetchScripturePassage(ref, args.filter, userPrefs?.language, userPrefs?.organization, userPrefs?.resource);
+        // Only update scripture text if we got something (don't overwrite with null)
+        if (result.text) {
+          scriptureText = scriptureText ? scriptureText + '\n\n' + result.text : result.text;
+        }
+        isFilterSearch = isFilterSearch || result.isFilterSearch;
+        // Aggregate matches from multiple tool calls instead of overwriting
+        searchMatches = [...searchMatches, ...result.matches];
       }
       scriptureReference = args.reference;
-      isFilterSearch = isFilterSearch || result.isFilterSearch;
-      // Aggregate matches from multiple tool calls instead of overwriting
-      searchMatches = [...searchMatches, ...result.matches];
       navigationHint = args.filter ? 'search' : 'scripture';
       if (args.filter) searchQuery = args.filter;
     } else if (functionName === 'get_translation_notes' || functionName === 'get_translation_questions') {
