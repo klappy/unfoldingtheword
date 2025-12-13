@@ -24,10 +24,16 @@ interface SearchCardProps {
   } | null;
   onClearSearch: () => void;
   onVerseClick: (reference: string) => void;
+  // When searching non-scripture resources (notes/questions), we still want
+  // to show the active filter and match count even if there are no scripture matches.
+  filterQuery?: string | null;
+  filterReference?: string | null;
+  resourceMatchCount?: number;
 }
 
-export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardProps) {
-  if (!results) {
+export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, filterReference, resourceMatchCount }: SearchCardProps) {
+  // If we have neither scripture search results nor a resource-level filter, show empty state
+  if (!results && !filterQuery) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center p-6 text-muted-foreground">
         <Search className="h-12 w-12 mb-4 opacity-50" />
@@ -36,7 +42,15 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
     );
   }
 
-  const { query, reference, resource, totalMatches, breakdown, matches } = results;
+  const hasScriptureResults = !!results;
+  const displayQuery = results?.query ?? filterQuery ?? '';
+  const displayReference = results?.reference ?? filterReference ?? undefined;
+  const resourceMatches = resourceMatchCount ?? 0;
+
+  const matches = results?.matches ?? [];
+  const resource = results?.resource;
+  const totalMatches = results?.totalMatches ?? 0;
+  const breakdown = results?.breakdown ?? { byTestament: {}, byBook: {} };
 
   // Group matches by book
   const matchesByBook: Record<string, SearchMatch[]> = {};
@@ -70,8 +84,14 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-primary" />
             <span className="font-medium text-sm">
-              "{query}"
-              {reference && <span className="text-muted-foreground"> in {reference}</span>}
+              {displayQuery && (
+                <>
+                  "{displayQuery}"
+                  {displayReference && (
+                    <span className="text-muted-foreground"> in {displayReference}</span>
+                  )}
+                </>
+              )}
             </span>
           </div>
           <Button
@@ -86,15 +106,22 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
         
         {/* Stats */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-          <Badge variant="secondary" className="text-xs">
-            {totalMatches} matches
-          </Badge>
+          {hasScriptureResults && (
+            <Badge variant="secondary" className="text-xs">
+              {totalMatches} matches
+            </Badge>
+          )}
           {resource && (
             <Badge variant="outline" className="text-xs uppercase">
               {resource}
             </Badge>
           )}
-          {breakdown.byTestament && Object.keys(breakdown.byTestament).length > 0 && (
+          {resourceMatches > 0 && (
+            <Badge variant="outline" className="text-xs">
+              {resourceMatches} resource match{resourceMatches === 1 ? '' : 'es'}
+            </Badge>
+          )}
+          {breakdown.byTestament && Object.keys(breakdown.byTestament).length > 0 && hasScriptureResults && (
             <>
               {breakdown.byTestament['OT'] && (
                 <span>OT: {breakdown.byTestament['OT']}</span>
@@ -111,7 +138,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4 pb-24">
           {/* Book breakdown - clickable to jump to that book's results */}
-          {Object.keys(breakdown.byBook).length > 0 && (
+          {hasScriptureResults && Object.keys(breakdown.byBook).length > 0 && (
             <div className="space-y-1">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 By Book
@@ -135,7 +162,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
           )}
 
           {/* Matches grouped by book */}
-          {Object.entries(matchesByBook).map(([book, bookMatches]) => (
+          {hasScriptureResults && Object.entries(matchesByBook).map(([book, bookMatches]) => (
             <div key={book} className="space-y-2">
               <button
                 className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
@@ -156,13 +183,21 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
                       {match.book} {match.chapter}:{match.verse}
                     </div>
                     <div className="text-sm line-clamp-2">
-                      {highlightTerm(match.text, query)}
+                      {highlightTerm(match.text, displayQuery)}
                     </div>
                   </button>
                 ))}
               </div>
             </div>
           ))}
+
+          {!hasScriptureResults && resourceMatches > 0 && (
+            <p className="text-sm text-muted-foreground">
+              No scripture verses were matched directly, but {resourceMatches} resource
+              match{resourceMatches === 1 ? ' was' : 'es were'} found. Swipe to the
+              Resources card to read the notes and questions for this search.
+            </p>
+          )}
         </div>
       </ScrollArea>
     </div>
