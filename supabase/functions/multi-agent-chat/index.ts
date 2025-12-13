@@ -468,50 +468,69 @@ async function fetchScripturePassage(reference: string, filter?: string, languag
         text = await response.text();
       }
       
-      // If this is a filter search, parse the text to extract matching verses
       const matches: ScriptureSearchMatch[] = [];
-      if (filter && text) {
-        // Parse the scripture text to find verses containing the filter term
+
+      // Prefer structured matches from MCP when doing a filtered search
+      if (filter && rawData && Array.isArray(rawData.matches)) {
+        for (const m of rawData.matches) {
+          const refStr: string = m.reference || '';
+          const refMatch = refStr.match(/^(.+?)\s+(\d+):(\d+)/);
+          if (!refMatch) continue;
+
+          const book = refMatch[1];
+          const chapter = parseInt(refMatch[2], 10);
+          const verse = parseInt(refMatch[3], 10);
+          const verseText: string = m.text || m.content || '';
+
+          matches.push({
+            book,
+            chapter,
+            verse,
+            text: verseText.trim(),
+          });
+        }
+
+        console.log(`[fetchScripturePassage] Using MCP matches: ${matches.length} for filter "${filter}"`);
+
+        // If scripture text wasn't provided, build a simple concatenation for context
+        if (!text && matches.length > 0) {
+          text = matches
+            .map((m) => `${m.book} ${m.chapter}:${m.verse} ${m.text}`)
+            .join('\n');
+        }
+      } else if (filter && text) {
+        // Fallback: parse plain text to find verses containing the filter term
         const filterLower = filter.toLowerCase();
         const lines = text.split('\n');
         let currentBook = reference.split(/\s+\d/)[0] || reference;
-        
+
         for (const line of lines) {
           // Match verse patterns like "3:16 For God so loved..." or "16. For God so loved..."
-          const verseMatch = line.match(/^(\d+):(\d+)\s+(.+)/) || line.match(/^(\d+)\.\s+(.+)/);
+          const verseMatch =
+            line.match(/^(\d+):(\d+)\s+(.+)/) ||
+            line.match(/^(\d+)\.\s+(.+)/);
+
           if (verseMatch) {
             const chapter = verseMatch[1] ? parseInt(verseMatch[1], 10) : 1;
-            const verse = verseMatch[2] ? parseInt(verseMatch[2], 10) : parseInt(verseMatch[1], 10);
+            const verse = verseMatch[2]
+              ? parseInt(verseMatch[2], 10)
+              : parseInt(verseMatch[1], 10);
             const verseText = verseMatch[3] || verseMatch[2] || '';
-            
+
             if (verseText.toLowerCase().includes(filterLower)) {
               matches.push({
                 book: currentBook,
                 chapter,
                 verse,
-                text: verseText.trim()
+                text: verseText.trim(),
               });
             }
           }
-          // Also try to match bold/highlighted patterns from MCP response
-          if (line.toLowerCase().includes(filterLower)) {
-            const refMatch = line.match(/\*\*([^*]+)\*\*/) || line.match(/`([^`]+)`/);
-            if (refMatch) {
-              // Try to extract reference from the line
-              const refPart = line.match(/(\d+):(\d+)/);
-              if (refPart) {
-                matches.push({
-                  book: currentBook,
-                  chapter: parseInt(refPart[1], 10),
-                  verse: parseInt(refPart[2], 10),
-                  text: line.replace(/\*\*/g, '').trim()
-                });
-              }
-            }
-          }
         }
-        
-        console.log(`Parsed ${matches.length} matching verses for filter "${filter}"`);
+
+        console.log(
+          `[fetchScripturePassage] Parsed ${matches.length} matching verses for filter "${filter}" from plain text`,
+        );
       }
       
       return { text, isFilterSearch: !!filter, matches };
