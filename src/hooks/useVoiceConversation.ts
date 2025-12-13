@@ -383,7 +383,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       const offer = await pcRef.current.createOffer();
       await pcRef.current.setLocalDescription(offer);
       
-      const baseUrl = "https://api.openai.com/v1/realtime/calls";
+      const baseUrl = "https://api.openai.com/v1/realtime";
       const model = "gpt-4o-realtime-preview-2024-12-17";
       
       const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
@@ -396,9 +396,11 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       });
       
       if (!sdpResponse.ok) {
+        const errorText = await sdpResponse.text();
+        console.error('[Voice] WebRTC SDP response error:', sdpResponse.status, errorText);
         throw new Error('Failed to establish WebRTC connection');
       }
-      
+
       const answer: RTCSessionDescriptionInit = {
         type: "answer",
         sdp: await sdpResponse.text(),
