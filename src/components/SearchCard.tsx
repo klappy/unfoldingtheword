@@ -20,7 +20,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
     );
   }
 
-  const { query, filter, reference, totalMatches, breakdown, matches } = results;
+  const { query, filter, reference, resource, totalMatches, breakdown, matches } = results;
 
   // Group matches by book
   const matchesByBook: Record<string, typeof matches> = {};
@@ -69,10 +69,15 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
         </div>
         
         {/* Stats */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
           <Badge variant="secondary" className="text-xs">
             {totalMatches} matches
           </Badge>
+          {resource && (
+            <Badge variant="outline" className="text-xs uppercase">
+              {resource}
+            </Badge>
+          )}
           {breakdown.byTestament && Object.keys(breakdown.byTestament).length > 0 && (
             <>
               {breakdown.byTestament['OT'] && (

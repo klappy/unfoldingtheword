@@ -1111,7 +1111,8 @@ serve(async (req) => {
               total_resources: resources.length,
               mcp_resources: resources,
               navigation_hint: navigationHint,
-              search_matches: searchMatches // Include actual search matches for SearchCard
+              search_matches: searchMatches, // Include actual search matches for SearchCard
+              search_resource: effectivePrefs.resource || 'ult' // Which resource was searched
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n\n`));
             

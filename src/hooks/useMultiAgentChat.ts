@@ -21,6 +21,7 @@ interface ChatMetadata {
   mcp_resources: any[];
   navigation_hint: 'scripture' | 'resources' | 'search' | 'notes' | null;
   search_matches?: SearchMatch[];
+  search_resource?: string;
 }
 
 interface UseMultiAgentChatOptions {
@@ -252,6 +253,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         searchQuery: metadata?.search_query || null,
         navigationHint: metadata?.navigation_hint || null,
         searchMatches: metadata?.search_matches || [],
+        searchResource: metadata?.search_resource || null,
         newMessages: [finalAssistantMessage], // Return for persistence
       };
     } catch (err) {
