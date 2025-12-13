@@ -107,8 +107,6 @@ serve(async (req) => {
         instructions: systemPrompt,
         tools: voiceTools,
         tool_choice: "auto",
-        input_audio_format: "pcm16",
-        output_audio_format: "pcm16",
         input_audio_transcription: {
           model: "whisper-1"
         },

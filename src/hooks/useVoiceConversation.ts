@@ -9,73 +9,6 @@ export const VOICE_PLAYBACK_SPEEDS: VoicePlaybackSpeed[] = [0.5, 0.75, 1, 1.25, 
 const VOICE_SPEED_KEY = 'voice-playback-speed';
 const DEVICE_ID_KEY = 'bible-study-device-id';
 
-// Encode Float32 PCM data to base64-encoded 16-bit PCM for Realtime API
-const encodeAudioForAPI = (float32Array: Float32Array): string => {
-  const int16Array = new Int16Array(float32Array.length);
-  for (let i = 0; i < float32Array.length; i++) {
-    const s = Math.max(-1, Math.min(1, float32Array[i]));
-    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  const uint8Array = new Uint8Array(int16Array.buffer);
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < uint8Array.length; i += chunkSize) {
-    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-    binary += String.fromCharCode.apply(null, Array.from(chunk));
-  }
-  return btoa(binary);
-};
-
-// Lightweight audio recorder that taps the existing MediaStream and
-// feeds 24kHz mono PCM chunks into the Realtime API via data channel
-class AudioRecorder {
-  private audioContext: AudioContext | null = null;
-  private processor: ScriptProcessorNode | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
-
-  constructor(
-    private stream: MediaStream,
-    private onAudioData: (audioData: Float32Array) => void,
-  ) {}
-
-  async start() {
-    try {
-      this.audioContext = new AudioContext({ sampleRate: 24000 });
-      this.source = this.audioContext.createMediaStreamSource(this.stream);
-      this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
-
-      this.processor.onaudioprocess = (e) => {
-        const inputData = e.inputBuffer.getChannelData(0);
-        this.onAudioData(new Float32Array(inputData));
-      };
-
-      this.source.connect(this.processor);
-      this.processor.connect(this.audioContext.destination);
-      console.log('[Voice] AudioRecorder started');
-    } catch (error) {
-      console.error('[Voice] Error initializing AudioRecorder:', error);
-      throw error;
-    }
-  }
-
-  stop() {
-    console.log('[Voice] AudioRecorder stopping');
-    if (this.source) {
-      this.source.disconnect();
-      this.source = null;
-    }
-    if (this.processor) {
-      this.processor.disconnect();
-      this.processor.onaudioprocess = null;
-      this.processor = null;
-    }
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
-  }
-}
-
 interface UseVoiceConversationOptions {
   language?: string;
   voice?: string;
@@ -107,7 +40,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recorderRef = useRef<AudioRecorder | null>(null);
   const playbackSpeedRef = useRef<VoicePlaybackSpeed>(playbackSpeed);
   const userPrefsRef = useRef<{ language: string; organization: string; resource: string } | null>(null);
 
@@ -451,46 +383,19 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       // Mark as connected once WebRTC handshake completes so UI can switch out of connecting state
       setStatus('connected');
 
-      // Start streaming microphone audio into the Realtime API via data channel
-      if (mediaStreamRef.current) {
-        recorderRef.current = new AudioRecorder(mediaStreamRef.current, (audioData: Float32Array) => {
-          if (dcRef.current?.readyState === 'open') {
-            try {
-              const encoded = encodeAudioForAPI(audioData);
-              dcRef.current.send(JSON.stringify({
-                type: 'input_audio_buffer.append',
-                audio: encoded,
-              }));
-            } catch (err) {
-              console.error('[Voice] Error sending audio chunk:', err);
-            }
-          }
-        });
-
-        try {
-          await recorderRef.current.start();
-        } catch (err) {
-          console.error('[Voice] Failed to start AudioRecorder:', err);
-          options.onError?.('Microphone streaming error');
-        }
-      }
+      // WebRTC handles audio automatically via peer connection - no manual streaming needed
       
     } catch (error) {
       console.error('Error starting voice conversation:', error);
       options.onError?.(error instanceof Error ? error.message : 'Failed to start voice conversation');
       setStatus('error');
       
-      recorderRef.current?.stop();
-      recorderRef.current = null;
       mediaStreamRef.current?.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
     }
   }, [status, options, handleDataChannelMessage, getResourcePrefs]);
 
   const endConversation = useCallback(() => {
-    recorderRef.current?.stop();
-    recorderRef.current = null;
-
     mediaStreamRef.current?.getTracks().forEach(track => track.stop());
     mediaStreamRef.current = null;
     
