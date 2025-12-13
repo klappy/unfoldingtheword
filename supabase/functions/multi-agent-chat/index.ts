@@ -33,10 +33,38 @@ WHAT YOU MUST NOT DO:
 WHEN TOOLS RETURN NOTHING:
 Say: "I searched but didn't find any resources on that specific topic. Would you like to try a different scripture reference or topic?"
 
+RESOURCE NAMES (CRITICAL):
+- When you mention ULT, you MUST say exactly: "UnfoldingWord® Literal Text (ULT)".
+- When you mention UST, you MUST say exactly: "UnfoldingWord® Simplified Text (UST)".
+- Do not invent alternative names or abbreviations for these resources.
+
 PASTORAL SENSITIVITY:
 If someone seems distressed, respond with warmth and compassion, search for comforting scripture using the tools, and gently suggest speaking with a pastor or trusted friend.`;
 
-// Tool definitions for MCP resource fetching
+
+// Extract resource override (ULT/UST) from the user message without persisting it
+function extractResourceFromMessage(message: string): { cleanedMessage: string; resourceOverride?: 'ult' | 'ust' } {
+  let cleanedMessage = message;
+  let resourceOverride: 'ult' | 'ust' | undefined;
+
+  const patterns: { regex: RegExp; id: 'ult' | 'ust' }[] = [
+    { regex: /in the unfoldingword[®\s]+literal text\s*\(ULT\)/i, id: 'ult' },
+    { regex: /in the unfoldingword[®\s]+simplified text\s*\(UST\)/i, id: 'ust' },
+    { regex: /in the ULT\b/i, id: 'ult' },
+    { regex: /in the UST\b/i, id: 'ust' },
+  ];
+
+  for (const pattern of patterns) {
+    if (pattern.regex.test(cleanedMessage)) {
+      resourceOverride = pattern.id;
+      cleanedMessage = cleanedMessage.replace(pattern.regex, '').trim();
+      break;
+    }
+  }
+
+  return { cleanedMessage, resourceOverride };
+}
+
 const mcpTools = [
   {
     type: "function",
@@ -558,6 +586,7 @@ async function fetchDirectResources(reference: string, userPrefs?: { language?: 
   navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null
 }> {
   console.log(`Direct fetch for scripture reference: ${reference}`);
+  console.log('Direct fetch using prefs:', userPrefs);
   
   const [resources, scriptureResult] = await Promise.all([
     fetchVerseResources(reference, userPrefs?.language, userPrefs?.organization),
@@ -908,12 +937,24 @@ serve(async (req) => {
     let searchQuery: string | null;
     let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
 
+    // Extract resource override from message (e.g., "in the ULT", "in the UST")
+    const { cleanedMessage, resourceOverride } = extractResourceFromMessage(message);
+    const effectiveMessage = cleanedMessage || message;
+    const effectivePrefs = {
+      ...userPrefs,
+      resource: resourceOverride || userPrefs?.resource,
+    };
+
+    console.log('Is voice request:', isVoiceRequest);
+    console.log('Response language:', responseLanguage);
+    console.log('User prefs:', effectivePrefs);
+
     // Classify intent using AI (works for any language)
-    const isReference = isScriptureReference(message);
+    const isReference = isScriptureReference(effectiveMessage);
     let intentHint: 'locate' | 'understand' | 'note' | undefined;
     
     if (!isReference) {
-      const classifiedIntent = await classifyIntent(message, OPENAI_API_KEY);
+      const classifiedIntent = await classifyIntent(effectiveMessage, OPENAI_API_KEY);
       // Only use intent hint if it's not 'read' (read is handled by isScriptureReference)
       if (classifiedIntent !== 'read') {
         intentHint = classifiedIntent;
@@ -923,7 +964,7 @@ serve(async (req) => {
 
     if (isReference) {
       console.log("Detected scripture reference, using direct fetch");
-      const result = await fetchDirectResources(message, userPrefs);
+      const result = await fetchDirectResources(effectiveMessage, effectivePrefs);
       resources = result.resources;
       scriptureText = result.scriptureText;
       scriptureReference = result.scriptureReference;
@@ -932,7 +973,7 @@ serve(async (req) => {
       
       if (resources.length === 0 && !scriptureText) {
         console.log("No resources from direct fetch, falling back to search");
-        const searchResult = await callAIWithTools(message, conversationHistory, scriptureContext, undefined, userPrefs);
+        const searchResult = await callAIWithTools(effectiveMessage, conversationHistory, scriptureContext, undefined, effectivePrefs);
         resources = searchResult.resources;
         scriptureText = searchResult.scriptureText;
         scriptureReference = searchResult.scriptureReference || scriptureReference;
@@ -941,7 +982,7 @@ serve(async (req) => {
       }
     } else {
       console.log("Using AI search with intent:", intentHint);
-      const result = await callAIWithTools(message, conversationHistory, scriptureContext, intentHint, userPrefs);
+      const result = await callAIWithTools(effectiveMessage, conversationHistory, scriptureContext, intentHint, effectivePrefs);
       resources = result.resources;
       scriptureText = result.scriptureText;
       scriptureReference = result.scriptureReference;
