@@ -2,6 +2,7 @@ import { Search, Book, X, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import type { Resource } from '@/types';
 
 interface SearchMatch {
   book: string;
@@ -29,9 +30,11 @@ interface SearchCardProps {
   filterQuery?: string | null;
   filterReference?: string | null;
   resourceMatchCount?: number;
+  // Optional: actual resource results so we can render a preview list
+  resourceResults?: Resource[];
 }
 
-export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, filterReference, resourceMatchCount }: SearchCardProps) {
+export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, filterReference, resourceMatchCount, resourceResults }: SearchCardProps) {
   // If we have neither scripture search results nor a resource-level filter, show empty state
   if (!results && !filterQuery) {
     return (
@@ -192,11 +195,45 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
           ))}
 
           {!hasScriptureResults && resourceMatches > 0 && (
-            <p className="text-sm text-muted-foreground">
-              No scripture verses were matched directly, but {resourceMatches} resource
-              match{resourceMatches === 1 ? ' was' : 'es were'} found. Swipe to the
-              Resources card to read the notes and questions for this search.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No scripture verses were matched directly, but {resourceMatches} resource
+                match{resourceMatches === 1 ? ' was' : 'es were'} found.
+                {resourceResults && resourceResults.length > 0 ? ' Here are some of those notes and questions:' : ' Swipe to the Resources card to read the notes and questions for this search.'}
+              </p>
+
+              {resourceResults && resourceResults.length > 0 && (
+                <div className="space-y-2">
+                  {resourceResults.slice(0, 50).map((res, idx) => (
+                    <div
+                      key={res.id ?? idx}
+                      className="p-3 rounded-md bg-muted/50 border border-border/40 space-y-1"
+                    >
+                      <div className="text-xs text-muted-foreground flex justify-between gap-2">
+                        <span className="font-medium truncate">
+                          {res.reference || 'Resource'}
+                        </span>
+                        <span className="uppercase text-[10px] tracking-wide">
+                          {res.type === 'translation-question' ? 'Question' : 'Note'}
+                        </span>
+                      </div>
+                      <div className="text-sm font-medium text-foreground line-clamp-2">
+                        {res.title}
+                      </div>
+                      <div className="text-sm text-muted-foreground line-clamp-3">
+                        {highlightTerm(res.content, displayQuery)}
+                      </div>
+                    </div>
+                  ))}
+                  {resourceResults.length > 50 && (
+                    <p className="text-xs text-muted-foreground">
+                      Showing the first 50 of {resourceResults.length} resource matches. Swipe to the
+                      Resources card to read all of the notes and questions for this search.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </ScrollArea>

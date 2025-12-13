@@ -530,6 +530,7 @@ const Index = () => {
             filterQuery={resourceFilterInfo?.query || undefined}
             filterReference={resourceFilterInfo?.reference || undefined}
             resourceMatchCount={resourceFilterInfo ? resources.length : undefined}
+            resourceResults={resourceFilterInfo ? resources : undefined}
           />
         );
       case 'scripture':
