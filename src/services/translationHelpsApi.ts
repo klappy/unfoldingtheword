@@ -1054,22 +1054,23 @@ export async function searchScripture(reference: string, filter: string): Promis
     // The MCP search endpoint doesn't support scripture text search (ult/ust)
     // It only supports translation resources: tn, tq, tw, ta
     // So we search across all available resources for the keyword within the scope
-    
     const query = reference ? `${filter} in ${reference}` : filter;
     console.log('[searchScripture] Searching:', query);
-    
-    // Search across all resource types in parallel
-    const resourceTypes = ['tn', 'tq', 'tw', 'ta'];
-    const searchPromises = resourceTypes.map(resource => 
-      callProxy('search', { query, resource }).catch(() => ({ hits: [] }))
-    );
-    
+
+    const resourceTypes = ['tn', 'tq', 'tw', 'ta'] as const;
+
+    const searchPromises = resourceTypes.map(async (resource) => {
+      try {
+        const data = await callProxy('search', { query, resource });
+        return { resource, data };
+      } catch (error) {
+        console.error('[searchScripture] Search failed for', resource, error);
+        return { resource, data: { hits: [] } };
+      }
+    });
+
     const results = await Promise.all(searchPromises);
-    
-    const matches: ScriptureSearchResult['matches'] = [];
-    const byBook: Record<string, number> = {};
-    const byTestament: Record<string, number> = {};
-    
+
     // OT books list for testament classification
     const OT_BOOKS = new Set([
       'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy',
@@ -1079,61 +1080,164 @@ export async function searchScripture(reference: string, filter: string): Promis
       'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel', 'Amos', 'Obadiah',
       'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'
     ]);
-    
-    // Combine and dedupe results from all resource searches
+
+    const matches: ScriptureSearchResult['matches'] = [];
     const seenRefs = new Set<string>();
-    
-    for (const result of results) {
-      const hits = result?.hits || [];
-      
+
+    const extractMatchesFromHit = (hit: any): ScriptureSearchResult['matches'] => {
+      const hitMatches: ScriptureSearchResult['matches'] = [];
+
+      const baseText = (
+        hit.text ||
+        hit.content ||
+        hit.snippet ||
+        hit.note ||
+        hit.question ||
+        ''
+      ).toString();
+
+      // First, try direct scripture reference from the hit.reference field
+      const refStr = (hit.reference || hit.ref || '').toString();
+      const directRefMatch = refStr.match(/^(.+?)\s+(\d+):(\d+)/);
+      if (directRefMatch) {
+        const book = directRefMatch[1].trim();
+        const chapter = parseInt(directRefMatch[2], 10);
+        const verse = parseInt(directRefMatch[3], 10);
+
+        hitMatches.push({
+          book,
+          chapter,
+          verse,
+          text: baseText.trim() || `${book} ${chapter}:${verse}`,
+        });
+      }
+
+      // Fallback: look for Bible reference links in markdown content (e.g.,
+      // "[Luke 3:30-32](rc://en/tn/help/luk/03/30)") which appear in
+      // Translation Word articles under "Bible References".
+      let contentText = '';
+      const rawContent = hit.content;
+
+      if (typeof rawContent === 'string') {
+        // Many MCP search hits encode content as a JSON array of blocks
+        // with { text } properties. Try to parse that first.
+        try {
+          const parsed = JSON.parse(rawContent);
+          if (Array.isArray(parsed)) {
+            contentText = parsed.map((b: any) => b.text || '').join('\n');
+          } else {
+            contentText = rawContent;
+          }
+        } catch {
+          contentText = rawContent;
+        }
+      } else if (rawContent) {
+        contentText = String(rawContent);
+      }
+
+      if (!contentText) {
+        contentText = baseText;
+      }
+
+      const refLinkRegex = /\[([^\]]+?)\]\(rc:\/\/[^)]+\)/g;
+      let linkMatch: RegExpExecArray | null;
+
+      while ((linkMatch = refLinkRegex.exec(contentText)) !== null) {
+        const refText = linkMatch[1]; // e.g., "Luke 3:30-32"
+        const refMatch = refText.match(/^(.+?)\s+(\d+):(\d+)/);
+        if (!refMatch) continue;
+
+        const book = refMatch[1].trim();
+        const chapter = parseInt(refMatch[2], 10);
+        const verse = parseInt(refMatch[3], 10); // for ranges, this is the start verse
+
+        hitMatches.push({
+          book,
+          chapter,
+          verse,
+          text: baseText.trim() || refText,
+        });
+      }
+
+      return hitMatches;
+    };
+
+    for (const { data } of results) {
+      const hits = data?.hits || [];
+
       for (const hit of hits) {
-        // Parse reference from hit
-        const refStr = hit.reference || hit.ref || '';
-        const refMatch = refStr.match(/^(.+?)\s+(\d+):(\d+)/);
-        
-        if (refMatch) {
-          const book = refMatch[1];
-          const chapter = parseInt(refMatch[2], 10);
-          const verse = parseInt(refMatch[3], 10);
-          const refKey = `${book}:${chapter}:${verse}`;
-          
-          // Skip duplicates
-          if (seenRefs.has(refKey)) continue;
-          seenRefs.add(refKey);
-          
-          const text = hit.text || hit.content || hit.snippet || hit.note || hit.question || '';
-          
-          matches.push({ book, chapter, verse, text });
-          
-          // Count by book
-          byBook[book] = (byBook[book] || 0) + 1;
-          
-          // Count by testament
-          const testament = OT_BOOKS.has(book) ? 'OT' : 'NT';
-          byTestament[testament] = (byTestament[testament] || 0) + 1;
+        const extracted = extractMatchesFromHit(hit);
+        for (const m of extracted) {
+          const canonicalBook = normalizeBookName(m.book);
+          const key = `${canonicalBook}:${m.chapter}:${m.verse}`;
+          if (seenRefs.has(key)) continue;
+          seenRefs.add(key);
+
+          matches.push({
+            book: canonicalBook,
+            chapter: m.chapter,
+            verse: m.verse,
+            text: m.text,
+          });
         }
       }
     }
-    
-    // Sort matches by book order (OT then NT) and chapter/verse
-    matches.sort((a, b) => {
-      const aIsOT = OT_BOOKS.has(a.book);
-      const bIsOT = OT_BOOKS.has(b.book);
-      if (aIsOT !== bIsOT) return aIsOT ? -1 : 1;
+
+    // Apply scope filtering based on reference (e.g., "NT", "OT", or a book name)
+    let scopedMatches = matches;
+    const trimmedRef = reference?.trim();
+
+    if (trimmedRef) {
+      const upperRef = trimmedRef.toUpperCase();
+
+      if (upperRef === 'NT' || upperRef === 'NEW TESTAMENT') {
+        scopedMatches = scopedMatches.filter(m => !OT_BOOKS.has(m.book));
+      } else if (upperRef === 'OT' || upperRef === 'OLD TESTAMENT') {
+        scopedMatches = scopedMatches.filter(m => OT_BOOKS.has(m.book));
+      } else {
+        // If the reference looks like a specific book (optionally with chapter),
+        // filter matches down to that book.
+        const bookOnly = trimmedRef.replace(/\s+\d.*$/, '');
+        const normalizedBook = normalizeBookName(bookOnly);
+        if (BOOK_CHAPTERS[normalizedBook]) {
+          scopedMatches = scopedMatches.filter(m => m.book === normalizedBook);
+        }
+      }
+    }
+
+    // Build breakdowns
+    const byBook: Record<string, number> = {};
+    const byTestament: Record<string, number> = {};
+
+    for (const m of scopedMatches) {
+      byBook[m.book] = (byBook[m.book] || 0) + 1;
+      const testament = OT_BOOKS.has(m.book) ? 'OT' : 'NT';
+      byTestament[testament] = (byTestament[testament] || 0) + 1;
+    }
+
+    // Sort matches by canonical book order (OT then NT) and chapter/verse
+    const bookOrder = Object.keys(BOOK_CHAPTERS);
+    scopedMatches.sort((a, b) => {
+      const aIndex = bookOrder.indexOf(a.book);
+      const bIndex = bookOrder.indexOf(b.book);
+
+      if (aIndex !== bIndex && aIndex !== -1 && bIndex !== -1) {
+        return aIndex - bIndex;
+      }
       if (a.book !== b.book) return a.book.localeCompare(b.book);
       if (a.chapter !== b.chapter) return a.chapter - b.chapter;
       return a.verse - b.verse;
     });
-    
-    console.log('[searchScripture] Found', matches.length, 'matches across', Object.keys(byBook).length, 'books');
-    
+
+    console.log('[searchScripture] Found', scopedMatches.length, 'matches across', Object.keys(byBook).length, 'books');
+
     return {
       query,
       filter,
       reference,
-      totalMatches: matches.length,
+      totalMatches: scopedMatches.length,
       breakdown: { byTestament, byBook },
-      matches,
+      matches: scopedMatches,
     };
   } catch (error) {
     console.error('[searchScripture] Error:', error);
