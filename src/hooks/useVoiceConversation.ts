@@ -42,6 +42,17 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const playbackSpeedRef = useRef<VoicePlaybackSpeed>(playbackSpeed);
   const userPrefsRef = useRef<{ language: string; organization: string; resource: string } | null>(null);
+  
+  // CRITICAL: Stable refs to avoid stale closures in data channel event listener
+  const optionsRef = useRef(options);
+  const handleToolCallRef = useRef<(toolName: string, args: any) => Promise<string>>();
+  const buildSessionConfigRef = useRef<() => any>();
+  const sendInitialGreetingRef = useRef<() => void>();
+
+  // Keep options ref up to date
+  useEffect(() => {
+    optionsRef.current = options;
+  });
 
   useEffect(() => {
     playbackSpeedRef.current = playbackSpeed;
@@ -284,6 +295,11 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
     };
   }, [getResourcePrefs, options.voice]);
 
+  // Keep buildSessionConfig ref up to date
+  useEffect(() => {
+    buildSessionConfigRef.current = buildSessionConfig;
+  }, [buildSessionConfig]);
+
   // Send initial greeting after session is fully configured
   const sendInitialGreeting = useCallback(() => {
     if (dcRef.current?.readyState === 'open') {
@@ -303,7 +319,17 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
     }
   }, []);
 
-  // Process incoming messages from the data channel
+  // Keep refs up to date
+  useEffect(() => {
+    sendInitialGreetingRef.current = sendInitialGreeting;
+  }, [sendInitialGreeting]);
+
+  useEffect(() => {
+    handleToolCallRef.current = handleToolCall;
+  }, [handleToolCall]);
+
+  // STABLE message handler - uses refs to avoid stale closures
+  // This is attached ONCE to the data channel and reads from refs for latest values
   const handleDataChannelMessage = useCallback(async (event: MessageEvent) => {
     try {
       const data = JSON.parse(event.data);
@@ -313,8 +339,8 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
         case 'session.created':
           console.log('[Voice] Session created, sending session.update...');
           // Send session configuration AFTER session.created
-          if (dcRef.current?.readyState === 'open') {
-            const sessionConfig = buildSessionConfig();
+          if (dcRef.current?.readyState === 'open' && buildSessionConfigRef.current) {
+            const sessionConfig = buildSessionConfigRef.current();
             console.log('[Voice] Sending session config:', sessionConfig);
             dcRef.current.send(JSON.stringify(sessionConfig));
           }
@@ -324,7 +350,7 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           console.log('[Voice] Session updated successfully, requesting greeting');
           setStatus('connected');
           // Now that session is fully configured, send initial greeting
-          sendInitialGreeting();
+          sendInitialGreetingRef.current?.();
           break;
           
         case 'input_audio_buffer.speech_started':
@@ -338,12 +364,12 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
         case 'conversation.item.input_audio_transcription.completed':
           const transcript = data.transcript || '';
           setUserTranscript(transcript);
-          options.onTranscript?.(transcript, true);
+          optionsRef.current.onTranscript?.(transcript, true);
           break;
           
         case 'response.audio_transcript.delta':
           setAgentTranscript(prev => prev + (data.delta || ''));
-          options.onAgentResponse?.(data.delta || '');
+          optionsRef.current.onAgentResponse?.(data.delta || '');
           break;
           
         case 'response.audio_transcript.done':
@@ -362,7 +388,7 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
         case 'response.function_call_arguments.done':
           const toolName = data.name;
           const toolArgs = JSON.parse(data.arguments || '{}');
-          const toolResult = await handleToolCall(toolName, toolArgs);
+          const toolResult = await handleToolCallRef.current?.(toolName, toolArgs) || 'Error processing request';
           
           if (dcRef.current?.readyState === 'open') {
             dcRef.current.send(JSON.stringify({
@@ -387,14 +413,14 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           
         case 'error':
           console.error('Voice API error:', data.error);
-          options.onError?.(data.error?.message || 'Voice conversation error');
+          optionsRef.current.onError?.(data.error?.message || 'Voice conversation error');
           setStatus('error');
           break;
       }
     } catch (error) {
       console.error('Error processing voice message:', error);
     }
-  }, [handleToolCall, options, buildSessionConfig, sendInitialGreeting]);
+  }, []); // Empty deps = STABLE reference, reads from refs
 
   // Start voice conversation
   const startConversation = useCallback(async () => {
@@ -513,7 +539,7 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
       mediaStreamRef.current?.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
     }
-  }, [status, options, handleDataChannelMessage, getResourcePrefs]);
+  }, [status, handleDataChannelMessage, getResourcePrefs, options.voice, options.language, options.onError]);
 
   const endConversation = useCallback(() => {
     mediaStreamRef.current?.getTracks().forEach(track => track.stop());
