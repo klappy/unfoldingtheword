@@ -293,22 +293,15 @@ export function ChatCard({
                   )}
                 </div>
 
-                {message.resources && message.resources.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border/30 space-y-3">
-                    {message.resources.map((resource, i) => (
-                      <button
-                        key={i}
-                        onClick={() => onResourceClick(resource)}
-                        className="inline-resource text-sm block text-left py-1"
-                      >
-                        {resource.type === 'scripture' && '📖 '} 
-                        {resource.type === 'note' && '📝 '}
-                        {resource.type === 'question' && '❓ '}
-                        {resource.type === 'word' && '📚 '}
-                        {resource.type === 'academy' && '🎓 '}
-                        <span className="underline underline-offset-2">{resource.title}</span>
-                      </button>
-                    ))}
+                {/* Tool calls are now replayed on-demand, not displayed as static links */}
+                {message.navigationHint && !message.isStreaming && (
+                  <div className="mt-3 pt-3 border-t border-border/30">
+                    <span className="text-xs text-muted-foreground">
+                      {message.navigationHint === 'scripture' && '📖 Scripture loaded — swipe right to view'}
+                      {message.navigationHint === 'resources' && '📚 Resources found — swipe right to explore'}
+                      {message.navigationHint === 'search' && '🔍 Search results ready — swipe right to view'}
+                      {message.navigationHint === 'notes' && '📝 Notes updated — swipe right to view'}
+                    </span>
                   </div>
                 )}
               </div>

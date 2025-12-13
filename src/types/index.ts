@@ -1,10 +1,17 @@
+// Tool call signature stored in messages
+export interface ToolCall {
+  tool: string;
+  args: Record<string, any>;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   agent?: AgentType;
   timestamp: Date;
-  resources?: ResourceLink[];
+  toolCalls?: ToolCall[]; // Tool call signatures (recipe, not results)
+  navigationHint?: 'scripture' | 'resources' | 'search' | 'notes' | null;
   isStreaming?: boolean; // True while content is still being streamed
 }
 
