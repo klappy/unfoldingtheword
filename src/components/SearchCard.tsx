@@ -125,7 +125,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
                 <ChevronRight className="h-3 w-3" />
               </button>
               <div className="space-y-2 pl-5">
-                {bookMatches.slice(0, 5).map((match, idx) => (
+                {bookMatches.map((match, idx) => (
                   <button
                     key={idx}
                     className="block text-left w-full p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
@@ -139,11 +139,6 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
                     </div>
                   </button>
                 ))}
-                {bookMatches.length > 5 && (
-                  <p className="text-xs text-muted-foreground pl-2">
-                    +{bookMatches.length - 5} more in {book}
-                  </p>
-                )}
               </div>
             </div>
           ))}
