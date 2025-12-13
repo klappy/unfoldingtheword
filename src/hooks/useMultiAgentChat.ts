@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Message, ResourceLink } from '@/types';
+import { Message, ToolCall } from '@/types';
 
 interface SearchMatch {
   book: string;
@@ -11,14 +11,7 @@ interface SearchMatch {
 interface ChatMetadata {
   scripture_reference: string | null;
   search_query: string | null;
-  resource_counts: {
-    notes: number;
-    questions: number;
-    words: number;
-    academy: number;
-  };
-  total_resources: number;
-  mcp_resources: any[];
+  tool_calls: ToolCall[];
   navigation_hint: 'scripture' | 'resources' | 'search' | 'notes' | null;
   search_matches?: SearchMatch[];
   search_resource?: string;
@@ -98,7 +91,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
           conversationHistory,
           scriptureContext,
           responseLanguage,
-          userPrefs, // Pass user preferences for resource selection
+          userPrefs,
           stream: true,
         }),
       });
@@ -130,10 +123,10 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         role: 'assistant',
         content: '',
         timestamp: new Date(),
-        isStreaming: true, // Mark as streaming
+        isStreaming: true,
       };
       setMessages(prev => [...prev, initialAssistantMessage]);
-      setIsLoading(false); // Stop showing separate loading indicator
+      setIsLoading(false);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -163,7 +156,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
               }
             } else if (parsed.type === 'content') {
               assistantContent += parsed.content;
-              // Update the assistant message with streaming content (keep isStreaming true)
+              // Update the assistant message with streaming content
               setMessages(prev => prev.map(m => 
                 m.id === assistantMessageId 
                   ? { ...m, content: assistantContent, isStreaming: true }
@@ -181,69 +174,18 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         }
       }
 
-      // Build resource links from metadata
-      const resources: ResourceLink[] = [];
-      if (metadata) {
-        const searchContext = metadata.scripture_reference || metadata.search_query || '';
-        
-        if (metadata.scripture_reference) {
-          resources.push({
-            type: 'scripture',
-            reference: metadata.scripture_reference,
-            title: metadata.scripture_reference,
-          });
-        }
-
-        if (metadata.resource_counts.notes > 0) {
-          resources.push({
-            type: 'note',
-            reference: searchContext,
-            title: 'Translation Notes',
-          });
-        }
-
-        if (metadata.resource_counts.questions > 0) {
-          resources.push({
-            type: 'question',
-            reference: searchContext,
-            title: 'Study Questions',
-          });
-        }
-
-        if (metadata.resource_counts.words > 0) {
-          resources.push({
-            type: 'word',
-            reference: searchContext,
-            title: 'Word Studies',
-          });
-        }
-
-        if (metadata.resource_counts.academy > 0) {
-          resources.push({
-            type: 'academy',
-            reference: searchContext,
-            title: 'Academy Articles',
-          });
-        }
-      }
-
-      // Build final content with resource count
-      const totalCount = metadata?.total_resources || 0;
-      const finalContent = totalCount > 0 
-        ? `${assistantContent}\n\n*${totalCount} resources found — swipe right to explore.*`
-        : assistantContent;
-
-      // Build final assistant message
+      // Build final assistant message with tool_calls and navigation_hint
       const finalAssistantMessage: Message = {
         id: assistantMessageId,
         role: 'assistant',
-        content: finalContent,
+        content: assistantContent,
         timestamp: new Date(),
-        resources: resources.length > 0 ? resources : undefined,
+        toolCalls: metadata?.tool_calls || undefined,
+        navigationHint: metadata?.navigation_hint || undefined,
         isStreaming: false,
       };
 
-      // Update final message with resources and clear streaming flag
+      // Update final message
       setMessages(prev => prev.map(m => 
         m.id === assistantMessageId ? finalAssistantMessage : m
       ));
@@ -254,7 +196,8 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         navigationHint: metadata?.navigation_hint || null,
         searchMatches: metadata?.search_matches || [],
         searchResource: metadata?.search_resource || null,
-        newMessages: [finalAssistantMessage], // Return for persistence
+        toolCalls: metadata?.tool_calls || [],
+        newMessages: [finalAssistantMessage],
       };
     } catch (err) {
       console.error('Chat error:', err);

@@ -54,8 +54,9 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
-          resources: Json | null
+          navigation_hint: string | null
           role: string
+          tool_calls: Json | null
         }
         Insert: {
           agent?: string | null
@@ -63,8 +64,9 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
-          resources?: Json | null
+          navigation_hint?: string | null
           role: string
+          tool_calls?: Json | null
         }
         Update: {
           agent?: string | null
@@ -72,8 +74,9 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
-          resources?: Json | null
+          navigation_hint?: string | null
           role?: string
+          tool_calls?: Json | null
         }
         Relationships: [
           {

@@ -718,7 +718,7 @@ async function fetchDirectResources(reference: string, userPrefs?: { language?: 
   };
 }
 
-// Process tool calls from AI response
+// Process tool calls from AI response - returns signatures AND results
 async function processToolCalls(toolCalls: any[], userPrefs?: { language?: string; organization?: string; resource?: string; deviceId?: string }): Promise<{ 
   resources: any[], 
   scriptureText: string | null, 
@@ -727,7 +727,8 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
   navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null,
   isFilterSearch: boolean,
   searchMatches: ScriptureSearchMatch[],
-  noteResult?: string
+  noteResult?: string,
+  toolCallSignatures: Array<{ tool: string; args: any }> // NEW: tool call signatures for storage
 }> {
   const resources: any[] = [];
   let scriptureText: string | null = null;
@@ -737,12 +738,16 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
   let isFilterSearch = false;
   let searchMatches: ScriptureSearchMatch[] = [];
   let noteResult: string | undefined;
+  const toolCallSignatures: Array<{ tool: string; args: any }> = [];
   
   for (const toolCall of toolCalls) {
     const functionName = toolCall.function.name;
     const args = JSON.parse(toolCall.function.arguments);
     
     console.log(`Processing tool call: ${functionName}`, args);
+    
+    // Store the tool call signature (recipe, not results)
+    toolCallSignatures.push({ tool: functionName, args });
     
     if (functionName === 'search_resources') {
       const results = await fetchMcpResourcesSearch(args.query, args.resource_types, userPrefs?.language, userPrefs?.organization);
@@ -784,7 +789,7 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
     }
   }
   
-  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, isFilterSearch, searchMatches, noteResult };
+  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, isFilterSearch, searchMatches, noteResult, toolCallSignatures };
 }
 
 // Call OpenAI with tool calling
@@ -794,7 +799,8 @@ async function callAIWithTools(userMessage: string, conversationHistory: any[], 
   scriptureReference: string | null,
   searchQuery: string | null,
   navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null,
-  searchMatches: ScriptureSearchMatch[]
+  searchMatches: ScriptureSearchMatch[],
+  toolCalls: Array<{ tool: string; args: any }> // Tool call signatures for storage
 }> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) {
@@ -866,6 +872,7 @@ User's organization: ${userPrefs?.organization || 'unfoldingWord'}`;
   let searchQuery: string | null = null;
   let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
   let searchMatches: ScriptureSearchMatch[] = [];
+  let toolCalls: Array<{ tool: string; args: any }> = [];
 
   if (message?.tool_calls && message.tool_calls.length > 0) {
     const result = await processToolCalls(message.tool_calls, userPrefs);
@@ -875,14 +882,17 @@ User's organization: ${userPrefs?.organization || 'unfoldingWord'}`;
     searchQuery = result.searchQuery;
     navigationHint = result.navigationHint;
     searchMatches = result.searchMatches;
+    toolCalls = result.toolCallSignatures;
   } else {
     console.log("No tool calls, falling back to direct search");
     resources = await fetchMcpResourcesSearch(userMessage, undefined, userPrefs?.language, userPrefs?.organization);
     searchQuery = userMessage;
     navigationHint = 'resources';
+    // Create a synthetic tool call for the fallback search
+    toolCalls = [{ tool: 'search_resources', args: { query: userMessage } }];
   }
 
-  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, searchMatches };
+  return { resources, scriptureText, scriptureReference, searchQuery, navigationHint, searchMatches, toolCalls };
 }
 
 // Generate a streaming response based on fetched resources
@@ -1089,6 +1099,8 @@ serve(async (req) => {
       console.log("Classified intent:", classifiedIntent, "using hint:", intentHint);
     }
 
+    let toolCalls: Array<{ tool: string; args: any }> = [];
+
     if (isReference) {
       console.log("Detected scripture reference, using direct fetch");
       const result = await fetchDirectResources(effectiveMessage, effectivePrefs);
@@ -1097,6 +1109,8 @@ serve(async (req) => {
       scriptureReference = result.scriptureReference;
       searchQuery = null;
       navigationHint = result.navigationHint;
+      // Create tool call signature for direct fetch
+      toolCalls = [{ tool: 'get_scripture_passage', args: { reference: effectiveMessage } }];
       
       if (resources.length === 0 && !scriptureText) {
         console.log("No resources from direct fetch, falling back to search");
@@ -1107,6 +1121,7 @@ serve(async (req) => {
         searchQuery = searchResult.searchQuery;
         navigationHint = searchResult.navigationHint;
         searchMatches = searchResult.searchMatches;
+        toolCalls = searchResult.toolCalls;
       }
     } else {
       console.log("Using AI search with intent:", intentHint);
@@ -1117,6 +1132,7 @@ serve(async (req) => {
       searchQuery = result.searchQuery;
       navigationHint = result.navigationHint;
       searchMatches = result.searchMatches;
+      toolCalls = result.toolCalls;
     }
 
     console.log(`Fetched ${resources.length} resources, scripture ref: ${scriptureReference}, query: ${searchQuery}, navigation: ${navigationHint}, matches: ${searchMatches.length}`);
@@ -1144,12 +1160,10 @@ serve(async (req) => {
               type: 'metadata',
               scripture_reference: scriptureReference,
               search_query: searchQuery || message,
-              resource_counts: resourceCounts,
-              total_resources: resources.length,
-              mcp_resources: resources,
+              tool_calls: toolCalls, // Tool call signatures for replay
               navigation_hint: navigationHint,
-              search_matches: searchMatches, // Include actual search matches for SearchCard
-              search_resource: effectivePrefs.resource || 'ult' // Which resource was searched
+              search_matches: searchMatches,
+              search_resource: effectivePrefs.resource || 'ult'
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n\n`));
             

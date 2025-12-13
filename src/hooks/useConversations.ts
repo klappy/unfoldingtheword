@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { HistoryItem, Message, ResourceLink } from '@/types';
+import { HistoryItem, Message } from '@/types';
 import { useDeviceId } from './useDeviceId';
 
 export function useConversations(currentLanguage: string = 'en') {
@@ -127,7 +127,8 @@ export function useConversations(currentLanguage: string = 'en') {
         role: message.role,
         content: message.content,
         agent: message.agent || null,
-        resources: message.resources ? JSON.parse(JSON.stringify(message.resources)) : null,
+        tool_calls: message.toolCalls ? JSON.parse(JSON.stringify(message.toolCalls)) : null,
+        navigation_hint: message.navigationHint || null,
       });
 
     if (error) {
@@ -155,7 +156,8 @@ export function useConversations(currentLanguage: string = 'en') {
       content: msg.content,
       agent: msg.agent as any,
       timestamp: new Date(msg.created_at),
-      resources: (msg.resources as unknown as ResourceLink[]) || undefined,
+      toolCalls: (msg.tool_calls as unknown as Message['toolCalls']) || undefined,
+      navigationHint: msg.navigation_hint as Message['navigationHint'] || undefined,
     }));
   }, []);
 
