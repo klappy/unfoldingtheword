@@ -788,10 +788,26 @@ async function processToolCalls(toolCalls: any[], userPrefs?: { language?: strin
         // Now supports reference parameter for scoped word lookups
         let url = `${MCP_BASE_URL}/api/fetch-translation-word?term=${encodeURIComponent(args.term)}`;
         if (args.reference) url += `&reference=${encodeURIComponent(args.reference)}`;
+        console.log(`Fetching translation word: ${url}`);
         const response = await fetch(url);
         if (response.ok) {
-          const data = await response.json();
-          resources.push({ ...data, resourceType: 'tw', term: args.term });
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await response.json();
+            resources.push({ ...data, resourceType: 'tw', term: args.term });
+          } else {
+            // MCP returns markdown for translation words
+            const text = await response.text();
+            if (text && text.trim()) {
+              resources.push({
+                resourceType: 'tw',
+                term: args.term,
+                title: args.term,
+                content: text.trim(),
+                definition: text.trim()
+              });
+            }
+          }
         }
       } catch (error) {
         console.error('Error fetching translation word:', error);
@@ -1245,7 +1261,10 @@ serve(async (req) => {
       resource_counts: resourceCounts,
       total_resources: resources.length,
       mcp_resources: resources,
-      navigation_hint: navigationHint
+      navigation_hint: navigationHint,
+      search_matches: searchMatches,
+      search_resource: effectivePrefs.resource || 'ult',
+      tool_calls: toolCalls
     };
 
     console.log(`Sending response with ${resources.length} resources, navigation: ${navigationHint}`);

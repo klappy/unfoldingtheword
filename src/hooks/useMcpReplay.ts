@@ -143,14 +143,28 @@ async function replayToolCall(
         
         const response = await fetch(url);
         if (response.ok) {
-          const data = await response.json();
-          result.resources = [{
-            id: data.id || `tw-${args.term}`,
-            type: 'translation-word',
-            title: data.term || args.term,
-            content: data.definition || data.content || '',
-            reference: data.reference,
-          }];
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await response.json();
+            result.resources = [{
+              id: data.id || `tw-${args.term}`,
+              type: 'translation-word',
+              title: data.term || args.term,
+              content: data.definition || data.content || '',
+              reference: data.reference,
+            }];
+          } else {
+            // MCP returns markdown for translation words
+            const text = await response.text();
+            if (text && text.trim()) {
+              result.resources = [{
+                id: `tw-${args.term}`,
+                type: 'translation-word',
+                title: args.term,
+                content: text.trim(),
+              }];
+            }
+          }
         }
         break;
       }
