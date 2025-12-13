@@ -986,7 +986,8 @@ async function* generateStreamingResponse(
   resources: any[],
   scriptureText: string | null,
   responseLanguage: string,
-  conversationHistory: any[]
+  conversationHistory: any[],
+  searchMatches: ScriptureSearchMatch[] = []
 ): AsyncGenerator<string, void, unknown> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) {
@@ -1024,6 +1025,8 @@ ${questionResources.length > 0 ? `TRANSLATION QUESTIONS (${questionResources.len
 ${wordResources.length > 0 ? `WORD STUDIES (${wordResources.length}):\n${wordResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
 
 ${academyResources.length > 0 ? `ACADEMY ARTICLES (${academyResources.length}):\n${academyResources.slice(0, 5).map(formatResource).join('\n')}\n` : ''}
+
+${searchMatches.length > 0 ? `SCRIPTURE SEARCH RESULTS (${searchMatches.length} matches found):\n${searchMatches.slice(0, 10).map(m => `- ${m.book} ${m.chapter}:${m.verse}: "${m.text.substring(0, 100)}${m.text.length > 100 ? '...' : ''}"`).join('\n')}\n` : ''}
 `;
 
   const isPastoralQuery = detectPastoralIntent(userMessage);
@@ -1045,6 +1048,7 @@ Keep responses SHORT - 2-4 sentences summarizing what was found. Sound natural a
 
 ${resourceContext}
 
+If scripture search results are provided, acknowledge the matches found and mention they can swipe to see them.
 If no relevant resources are found, say so honestly and suggest what to search for.${languageInstruction}`;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1259,7 +1263,8 @@ serve(async (req) => {
               resources,
               scriptureText,
               responseLanguage || 'en',
-              conversationHistory
+              conversationHistory,
+              searchMatches
             );
             
             for await (const chunk of generator) {
@@ -1300,7 +1305,8 @@ serve(async (req) => {
       resources,
       scriptureText,
       responseLanguage || 'en',
-      conversationHistory
+      conversationHistory,
+      searchMatches
     );
     
     for await (const chunk of generator) {
