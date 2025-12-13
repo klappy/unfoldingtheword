@@ -505,29 +505,19 @@ export function useScriptureData() {
     setResources(filtered.length > 0 ? filtered : allResources);
   }, [allResources]);
 
-  // Load filtered search results (e.g., "find love in Romans")
+  // Legacy fallback - kept for compatibility but should not be used
+  // All search results should come from orchestrator metadata via setSearchResultsFromMetadata
   const loadFilteredSearch = useCallback(async (reference: string, filter: string) => {
-    console.log('[useScriptureData] Loading filtered search:', filter, 'in', reference);
-    setIsLoading(true);
-    
-    try {
-      const results = await searchScripture(reference, filter);
-      console.log('[useScriptureData] Search results:', results);
-      setSearchResults(results);
-    } catch (err) {
-      console.error('[useScriptureData] Filtered search failed:', err);
-      // Set empty results on error
-      setSearchResults({
-        query: `${filter} in ${reference}`,
-        filter,
-        reference,
-        totalMatches: 0,
-        breakdown: { byTestament: {}, byBook: {} },
-        matches: [],
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    console.warn('[useScriptureData] loadFilteredSearch called - this is a fallback. Search should come from orchestrator metadata.');
+    // Set empty results - orchestrator should provide search_matches
+    setSearchResults({
+      query: `${filter} in ${reference}`,
+      filter,
+      reference,
+      totalMatches: 0,
+      breakdown: { byTestament: {}, byBook: {} },
+      matches: [],
+    });
   }, []);
 
   // Clear search results
