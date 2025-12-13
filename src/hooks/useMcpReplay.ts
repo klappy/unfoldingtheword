@@ -120,25 +120,27 @@ async function replayToolCall(
   try {
     switch (tool) {
       case 'get_scripture_passage': {
+        // Use resource from tool args if AI specified one, otherwise fall back to user prefs
+        const effectiveResource = args.resource || prefs.resource;
         let url = `${MCP_BASE_URL}/api/fetch-scripture?reference=${encodeURIComponent(args.reference)}`;
         if (args.filter) url += `&filter=${encodeURIComponent(args.filter)}`;
         url += `&language=${encodeURIComponent(prefs.language)}`;
         url += `&organization=${encodeURIComponent(prefs.organization)}`;
-        url += `&resource=${encodeURIComponent(prefs.resource)}`;
+        url += `&resource=${encodeURIComponent(effectiveResource)}`;
         
         const response = await fetch(url);
         if (response.ok) {
           const contentType = response.headers.get('content-type') || '';
           
           if (args.filter) {
-            // Filter search - MCP returns markdown with YAML frontmatter
+            // Filter search - MCP returns JSON with matches array
             if (contentType.includes('application/json')) {
               const data = await response.json();
               result.searchResults = {
                 query: args.filter,
                 reference: args.reference,
                 matches: data.matches || [],
-                resource: prefs.resource,
+                resource: effectiveResource,
                 totalMatches: data.statistics?.total || data.matches?.length || 0,
                 breakdown: {
                   byTestament: data.statistics?.byTestament || {},
@@ -153,7 +155,7 @@ async function replayToolCall(
                 query: args.filter,
                 reference: args.reference,
                 matches,
-                resource: prefs.resource,
+                resource: effectiveResource,
                 totalMatches: metadata.total || matches.length,
                 breakdown: {
                   byTestament: metadata.byTestament || {},
@@ -168,7 +170,7 @@ async function replayToolCall(
                 reference: args.reference,
                 text: data.text || '',
                 verses: data.verses || [],
-                translation: prefs.resource,
+                translation: effectiveResource,
                 book: data.book,
                 metadata: data.metadata,
               };
@@ -187,15 +189,15 @@ async function replayToolCall(
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
-          if (Array.isArray(data)) {
-            result.resources = data.map((r: any) => ({
-              id: r.id || `tn-${Math.random()}`,
-              type: 'translation-note',
-              title: r.title || args.reference,
-              content: r.content || '',
-              reference: r.reference || args.reference,
-            }));
-          }
+          // Handle both array (no filter) and {matches: [...]} (with filter) response formats
+          const items = Array.isArray(data) ? data : (data.matches || []);
+          result.resources = items.map((r: any) => ({
+            id: r.id || `tn-${Math.random()}`,
+            type: 'translation-note' as const,
+            title: r.title || r.quote || args.reference,
+            content: r.content || r.note || '',
+            reference: r.reference || args.reference,
+          }));
         }
         break;
       }
@@ -209,15 +211,15 @@ async function replayToolCall(
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
-          if (Array.isArray(data)) {
-            result.resources = data.map((r: any) => ({
-              id: r.id || `tq-${Math.random()}`,
-              type: 'translation-question',
-              title: r.question || args.reference,
-              content: r.response || '',
-              reference: r.reference || args.reference,
-            }));
-          }
+          // Handle both array (no filter) and {matches: [...]} (with filter) response formats
+          const items = Array.isArray(data) ? data : (data.matches || []);
+          result.resources = items.map((r: any) => ({
+            id: r.id || `tq-${Math.random()}`,
+            type: 'translation-question' as const,
+            title: r.question || args.reference,
+            content: r.response || '',
+            reference: r.reference || args.reference,
+          }));
         }
         break;
       }
