@@ -199,22 +199,32 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     try {
       // ===== SCRIPTURE PASSAGE =====
       if (toolName === 'get_scripture_passage') {
-        console.log(`[Voice] Fetching scripture: ${args.reference} with resource: ${mergedParams.resource}`);
+        console.log(`[Voice] Fetching scripture: ${args.reference} with resource: ${mergedParams.resource}`, args.filter ? `filter: ${args.filter}` : '');
+        
+        const params: Record<string, any> = { 
+          reference: args.reference,
+          resource: mergedParams.resource,
+          language: mergedParams.language,
+          organization: mergedParams.organization,
+        };
+        
+        // Add filter if provided
+        if (args.filter) {
+          params.filter = args.filter;
+        }
         
         const { content, isFallback } = await fetchWithFallback(
           'fetch-scripture',
-          { 
-            reference: args.reference,
-            resource: mergedParams.resource,
-            language: mergedParams.language,
-            organization: mergedParams.organization,
-          },
+          params,
           mergedParams.language,
           'scripture'
         );
         
         if (content) {
-          options.onScriptureReference?.(args.reference, mergedParams.resource);
+          // Only notify UI for regular scripture (not filter searches)
+          if (!args.filter) {
+            options.onScriptureReference?.(args.reference, mergedParams.resource);
+          }
           const formatted = formatScriptureForSpeech(content, args.reference);
           return isFallback ? getFallbackNotice('passage') + formatted : formatted;
         }

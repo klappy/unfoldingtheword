@@ -88,7 +88,19 @@ export interface HistoryItem {
   scriptureReference?: string;
 }
 
-export type CardType = 'history' | 'chat' | 'scripture' | 'resources' | 'notes';
+export type CardType = 'history' | 'chat' | 'search' | 'scripture' | 'resources' | 'notes';
+
+export interface SearchResults {
+  query: string;
+  filter?: string;
+  reference?: string;  // scope: 'Romans', 'NT', 'Gospels', etc.
+  totalMatches: number;
+  breakdown: {
+    byTestament?: Record<string, number>;
+    byBook: Record<string, number>;
+  };
+  matches: { book: string; chapter: number; verse: number; text: string }[];
+}
 
 export interface SwipeState {
   direction: 'up' | 'down' | 'left' | 'right' | null;
