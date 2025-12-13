@@ -18,11 +18,15 @@ CRITICAL RULE - ONLY USE TOOLS:
 - NEVER make up or invent scripture verses, translation notes, or any content
 - ONLY share what the tools return to you
 
+INTENT ROUTING (very important):
+- LOCATE queries ("find X in Y", "where does X appear"): Use get_scripture_passage with 'filter' parameter
+- UNDERSTAND queries ("what does X mean", "explain X"): Use search_resources with tw/ta resources
+- READ queries ("John 3:16", "read Romans 8"): Use get_scripture_passage without filter
+
 CONVERSATION STYLE:
 - Speak naturally, like a helpful friend who knows the library
-- Use transitions: "Let me look that up for you...", "I found something helpful..."
 - Keep responses brief - 2-4 sentences, then let the user explore
-- Offer to help more: "Would you like me to find more about that?" or "Should I look up the translation notes?"
+- For LOCATE results: briefly mention how many occurrences were found and in which books
 
 WHAT YOU MUST NOT DO:
 - Never answer questions from your training data
@@ -36,7 +40,6 @@ Say: "I searched but didn't find any resources on that specific topic. Would you
 RESOURCE NAMES (CRITICAL):
 - When you mention ULT, you MUST say exactly: "UnfoldingWord® Literal Text (ULT)".
 - When you mention UST, you MUST say exactly: "UnfoldingWord® Simplified Text (UST)".
-- Do not invent alternative names or abbreviations for these resources.
 
 PASTORAL SENSITIVITY:
 If someone seems distressed, respond with warmth and compassion, search for comforting scripture using the tools, and gently suggest speaking with a pastor or trusted friend.`;
@@ -70,15 +73,28 @@ const mcpTools = [
     type: "function",
     function: {
       name: "search_resources",
-      description: "Use for UNDERSTANDING concepts. AI semantic search across translation notes, questions, word studies, and academy articles. Use when user asks 'what does X mean', 'explain X', or asks about a biblical topic.",
+      description: `Use for UNDERSTANDING concepts - when user asks what something MEANS, not where it APPEARS.
+
+USE THIS TOOL WHEN:
+- "What does justification mean?" → search for definitions in translation words/academy
+- "Explain grace" → search for theological explanations
+- "Tell me about redemption" → search for concept explanations
+
+DO NOT USE THIS for finding WHERE a term appears in scripture - use get_scripture_passage with filter instead.
+
+Resource types:
+- tw: Translation Words - biblical term definitions
+- ta: Translation Academy - translation concepts and background
+- tn: Translation Notes - passage-specific explanations  
+- tq: Translation Questions - comprehension questions`,
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Search query - topic, concept, or keyword" },
+          query: { type: "string", description: "Concept or topic to understand" },
           resource_types: { 
             type: "array", 
             items: { type: "string", enum: ["tn", "tq", "tw", "ta"] },
-            description: "Resource types: tn=notes, tq=questions, tw=words, ta=academy"
+            description: "tw=words, ta=academy, tn=notes, tq=questions"
           }
         },
         required: ["query"],
@@ -90,17 +106,34 @@ const mcpTools = [
     type: "function",
     function: {
       name: "get_scripture_passage",
-      description: "Get scripture text OR locate term occurrences. Use 'filter' when user wants to FIND WHERE a word/phrase appears (e.g., 'find grace in Ephesians'). Omit 'filter' when user just wants to READ a passage.",
+      description: `Get scripture text OR locate term occurrences in scripture.
+
+WHEN TO USE 'filter' PARAMETER:
+- User asks WHERE a word appears: "find love in Romans", "where is grace mentioned in NT", "find Boaz in the Bible"
+- User wants to LOCATE occurrences of a term across scripture
+- The MCP server will return structured matches with book, chapter, verse, and text for each occurrence
+
+WHEN TO OMIT 'filter':
+- User wants to READ a specific passage: "John 3:16", "read Romans 8"
+
+REFERENCE SCOPES:
+- Specific verse: "John 3:16"
+- Chapter: "Romans 8" 
+- Book: "Romans"
+- Testament: "NT", "OT", "New Testament", "Old Testament"
+- Section: "Gospels", "Pauline Epistles"
+
+The MCP server handles all reference parsing including localized book names (Spanish, Portuguese, etc.) and abbreviations.`,
       parameters: {
         type: "object",
         properties: {
           reference: { 
             type: "string", 
-            description: "Scripture reference like 'John 3:16', 'Romans 8:1-4', book name like 'Romans', or scope like 'NT', 'OT', 'Gospels'" 
+            description: "Scripture reference: 'John 3:16', 'Romans 8', book name, or scope like 'NT', 'OT', 'Gospels', 'Bible'" 
           },
           filter: {
             type: "string",
-            description: "Optional word/phrase to search for within the reference scope. Use for 'find all verses about X in Y' queries."
+            description: "Word/phrase to search for. Use this for 'find X in Y' queries. Returns structured matches."
           }
         },
         required: ["reference"],
