@@ -4,6 +4,7 @@ import { CardType } from '@/types';
 const SWIPE_THRESHOLD = 50;
 const VELOCITY_THRESHOLD = 0.3;
 const SWIPE_UP_THRESHOLD = 80;
+const LONG_PRESS_DURATION = 300; // ms required to hold before swipe-up dismiss activates
 
 interface UseSwipeNavigationOptions {
   visibleCards: CardType[];
@@ -27,6 +28,8 @@ export function useSwipeNavigation(options?: UseSwipeNavigationOptions) {
   const startTime = useRef(0);
   const draggingRef = useRef(false);
   const isVerticalSwipe = useRef(false);
+  const longPressActivated = useRef(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // If current card is no longer visible, navigate to chat or nearest visible card
   useEffect(() => {
@@ -44,9 +47,15 @@ export function useSwipeNavigation(options?: UseSwipeNavigationOptions) {
     startTime.current = Date.now();
     draggingRef.current = true;
     isVerticalSwipe.current = false;
+    longPressActivated.current = false;
     setIsDragging(true);
     setDragOffset(0);
     setDragOffsetY(0);
+    
+    // Start long-press timer for dismiss activation
+    longPressTimer.current = setTimeout(() => {
+      longPressActivated.current = true;
+    }, LONG_PRESS_DURATION);
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -56,12 +65,20 @@ export function useSwipeNavigation(options?: UseSwipeNavigationOptions) {
     const deltaX = point.clientX - startPos.current.x;
     const deltaY = point.clientY - startPos.current.y;
     
+    // Cancel long-press timer if user moves significantly before it activates
+    if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    }
+    
     // Determine swipe direction on first significant movement
     if (!isVerticalSwipe.current && Math.abs(deltaY) > 10 && Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
       isVerticalSwipe.current = true;
     }
     
-    if (isVerticalSwipe.current) {
+    if (isVerticalSwipe.current && longPressActivated.current) {
       // Only track upward swipes for dismissal
       if (deltaY < 0) {
         setDragOffsetY(deltaY);
@@ -75,16 +92,23 @@ export function useSwipeNavigation(options?: UseSwipeNavigationOptions) {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     setIsDragging(false);
+    
+    // Clear long-press timer
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
 
     const point = 'changedTouches' in e ? e.changedTouches[0] : e;
     const deltaX = point.clientX - startPos.current.x;
     const deltaY = point.clientY - startPos.current.y;
     const deltaTime = Date.now() - startTime.current;
 
-    // Check for swipe up to dismiss
-    if (isVerticalSwipe.current && deltaY < -SWIPE_UP_THRESHOLD) {
+    // Check for swipe up to dismiss - only if long-press was activated
+    if (isVerticalSwipe.current && longPressActivated.current && deltaY < -SWIPE_UP_THRESHOLD) {
       options?.onSwipeUp?.(currentCard);
       setDragOffsetY(0);
+      longPressActivated.current = false;
       return;
     }
     
