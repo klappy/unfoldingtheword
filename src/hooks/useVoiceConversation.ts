@@ -197,20 +197,134 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     return "I'm not sure how to help with that. Could you rephrase?";
   }, [handleBibleStudyAssistant]);
 
+  // Build session configuration to send after session.created
+  const buildSessionConfig = useCallback(() => {
+    const prefs = userPrefsRef.current || getResourcePrefs();
+    
+    let instructions = `You are a natural voice interface for a Bible study assistant. Your job is to speak naturally and conversationally while using a single tool to do all the work.
+
+HOW YOU WORK:
+- You have ONE tool: bible_study_assistant
+- This tool handles ALL requests: reading scripture, searching resources, finding terms, managing notes
+- Just pass the user's request to the tool and speak the response naturally
+
+INITIAL GREETING:
+When the conversation starts, introduce yourself briefly:
+"Hi! I'm your Bible study assistant. I can help you read scripture passages, find translation resources, look up biblical terms, and save notes. Just ask me naturally - like 'read John 3:16' or 'what does grace mean?' What would you like to explore?"
+
+CONVERSATION STYLE:
+- Speak naturally, like a helpful friend
+- Keep responses conversational - you're speaking, not reading a document
+- Use transitions: "Let me look that up...", "I found something interesting..."
+- After sharing content, offer to help more: "Would you like to explore this further?"
+
+WHAT YOU DO:
+- Pass ALL requests to bible_study_assistant tool
+- Speak the tool's response naturally (it gives you voice-friendly text)
+- The tool handles: scripture reading, resource search, word definitions, notes management
+
+WHAT YOU DON'T DO:
+- Never answer from your own knowledge
+- Never interpret scripture or give theological opinions
+- Never act as a pastor or counselor
+- Never reference screens or UI elements
+
+LANGUAGE:
+Match the user's language naturally. The tool handles translations.`;
+
+    if (prefs.language && prefs.language !== 'en') {
+      instructions += `\n\nIMPORTANT: The user's preferred language is ${prefs.language}. Respond naturally in this language.`;
+    }
+
+    return {
+      type: "session.update",
+      session: {
+        modalities: ["text", "audio"],
+        instructions,
+        voice: options.voice || "alloy",
+        input_audio_format: "pcm16",
+        output_audio_format: "pcm16",
+        input_audio_transcription: {
+          model: "whisper-1"
+        },
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 800
+        },
+        tools: [
+          {
+            type: "function",
+            name: "bible_study_assistant",
+            description: `Your single tool for ALL Bible study tasks. Just pass the user's natural request. 
+Handles: reading scripture, searching topics, finding where terms appear, word definitions, translation notes, questions, academy articles, and user notes.
+User's preferences: language="${prefs.language}", organization="${prefs.organization}", resource="${prefs.resource}"`,
+            parameters: {
+              type: "object",
+              properties: {
+                request: { 
+                  type: "string", 
+                  description: "The user's natural language request exactly as they said it" 
+                },
+                action_hint: {
+                  type: "string",
+                  enum: ["read", "search", "locate", "notes", "general"],
+                  description: "Optional hint: read=scripture passage, search=learn concept, locate=find term occurrences, notes=manage notes, general=other"
+                }
+              },
+              required: ["request"]
+            }
+          }
+        ],
+        tool_choice: "auto",
+        temperature: 0.8,
+        max_response_output_tokens: 4096
+      }
+    };
+  }, [getResourcePrefs, options.voice]);
+
+  // Send initial greeting after session is fully configured
+  const sendInitialGreeting = useCallback(() => {
+    if (dcRef.current?.readyState === 'open') {
+      console.log('[Voice] Sending initial greeting request');
+      dcRef.current.send(JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [{
+            type: 'input_text',
+            text: 'Please introduce yourself briefly as my Bible study assistant and explain how you can help me study the Bible.'
+          }]
+        }
+      }));
+      dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+    }
+  }, []);
+
   // Process incoming messages from the data channel
   const handleDataChannelMessage = useCallback(async (event: MessageEvent) => {
     try {
       const data = JSON.parse(event.data);
-      console.log('Voice event:', data.type);
+      console.log('[Voice] Event:', data.type);
       
       switch (data.type) {
         case 'session.created':
-          console.log('Voice session created');
-          setStatus('connected');
+          console.log('[Voice] Session created, sending session.update...');
+          // Send session configuration AFTER session.created
+          if (dcRef.current?.readyState === 'open') {
+            const sessionConfig = buildSessionConfig();
+            console.log('[Voice] Sending session config:', sessionConfig);
+            dcRef.current.send(JSON.stringify(sessionConfig));
+          }
           break;
           
         case 'session.updated':
-          console.log('Voice session updated');
+          console.log('[Voice] Session updated successfully, requesting greeting');
+          setStatus('connected');
+          // Now that session is fully configured, send initial greeting
+          sendInitialGreeting();
           break;
           
         case 'input_audio_buffer.speech_started':
@@ -280,7 +394,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
     } catch (error) {
       console.error('Error processing voice message:', error);
     }
-  }, [handleToolCall, options]);
+  }, [handleToolCall, options, buildSessionConfig, sendInitialGreeting]);
 
   // Start voice conversation
   const startConversation = useCallback(async () => {
@@ -343,31 +457,9 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       dcRef.current.addEventListener('message', handleDataChannelMessage);
       
       dcRef.current.onopen = () => {
-        console.log('[Voice] Data channel opened');
-        // Set connected immediately since data channel is ready
-        setStatus('connected');
-
-        // Request an initial spoken greeting so users know the voice is active
-        try {
-          dcRef.current?.send(JSON.stringify({
-            type: 'conversation.item.create',
-            item: {
-              type: 'message',
-              role: 'user',
-              content: [
-                {
-                  type: 'input_text',
-                  text: 'Please introduce yourself briefly as my Bible study assistant and explain how you can help me study the Bible.'
-                }
-              ]
-            }
-          }));
-
-          dcRef.current?.send(JSON.stringify({ type: 'response.create' }));
-          console.log('[Voice] Requested initial greeting from Realtime API');
-        } catch (err) {
-          console.error('[Voice] Failed to request initial greeting:', err);
-        }
+        console.log('[Voice] Data channel opened, waiting for session.created...');
+        // Don't send anything yet - wait for session.created event
+        // The session.update and greeting will be sent in handleDataChannelMessage
       };
       
       dcRef.current.onclose = () => {
