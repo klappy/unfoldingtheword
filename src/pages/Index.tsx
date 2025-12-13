@@ -16,7 +16,7 @@ import { LanguageSelectionChat } from '@/components/LanguageSelectionChat';
 import { TranslationDialog } from '@/components/TranslationDialog';
 import { DismissConfirmDialog } from '@/components/DismissConfirmDialog';
 import { PersistentInputBar } from '@/components/PersistentInputBar';
-import { VoiceDebugPanel } from '@/components/VoiceDebugPanel';
+
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
 import { useMultiAgentChat } from '@/hooks/useMultiAgentChat';
@@ -637,13 +637,6 @@ const Index = () => {
           onResetCommand={() => setShowResetConfirm(true)}
         />
       )}
-      {/* Voice debug panel */}
-      <VoiceDebugPanel
-        status={voiceConversation.status}
-        isAgentSpeaking={voiceConversation.isAgentSpeaking}
-        userTranscript={voiceConversation.userTranscript}
-        agentTranscript={voiceConversation.agentTranscript}
-      />
     </div>
   );
 };
