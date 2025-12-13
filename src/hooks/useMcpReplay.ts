@@ -16,6 +16,11 @@ export interface McpState {
     reference: string;
     matches: Array<{ book: string; chapter: number; verse: number; text: string }>;
     resource?: string;
+    totalMatches: number;
+    breakdown: {
+      byTestament?: Record<string, number>;
+      byBook: Record<string, number>;
+    };
   } | null;
   isLoading: boolean;
   error: string | null;
@@ -44,6 +49,62 @@ function getResourcePrefs() {
   return { language: 'en', organization: 'unfoldingWord', resource: 'ult' };
 }
 
+// Parse MCP markdown search results with YAML frontmatter
+function parseSearchMarkdown(markdown: string): {
+  metadata: { total?: number; byTestament?: Record<string, number>; byBook?: Record<string, number> };
+  matches: Array<{ book: string; chapter: number; verse: number; text: string }>;
+} {
+  const matches: Array<{ book: string; chapter: number; verse: number; text: string }> = [];
+  let metadata: { total?: number; byTestament?: Record<string, number>; byBook?: Record<string, number> } = {};
+
+  // Parse YAML frontmatter if present
+  const yamlMatch = markdown.match(/^---\n([\s\S]*?)\n---/);
+  if (yamlMatch) {
+    const yamlContent = yamlMatch[1];
+    // Simple YAML parsing for our expected format
+    const totalMatch = yamlContent.match(/total:\s*(\d+)/);
+    if (totalMatch) metadata.total = parseInt(totalMatch[1], 10);
+    
+    // Parse byTestament
+    const byTestamentMatch = yamlContent.match(/byTestament:\n((?:\s+\w+:\s*\d+\n?)*)/);
+    if (byTestamentMatch) {
+      metadata.byTestament = {};
+      byTestamentMatch[1].replace(/(\w+):\s*(\d+)/g, (_, key, val) => {
+        metadata.byTestament![key] = parseInt(val, 10);
+        return '';
+      });
+    }
+    
+    // Parse byBook
+    const byBookMatch = yamlContent.match(/byBook:\n((?:\s+[\w\s]+:\s*\d+\n?)*)/);
+    if (byBookMatch) {
+      metadata.byBook = {};
+      byBookMatch[1].replace(/([\w\s]+):\s*(\d+)/g, (_, key, val) => {
+        metadata.byBook![key.trim()] = parseInt(val, 10);
+        return '';
+      });
+    }
+  }
+
+  // Parse matches from markdown content (after frontmatter)
+  const contentStart = markdown.indexOf('---', 3);
+  const content = contentStart > 0 ? markdown.slice(contentStart + 3) : markdown;
+  
+  // Match patterns like "**Genesis 1:1** text here" or "- Genesis 1:1: text"
+  const matchRegex = /(?:\*\*|-)?\s*([\w\s]+)\s+(\d+):(\d+)(?:\*\*)?[:\s]+(.+?)(?=\n(?:\*\*|-)|$)/g;
+  let match;
+  while ((match = matchRegex.exec(content)) !== null) {
+    matches.push({
+      book: match[1].trim(),
+      chapter: parseInt(match[2], 10),
+      verse: parseInt(match[3], 10),
+      text: match[4].trim(),
+    });
+  }
+
+  return { metadata, matches };
+}
+
 // Replay a single tool call against MCP server
 async function replayToolCall(
   toolCall: ToolCall,
@@ -67,26 +128,51 @@ async function replayToolCall(
         
         const response = await fetch(url);
         if (response.ok) {
-          const data = await response.json();
+          const contentType = response.headers.get('content-type') || '';
           
-          if (args.filter && data.matches) {
-            // Filter search - return search results
-            result.searchResults = {
-              query: args.filter,
-              reference: args.reference,
-              matches: data.matches || [],
-              resource: prefs.resource,
-            };
-          } else if (data.text || data.book) {
-            // Normal passage fetch
-            result.scripture = {
-              reference: args.reference,
-              text: data.text || '',
-              verses: data.verses || [],
-              translation: prefs.resource,
-              book: data.book,
-              metadata: data.metadata,
-            };
+          if (args.filter) {
+            // Filter search - MCP returns markdown with YAML frontmatter
+            if (contentType.includes('application/json')) {
+              const data = await response.json();
+              result.searchResults = {
+                query: args.filter,
+                reference: args.reference,
+                matches: data.matches || [],
+                resource: prefs.resource,
+                totalMatches: data.statistics?.total || data.matches?.length || 0,
+                breakdown: {
+                  byTestament: data.statistics?.byTestament || {},
+                  byBook: data.statistics?.byBook || {},
+                },
+              };
+            } else {
+              // Raw markdown response - parse YAML frontmatter for statistics
+              const text = await response.text();
+              const { metadata, matches } = parseSearchMarkdown(text);
+              result.searchResults = {
+                query: args.filter,
+                reference: args.reference,
+                matches,
+                resource: prefs.resource,
+                totalMatches: metadata.total || matches.length,
+                breakdown: {
+                  byTestament: metadata.byTestament || {},
+                  byBook: metadata.byBook || {},
+                },
+              };
+            }
+          } else if (contentType.includes('application/json')) {
+            const data = await response.json();
+            if (data.text || data.book) {
+              result.scripture = {
+                reference: args.reference,
+                text: data.text || '',
+                verses: data.verses || [],
+                translation: prefs.resource,
+                book: data.book,
+                metadata: data.metadata,
+              };
+            }
           }
         }
         break;

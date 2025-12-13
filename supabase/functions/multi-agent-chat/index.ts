@@ -642,6 +642,7 @@ async function fetchScripturePassage(reference: string, filter?: string, languag
 
 // Detect if input is a scripture reference
 function isScriptureReference(input: string): boolean {
+  if (!input) return false;
   const trimmed = input.trim().toLowerCase();
   
   const bibleBooks = [

@@ -1,11 +1,27 @@
-import { SearchResults } from '@/types';
 import { Search, Book, X, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
+interface SearchMatch {
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
 interface SearchCardProps {
-  results: SearchResults | null;
+  results: {
+    query: string;
+    reference?: string;
+    matches: SearchMatch[];
+    resource?: string;
+    totalMatches: number;
+    breakdown: {
+      byTestament?: Record<string, number>;
+      byBook: Record<string, number>;
+    };
+  } | null;
   onClearSearch: () => void;
   onVerseClick: (reference: string) => void;
 }
@@ -20,10 +36,10 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
     );
   }
 
-  const { query, filter, reference, resource, totalMatches, breakdown, matches } = results;
+  const { query, reference, resource, totalMatches, breakdown, matches } = results;
 
   // Group matches by book
-  const matchesByBook: Record<string, typeof matches> = {};
+  const matchesByBook: Record<string, SearchMatch[]> = {};
   for (const match of matches) {
     if (!matchesByBook[match.book]) {
       matchesByBook[match.book] = [];
@@ -54,7 +70,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-primary" />
             <span className="font-medium text-sm">
-              "{filter || query}"
+              "{query}"
               {reference && <span className="text-muted-foreground"> in {reference}</span>}
             </span>
           </div>
@@ -94,7 +110,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
       {/* Results */}
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4 pb-24">
-          {/* Book breakdown */}
+          {/* Book breakdown - clickable to jump to that book's results */}
           {Object.keys(breakdown.byBook).length > 0 && (
             <div className="space-y-1">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
@@ -118,7 +134,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
             </div>
           )}
 
-          {/* Matches by book */}
+          {/* Matches grouped by book */}
           {Object.entries(matchesByBook).map(([book, bookMatches]) => (
             <div key={book} className="space-y-2">
               <button
@@ -140,7 +156,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick }: SearchCardP
                       {match.book} {match.chapter}:{match.verse}
                     </div>
                     <div className="text-sm line-clamp-2">
-                      {highlightTerm(match.text, filter || query)}
+                      {highlightTerm(match.text, query)}
                     </div>
                   </button>
                 ))}
