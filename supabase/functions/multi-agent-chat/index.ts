@@ -266,18 +266,47 @@ async function fetchVerseResources(reference: string, language?: string, organiz
     console.log(`Fetching translation notes: ${notesUrl}`);
     const notesResponse = await fetch(notesUrl);
     if (notesResponse.ok) {
-      const contentType = notesResponse.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await notesResponse.json();
-        if (Array.isArray(data)) {
-          results.push(...data.map((r: any) => ({ ...r, resourceType: 'tn' })));
+      const text = await notesResponse.text();
+      console.log(`Notes response (first 500 chars): ${text.substring(0, 500)}`);
+      // Try to parse as JSON first
+      if (text.trim().startsWith('[') || text.trim().startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          if (Array.isArray(data)) {
+            // Direct array of notes
+            console.log(`Parsed ${data.length} JSON notes array`);
+            results.push(...data.map((r: any) => ({ ...r, resourceType: 'tn' })));
+          } else if (data && typeof data === 'object') {
+            // Filter response format with matches array
+            if (data.matches && Array.isArray(data.matches)) {
+              console.log(`Parsed ${data.matches.length} notes from filter response (total: ${data.totalMatches})`);
+              results.push(...data.matches.map((match: any) => ({
+                resourceType: 'tn',
+                reference: match.reference,
+                title: match.reference,
+                content: match.note,
+                quote: match.quote,
+                matchedTerms: match.matchedTerms,
+                matchCount: match.matchCount
+              })));
+            } else {
+              // Single note object
+              console.log(`Parsed single JSON note object`);
+              results.push({ ...data, resourceType: 'tn' });
+            }
+          }
+        } catch (parseError) {
+          console.log(`JSON parse failed, falling back to markdown: ${parseError}`);
+          if (text.trim()) {
+            const notes = parseMarkdownNotes(text, reference);
+            console.log(`Parsed ${notes.length} markdown notes`);
+            results.push(...notes.map((n: any) => ({ ...n, resourceType: 'tn' })));
+          }
         }
-      } else {
-        const text = await notesResponse.text();
-        if (text && text.trim()) {
-          const notes = parseMarkdownNotes(text, reference);
-          results.push(...notes.map((n: any) => ({ ...n, resourceType: 'tn' })));
-        }
+      } else if (text.trim()) {
+        const notes = parseMarkdownNotes(text, reference);
+        console.log(`Parsed ${notes.length} markdown notes`);
+        results.push(...notes.map((n: any) => ({ ...n, resourceType: 'tn' })));
       }
     }
   } catch (error) {
@@ -290,18 +319,47 @@ async function fetchVerseResources(reference: string, language?: string, organiz
     console.log(`Fetching translation questions: ${questionsUrl}`);
     const questionsResponse = await fetch(questionsUrl);
     if (questionsResponse.ok) {
-      const contentType = questionsResponse.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await questionsResponse.json();
-        if (Array.isArray(data)) {
-          results.push(...data.map((r: any) => ({ ...r, resourceType: 'tq' })));
+      const text = await questionsResponse.text();
+      console.log(`Questions response (first 500 chars): ${text.substring(0, 500)}`);
+      // Try to parse as JSON first
+      if (text.trim().startsWith('[') || text.trim().startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          if (Array.isArray(data)) {
+            // Direct array of questions
+            console.log(`Parsed ${data.length} JSON questions array`);
+            results.push(...data.map((r: any) => ({ ...r, resourceType: 'tq' })));
+          } else if (data && typeof data === 'object') {
+            // Filter response format with matches array
+            if (data.matches && Array.isArray(data.matches)) {
+              console.log(`Parsed ${data.matches.length} questions from filter response (total: ${data.totalMatches})`);
+              results.push(...data.matches.map((match: any) => ({
+                resourceType: 'tq',
+                reference: match.reference,
+                title: match.question || match.reference,
+                question: match.question,
+                content: match.response || match.answer,
+                matchedTerms: match.matchedTerms,
+                matchCount: match.matchCount
+              })));
+            } else {
+              // Single question object
+              console.log(`Parsed single JSON question object`);
+              results.push({ ...data, resourceType: 'tq' });
+            }
+          }
+        } catch (parseError) {
+          console.log(`JSON parse failed, falling back to markdown: ${parseError}`);
+          if (text.trim()) {
+            const questions = parseMarkdownQuestions(text, reference);
+            console.log(`Parsed ${questions.length} markdown questions`);
+            results.push(...questions.map((q: any) => ({ ...q, resourceType: 'tq' })));
+          }
         }
-      } else {
-        const text = await questionsResponse.text();
-        if (text && text.trim()) {
-          const questions = parseMarkdownQuestions(text, reference);
-          results.push(...questions.map((q: any) => ({ ...q, resourceType: 'tq' })));
-        }
+      } else if (text.trim()) {
+        const questions = parseMarkdownQuestions(text, reference);
+        console.log(`Parsed ${questions.length} markdown questions`);
+        results.push(...questions.map((q: any) => ({ ...q, resourceType: 'tq' })));
       }
     }
   } catch (error) {
