@@ -1,6 +1,7 @@
 import { useCallback, useState, useMemo } from 'react';
-import { Resource } from '@/types';
+import { Resource, SearchResults } from '@/types';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
+import { useCardVisibility } from '@/hooks/useCardVisibility';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useI18n } from '@/hooks/useI18n';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
@@ -10,8 +11,10 @@ import { ScriptureCard } from '@/components/ScriptureCard';
 import { ResourcesCard } from '@/components/ResourcesCard';
 import { NotesCard } from '@/components/NotesCard';
 import { HistoryCard } from '@/components/HistoryCard';
+import { SearchCard } from '@/components/SearchCard';
 import { LanguageSelectionChat } from '@/components/LanguageSelectionChat';
 import { TranslationDialog } from '@/components/TranslationDialog';
+import { DismissConfirmDialog } from '@/components/DismissConfirmDialog';
 import { PersistentInputBar } from '@/components/PersistentInputBar';
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
@@ -38,23 +41,68 @@ const Index = () => {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [dismissCard, setDismissCard] = useState<CardType | null>(null);
+
+  const { scripture, resources, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
+  const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
+  const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
+    onBugReport: addBugReport,
+  });
+
+  const { 
+    conversations, 
+    currentConversationId, 
+    setCurrentConversationId,
+    createConversation, 
+    updateConversation,
+    saveMessage,
+    loadConversationMessages,
+  } = useConversations(language || 'en');
+
+  // Compute content state for dynamic card visibility
+  const contentState = useMemo(() => ({
+    hasHistory: conversations.length > 0,
+    hasSearch: searchResults !== null,
+    hasScripture: scripture !== null,
+    hasResources: resources.length > 0,
+    hasNotes: notes.length > 0,
+  }), [conversations.length, searchResults, scripture, resources.length, notes.length]);
+
+  // Use card visibility hook
+  const {
+    visibleCards,
+    dismissCard: handleDismissCard,
+    shouldConfirmDismiss,
+    isCardVisible,
+  } = useCardVisibility(contentState);
+
+  // Handle swipe up to dismiss
+  const handleSwipeUp = useCallback((card: CardType) => {
+    // Don't allow dismissing chat
+    if (card === 'chat') return;
+    
+    if (shouldConfirmDismiss(card)) {
+      setDismissCard(card);
+    } else {
+      handleDismissCard(card, false);
+    }
+  }, [shouldConfirmDismiss, handleDismissCard]);
 
   const {
     currentCard,
     swipeDirection,
     dragOffset,
+    dragOffsetY,
     isDragging,
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
     navigateToCard,
     cardOrder,
-  } = useSwipeNavigation();
-
-  const { scripture, resources, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
-  const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
-  const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
-    onBugReport: addBugReport,
+  } = useSwipeNavigation({ 
+    visibleCards, 
+    onSwipeUp: handleSwipeUp 
   });
 
   // Voice conversation - managed at top level so it persists across card navigation
@@ -72,7 +120,12 @@ const Index = () => {
       console.log('[Index] Voice tool call:', toolName, args);
       // Navigate immediately based on tool type
       if (toolName === 'get_scripture_passage') {
-        navigateToCard('scripture');
+        if (args.filter) {
+          // Filter search → navigate to search card
+          navigateToCard('search');
+        } else {
+          navigateToCard('scripture');
+        }
       } else if (!toolName.includes('note')) {
         navigateToCard('resources');
       }
@@ -153,15 +206,6 @@ const Index = () => {
       requestBatchTranslation(items);
     }
   }, [buildBatchItems, requestBatchTranslation]);
-  const { 
-    conversations, 
-    currentConversationId, 
-    setCurrentConversationId,
-    createConversation, 
-    updateConversation,
-    saveMessage,
-    loadConversationMessages,
-  } = useConversations(language || 'en');
 
   const handleSendMessage = useCallback(async (content: string) => {
     let convId = currentConversationId;
@@ -257,6 +301,7 @@ const Index = () => {
     clearMessages();
     clearScriptureData();
     setCurrentConversationId(null);
+    setSearchResults(null);
     navigateToCard('chat');
   }, [clearMessages, clearScriptureData, setCurrentConversationId, navigateToCard]);
 
@@ -272,6 +317,17 @@ const Index = () => {
     navigateToCard('scripture');
   }, [loadScriptureData, navigateToCard]);
 
+  // Handle search result verse click
+  const handleSearchVerseClick = useCallback(async (reference: string) => {
+    console.log('[Index] Search result verse clicked:', reference);
+    await loadScriptureData(reference);
+    navigateToCard('scripture');
+  }, [loadScriptureData, navigateToCard]);
+
+  // Clear search results
+  const handleClearSearch = useCallback(() => {
+    setSearchResults(null);
+  }, []);
 
   const renderCard = useCallback((card: CardType) => {
     switch (card) {
@@ -310,6 +366,14 @@ const Index = () => {
             // Reset dialog
             showResetConfirm={showResetConfirm}
             onShowResetConfirm={setShowResetConfirm}
+          />
+        );
+      case 'search':
+        return (
+          <SearchCard
+            results={searchResults}
+            onClearSearch={handleClearSearch}
+            onVerseClick={handleSearchVerseClick}
           />
         );
       case 'scripture':
@@ -372,7 +436,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleResourceClick, handleScriptureReferenceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, resourcePreferences, setActiveResource, language, t, hasStaticTranslations, translateUiStrings, i18nLoading, showVoiceMode, voiceConversation, showResetConfirm, handleSendMessage, scrollToResourceType, clearVerseFilter, fallbackState, handleTranslateAllRequest, isTranslating, clearScriptureData]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleResourceClick, handleScriptureReferenceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, resourcePreferences, setActiveResource, language, t, hasStaticTranslations, translateUiStrings, i18nLoading, showVoiceMode, voiceConversation, showResetConfirm, handleSendMessage, scrollToResourceType, clearVerseFilter, fallbackState, handleTranslateAllRequest, isTranslating, clearScriptureData, searchResults, handleClearSearch, handleSearchVerseClick]);
 
   // Show chat-based language selection on first launch or when manually triggered
   if (needsSelection || showLanguageSelector) {
@@ -401,6 +465,7 @@ const Index = () => {
         cardOrder={cardOrder}
         swipeDirection={swipeDirection}
         dragOffset={dragOffset}
+        dragOffsetY={dragOffsetY}
         isDragging={isDragging}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -416,6 +481,18 @@ const Index = () => {
         itemCount={batchItemCount}
         onConfirm={confirmTranslation}
         onCancel={cancelTranslation}
+      />
+
+      <DismissConfirmDialog
+        isOpen={dismissCard !== null}
+        cardType={dismissCard}
+        onConfirm={(neverAskAgain) => {
+          if (dismissCard) {
+            handleDismissCard(dismissCard, neverAskAgain);
+          }
+          setDismissCard(null);
+        }}
+        onCancel={() => setDismissCard(null)}
       />
       
       {/* Persistent input bar - shown on all cards except history */}

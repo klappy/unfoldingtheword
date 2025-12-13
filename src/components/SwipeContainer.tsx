@@ -7,6 +7,7 @@ interface SwipeContainerProps {
   cardOrder: CardType[];
   swipeDirection: 1 | -1;
   dragOffset: number;
+  dragOffsetY?: number;
   isDragging: boolean;
   onTouchStart: (e: React.TouchEvent | React.MouseEvent) => void;
   onTouchMove: (e: React.TouchEvent | React.MouseEvent) => void;
@@ -19,6 +20,7 @@ export function SwipeContainer({
   cardOrder,
   swipeDirection,
   dragOffset,
+  dragOffsetY = 0,
   isDragging,
   onTouchStart,
   onTouchMove,
@@ -71,7 +73,9 @@ export function SwipeContainer({
         initial={{ x: swipeDirection * 100 + '%', opacity: 0 }}
         animate={{ 
           x: dragOffset,
-          opacity: 1,
+          y: dragOffsetY,
+          opacity: dragOffsetY < -40 ? 1 + dragOffsetY / 200 : 1,
+          scale: dragOffsetY < -40 ? 1 + dragOffsetY / 400 : 1,
         }}
         transition={isDragging ? { duration: 0 } : { duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
         style={{ willChange: 'transform' }}

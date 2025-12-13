@@ -80,13 +80,17 @@ const createVoiceTools = (userPrefs: { language: string; organization: string; r
   {
     type: "function",
     name: "get_scripture_passage",
-    description: `Get scripture text. User's current preference: resource="${userPrefs.resource}", language="${userPrefs.language}", organization="${userPrefs.organization}". Use these defaults unless user specifies otherwise.`,
+    description: `Get scripture text. User's current preference: resource="${userPrefs.resource}", language="${userPrefs.language}", organization="${userPrefs.organization}". Use these defaults unless user specifies otherwise. Can optionally filter to find all occurrences of a word/phrase.`,
     parameters: {
       type: "object",
       properties: {
         reference: { 
           type: "string", 
-          description: "Scripture reference like 'John 3:16', 'Romans 8:1-4', or 'Matthew 5'" 
+          description: "Scripture reference like 'John 3:16', 'Romans 8:1-4', 'Matthew 5', or scopes like 'NT', 'OT', 'Gospels', 'Pentateuch', 'Romans'" 
+        },
+        filter: {
+          type: "string",
+          description: "Optional word or phrase to search for within the reference scope. Use for 'find all verses about X in Y' queries. Response includes YAML metadata with match counts."
         },
         resource: {
           type: "string",

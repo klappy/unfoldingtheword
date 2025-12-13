@@ -33,11 +33,18 @@ const mcpTools = [
     type: "function",
     function: {
       name: "get_scripture_passage",
-      description: "Get the text of a specific scripture passage",
+      description: "Get the text of a specific scripture passage. Can optionally filter to find all occurrences of a word/phrase within the passage or scope.",
       parameters: {
         type: "object",
         properties: {
-          reference: { type: "string", description: "Scripture reference like 'John 3:16' or 'Romans 8:1-4'" }
+          reference: { 
+            type: "string", 
+            description: "Scripture reference like 'John 3:16', 'Romans 8:1-4', a book name like 'Romans', or a scope like 'NT', 'OT', 'Gospels', 'Pentateuch'" 
+          },
+          filter: {
+            type: "string",
+            description: "Optional word or phrase to search for within the reference scope. Use this for 'find all verses about X in Y' queries."
+          }
         },
         required: ["reference"],
         additionalProperties: false
