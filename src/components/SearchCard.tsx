@@ -35,6 +35,17 @@ interface SearchCardProps {
 }
 
 export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, filterReference, resourceMatchCount, resourceResults }: SearchCardProps) {
+  // Filter resources client-side to only show those matching the search term
+  const filteredResourceResults = resourceResults && filterQuery
+    ? resourceResults.filter(r => {
+        const query = filterQuery.toLowerCase();
+        return (
+          r.title?.toLowerCase().includes(query) ||
+          r.content?.toLowerCase().includes(query)
+        );
+      })
+    : resourceResults;
+
   // If we have neither scripture search results nor a resource-level filter, show empty state
   if (!results && !filterQuery) {
     return (
@@ -48,7 +59,8 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
   const hasScriptureResults = !!results;
   const displayQuery = results?.query ?? filterQuery ?? '';
   const displayReference = results?.reference ?? filterReference ?? undefined;
-  const resourceMatches = resourceMatchCount ?? 0;
+  // Use actual filtered count, not the passed-in count which may be stale
+  const resourceMatches = filteredResourceResults?.length ?? 0;
 
   const matches = results?.matches ?? [];
   const resource = results?.resource;
@@ -199,12 +211,12 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
               <p className="text-sm text-muted-foreground">
                 No scripture verses were matched directly, but {resourceMatches} resource
                 match{resourceMatches === 1 ? ' was' : 'es were'} found.
-                {resourceResults && resourceResults.length > 0 ? ' Here are some of those notes and questions:' : ' Swipe to the Resources card to read the notes and questions for this search.'}
+                {filteredResourceResults && filteredResourceResults.length > 0 ? ' Here are those notes and questions:' : ' Swipe to the Resources card to read the notes and questions for this search.'}
               </p>
 
-              {resourceResults && resourceResults.length > 0 && (
+              {filteredResourceResults && filteredResourceResults.length > 0 && (
                 <div className="space-y-2">
-                  {resourceResults.slice(0, 50).map((res, idx) => (
+                  {filteredResourceResults.slice(0, 50).map((res, idx) => (
                     <div
                       key={res.id ?? idx}
                       className="p-3 rounded-md bg-muted/50 border border-border/40 space-y-1"
@@ -225,9 +237,9 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
                       </div>
                     </div>
                   ))}
-                  {resourceResults.length > 50 && (
+                  {filteredResourceResults.length > 50 && (
                     <p className="text-xs text-muted-foreground">
-                      Showing the first 50 of {resourceResults.length} resource matches. Swipe to the
+                      Showing the first 50 of {filteredResourceResults.length} resource matches. Swipe to the
                       Resources card to read all of the notes and questions for this search.
                     </p>
                   )}
