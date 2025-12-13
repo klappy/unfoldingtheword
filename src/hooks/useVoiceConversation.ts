@@ -379,7 +379,9 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       };
       
       await pcRef.current.setRemoteDescription(answer);
-      console.log("Voice WebRTC connection established");
+      console.log("[Voice] WebRTC connection established");
+      // Mark as connected once WebRTC handshake completes so UI can switch out of connecting state
+      setStatus('connected');
       
     } catch (error) {
       console.error('Error starting voice conversation:', error);
