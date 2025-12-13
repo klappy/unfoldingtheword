@@ -331,6 +331,10 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
           audioElRef.current.playbackRate = playbackSpeedRef.current;
         }
       };
+
+      pcRef.current.oniceconnectionstatechange = () => {
+        console.log('[Voice] ICE state:', pcRef.current?.iceConnectionState);
+      };
       
       const audioTrack = mediaStreamRef.current.getTracks()[0];
       pcRef.current.addTrack(audioTrack);
@@ -379,7 +383,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
       const offer = await pcRef.current.createOffer();
       await pcRef.current.setLocalDescription(offer);
       
-      const baseUrl = "https://api.openai.com/v1/realtime";
+      const baseUrl = "https://api.openai.com/v1/realtime/calls";
       const model = "gpt-4o-realtime-preview-2024-12-17";
       
       const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
