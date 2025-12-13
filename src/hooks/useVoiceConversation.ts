@@ -342,6 +342,28 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
         console.log('[Voice] Data channel opened');
         // Set connected immediately since data channel is ready
         setStatus('connected');
+
+        // Request an initial spoken greeting so users know the voice is active
+        try {
+          dcRef.current?.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'message',
+              role: 'user',
+              content: [
+                {
+                  type: 'input_text',
+                  text: 'Please introduce yourself briefly as my Bible study assistant and explain how you can help me study the Bible.'
+                }
+              ]
+            }
+          }));
+
+          dcRef.current?.send(JSON.stringify({ type: 'response.create' }));
+          console.log('[Voice] Requested initial greeting from Realtime API');
+        } catch (err) {
+          console.error('[Voice] Failed to request initial greeting:', err);
+        }
       };
       
       dcRef.current.onclose = () => {
