@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Search, Book, X, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,29 +34,15 @@ interface SearchCardProps {
   resourceResults?: Resource[];
 }
 
-export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, filterReference, resourceMatchCount, resourceResults }: SearchCardProps) {
-  // Filter resources client-side to only show those matching the search term
-  const filteredResourceResults = resourceResults && filterQuery
-    ? resourceResults.filter(r => {
-        const query = filterQuery.toLowerCase();
-        return (
-          (r.title && r.title.toLowerCase().includes(query)) ||
-          (r.content && r.content.toLowerCase().includes(query))
-        );
-      })
-    : resourceResults;
-
-  // Debug log to verify filtering behavior
-  useEffect(() => {
-    if (resourceResults) {
-      console.log('[SearchCard] Resource filter debug', {
-        filterQuery,
-        totalResources: resourceResults.length,
-        filteredResources: filteredResourceResults?.length ?? 0,
-      });
-    }
-  }, [filterQuery, resourceResults, filteredResourceResults]);
-
+export function SearchCard({
+  results,
+  onClearSearch,
+  onVerseClick,
+  filterQuery,
+  filterReference,
+  resourceMatchCount,
+  resourceResults,
+}: SearchCardProps) {
   // If we have neither scripture search results nor a resource-level filter, show empty state
   if (!results && !filterQuery) {
     return (
@@ -71,8 +56,7 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
   const hasScriptureResults = !!results;
   const displayQuery = results?.query ?? filterQuery ?? '';
   const displayReference = results?.reference ?? filterReference ?? undefined;
-  // Use actual filtered count, not the passed-in count which may be stale
-  const resourceMatches = filteredResourceResults?.length ?? 0;
+  const resourceMatches = resourceMatchCount ?? (resourceResults?.length ?? 0);
 
   const matches = results?.matches ?? [];
   const resource = results?.resource;
@@ -223,12 +207,14 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
               <p className="text-sm text-muted-foreground">
                 No scripture verses were matched directly, but {resourceMatches} resource
                 match{resourceMatches === 1 ? ' was' : 'es were'} found.
-                {filteredResourceResults && filteredResourceResults.length > 0 ? ' Here are those notes and questions:' : ' Swipe to the Resources card to read the notes and questions for this search.'}
+                {resourceResults && resourceResults.length > 0
+                  ? ' Here are those notes and questions:'
+                  : ' Swipe to the Resources card to read the notes and questions for this search.'}
               </p>
 
-              {filteredResourceResults && filteredResourceResults.length > 0 && (
+              {resourceResults && resourceResults.length > 0 && (
                 <div className="space-y-2">
-                  {filteredResourceResults.slice(0, 50).map((res, idx) => (
+                  {resourceResults.slice(0, 50).map((res, idx) => (
                     <div
                       key={res.id ?? idx}
                       className="p-3 rounded-md bg-muted/50 border border-border/40 space-y-1"
@@ -249,9 +235,9 @@ export function SearchCard({ results, onClearSearch, onVerseClick, filterQuery, 
                       </div>
                     </div>
                   ))}
-                  {filteredResourceResults.length > 50 && (
+                  {resourceResults.length > 50 && (
                     <p className="text-xs text-muted-foreground">
-                      Showing the first 50 of {filteredResourceResults.length} resource matches. Swipe to the
+                      Showing the first 50 of {resourceResults.length} resource matches. Swipe to the
                       Resources card to read all of the notes and questions for this search.
                     </p>
                   )}
