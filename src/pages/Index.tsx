@@ -41,10 +41,9 @@ const Index = () => {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
 
-  const { scripture, resources, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, filterByVerse, clearVerseFilter, clearData: clearScriptureData } = useScriptureData();
+  const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, clearData: clearScriptureData } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
     onBugReport: addBugReport,
@@ -116,12 +115,13 @@ const Index = () => {
       // Navigate to scripture card when voice AI fetches scripture
       navigateToCard('scripture');
     }, [loadScriptureData, navigateToCard]),
-    onToolCall: useCallback((toolName: string, args: any) => {
+    onToolCall: useCallback(async (toolName: string, args: any) => {
       console.log('[Index] Voice tool call:', toolName, args);
       // Navigate immediately based on tool type
       if (toolName === 'get_scripture_passage') {
         if (args.filter) {
-          // Filter search → navigate to search card
+          // Filter search → load search results and navigate to search card
+          await loadFilteredSearch(args.reference, args.filter);
           navigateToCard('search');
         } else {
           navigateToCard('scripture');
@@ -129,7 +129,7 @@ const Index = () => {
       } else if (!toolName.includes('note')) {
         navigateToCard('resources');
       }
-    }, [navigateToCard]),
+    }, [navigateToCard, loadFilteredSearch]),
     onError: (error) => {
       console.error('[Index] Voice error:', error);
     },
@@ -301,9 +301,9 @@ const Index = () => {
     clearMessages();
     clearScriptureData();
     setCurrentConversationId(null);
-    setSearchResults(null);
+    clearSearchResults();
     navigateToCard('chat');
-  }, [clearMessages, clearScriptureData, setCurrentConversationId, navigateToCard]);
+  }, [clearMessages, clearScriptureData, setCurrentConversationId, clearSearchResults, navigateToCard]);
 
   const handleVerseSelect = useCallback((reference: string) => {
     console.log('[Index] Verse selected:', reference);
@@ -326,8 +326,8 @@ const Index = () => {
 
   // Clear search results
   const handleClearSearch = useCallback(() => {
-    setSearchResults(null);
-  }, []);
+    clearSearchResults();
+  }, [clearSearchResults]);
 
   const renderCard = useCallback((card: CardType) => {
     switch (card) {

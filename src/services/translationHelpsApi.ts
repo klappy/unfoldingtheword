@@ -1035,3 +1035,115 @@ export async function searchResources(query: string, resource: string): Promise<
     return [];
   }
 }
+
+export interface ScriptureSearchResult {
+  query: string;
+  filter: string;
+  reference: string;
+  totalMatches: number;
+  breakdown: {
+    byTestament: Record<string, number>;
+    byBook: Record<string, number>;
+  };
+  matches: { book: string; chapter: number; verse: number; text: string }[];
+}
+
+// Search for a word/phrase within a scripture scope (e.g., "love" in "Romans" or "NT")
+export async function searchScripture(reference: string, filter: string): Promise<ScriptureSearchResult> {
+  try {
+    // The MCP search endpoint doesn't support scripture text search (ult/ust)
+    // It only supports translation resources: tn, tq, tw, ta
+    // So we search across all available resources for the keyword within the scope
+    
+    const query = reference ? `${filter} in ${reference}` : filter;
+    console.log('[searchScripture] Searching:', query);
+    
+    // Search across all resource types in parallel
+    const resourceTypes = ['tn', 'tq', 'tw', 'ta'];
+    const searchPromises = resourceTypes.map(resource => 
+      callProxy('search', { query, resource }).catch(() => ({ hits: [] }))
+    );
+    
+    const results = await Promise.all(searchPromises);
+    
+    const matches: ScriptureSearchResult['matches'] = [];
+    const byBook: Record<string, number> = {};
+    const byTestament: Record<string, number> = {};
+    
+    // OT books list for testament classification
+    const OT_BOOKS = new Set([
+      'Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy',
+      'Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel', '1 Kings', '2 Kings',
+      '1 Chronicles', '2 Chronicles', 'Ezra', 'Nehemiah', 'Esther', 'Job',
+      'Psalms', 'Proverbs', 'Ecclesiastes', 'Song of Solomon', 'Isaiah', 'Jeremiah',
+      'Lamentations', 'Ezekiel', 'Daniel', 'Hosea', 'Joel', 'Amos', 'Obadiah',
+      'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'
+    ]);
+    
+    // Combine and dedupe results from all resource searches
+    const seenRefs = new Set<string>();
+    
+    for (const result of results) {
+      const hits = result?.hits || [];
+      
+      for (const hit of hits) {
+        // Parse reference from hit
+        const refStr = hit.reference || hit.ref || '';
+        const refMatch = refStr.match(/^(.+?)\s+(\d+):(\d+)/);
+        
+        if (refMatch) {
+          const book = refMatch[1];
+          const chapter = parseInt(refMatch[2], 10);
+          const verse = parseInt(refMatch[3], 10);
+          const refKey = `${book}:${chapter}:${verse}`;
+          
+          // Skip duplicates
+          if (seenRefs.has(refKey)) continue;
+          seenRefs.add(refKey);
+          
+          const text = hit.text || hit.content || hit.snippet || hit.note || hit.question || '';
+          
+          matches.push({ book, chapter, verse, text });
+          
+          // Count by book
+          byBook[book] = (byBook[book] || 0) + 1;
+          
+          // Count by testament
+          const testament = OT_BOOKS.has(book) ? 'OT' : 'NT';
+          byTestament[testament] = (byTestament[testament] || 0) + 1;
+        }
+      }
+    }
+    
+    // Sort matches by book order (OT then NT) and chapter/verse
+    matches.sort((a, b) => {
+      const aIsOT = OT_BOOKS.has(a.book);
+      const bIsOT = OT_BOOKS.has(b.book);
+      if (aIsOT !== bIsOT) return aIsOT ? -1 : 1;
+      if (a.book !== b.book) return a.book.localeCompare(b.book);
+      if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+      return a.verse - b.verse;
+    });
+    
+    console.log('[searchScripture] Found', matches.length, 'matches across', Object.keys(byBook).length, 'books');
+    
+    return {
+      query,
+      filter,
+      reference,
+      totalMatches: matches.length,
+      breakdown: { byTestament, byBook },
+      matches,
+    };
+  } catch (error) {
+    console.error('[searchScripture] Error:', error);
+    return {
+      query: `${filter} in ${reference}`,
+      filter,
+      reference,
+      totalMatches: 0,
+      breakdown: { byTestament: {}, byBook: {} },
+      matches: [],
+    };
+  }
+}
