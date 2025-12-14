@@ -59,6 +59,11 @@ export function SearchCard({
   const [wordArticles, setWordArticles] = useState<Record<string, string>>({});
   const [loadingWords, setLoadingWords] = useState<Record<string, boolean>>({});
 
+  // Track expanded academy articles and their fetched content
+  const [expandedAcademy, setExpandedAcademy] = useState<Record<string, boolean>>({});
+  const [academyArticles, setAcademyArticles] = useState<Record<string, string>>({});
+  const [loadingAcademy, setLoadingAcademy] = useState<Record<string, boolean>>({});
+
   // Fetch full word article content
   const fetchWordArticle = useCallback(async (term: string) => {
     if (wordArticles[term]) return; // Already fetched
@@ -90,6 +95,37 @@ export function SearchCard({
     }
   }, [wordArticles]);
 
+  // Fetch full academy article content
+  const fetchAcademyArticle = useCallback(async (moduleId: string) => {
+    if (academyArticles[moduleId]) return; // Already fetched
+    
+    setLoadingAcademy(prev => ({ ...prev, [moduleId]: true }));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
+        body: {
+          endpoint: 'fetch-translation-academy',
+          params: {
+            moduleId,
+            language: 'en',
+            organization: 'unfoldingWord',
+          },
+        },
+      });
+
+      if (error) throw error;
+      
+      // Handle markdown response
+      const content = typeof data === 'string' ? data : (data?.content || '');
+      setAcademyArticles(prev => ({ ...prev, [moduleId]: content }));
+    } catch (err) {
+      console.error('Failed to fetch academy article:', err);
+      setAcademyArticles(prev => ({ ...prev, [moduleId]: 'Failed to load article content.' }));
+    } finally {
+      setLoadingAcademy(prev => ({ ...prev, [moduleId]: false }));
+    }
+  }, [academyArticles]);
+
   const toggleWordArticle = useCallback((term: string) => {
     const isExpanding = !expandedWords[term];
     setExpandedWords(prev => ({ ...prev, [term]: isExpanding }));
@@ -98,6 +134,15 @@ export function SearchCard({
       fetchWordArticle(term);
     }
   }, [expandedWords, wordArticles, fetchWordArticle]);
+
+  const toggleAcademyArticle = useCallback((moduleId: string) => {
+    const isExpanding = !expandedAcademy[moduleId];
+    setExpandedAcademy(prev => ({ ...prev, [moduleId]: isExpanding }));
+    
+    if (isExpanding && !academyArticles[moduleId]) {
+      fetchAcademyArticle(moduleId);
+    }
+  }, [expandedAcademy, academyArticles, fetchAcademyArticle]);
 
   // Memoize markdown components with current search term and click handler
   const searchQuery = results?.query || filterQuery || '';
@@ -222,6 +267,69 @@ export function SearchCard({
                             ) : (
                               <div className="text-sm text-muted-foreground">
                                 {match.text}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : key === 'academy' ? (
+                /* Special rendering for academy articles - expandable */
+                <div className="space-y-2">
+                  {data.matches.map((match, idx) => {
+                    const moduleId = match.reference || 'unknown';
+                    const isAcademyExpanded = expandedAcademy[moduleId];
+                    const isLoading = loadingAcademy[moduleId];
+                    const articleContent = academyArticles[moduleId];
+
+                    return (
+                      <div key={idx} className="border border-border/30 rounded-md overflow-hidden">
+                        <button
+                          className={cn(
+                            "w-full flex items-center justify-between p-3 bg-muted/20 hover:bg-muted/40 transition-colors text-left",
+                            isAcademyExpanded && "border-b border-border/30"
+                          )}
+                          onClick={() => toggleAcademyArticle(moduleId)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-primary">
+                              {moduleId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                            </div>
+                            {!isAcademyExpanded && match.text && (
+                              <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                {match.text}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-shrink-0 ml-2">
+                            {isLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : isAcademyExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                        </button>
+                        
+                        {isAcademyExpanded && (
+                          <div className="p-3 bg-background">
+                            {isLoading ? (
+                              <div className="flex items-center justify-center py-4">
+                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                <span className="ml-2 text-sm text-muted-foreground">Loading article...</span>
+                              </div>
+                            ) : articleContent ? (
+                              <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown components={markdownComponents}>
+                                  {articleContent.replace(/\\n/g, '\n')}
+                                </ReactMarkdown>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-muted-foreground">
+                                Tap to load article content
                               </div>
                             )}
                           </div>
