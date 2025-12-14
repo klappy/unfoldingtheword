@@ -410,7 +410,8 @@ serve(async (req) => {
     const notesMatchCount = searchResultsFull?.notes?.totalCount || 0;
     const questionsMatchCount = searchResultsFull?.questions?.totalCount || 0;
     const wordsMatchCount = searchResultsFull?.words?.totalCount || 0;
-    const totalMatchCount = scriptureMatchCount + notesMatchCount + questionsMatchCount + wordsMatchCount;
+    const academyMatchCount = searchResultsFull?.academy?.totalCount || 0;
+    const totalMatchCount = scriptureMatchCount + notesMatchCount + questionsMatchCount + wordsMatchCount + academyMatchCount;
 
     // Build match counts as clean array
     const countParts: string[] = [];
@@ -418,6 +419,7 @@ serve(async (req) => {
     if (notesMatchCount) countParts.push(`${notesMatchCount} translation notes`);
     if (questionsMatchCount) countParts.push(`${questionsMatchCount} translation questions`);
     if (wordsMatchCount) countParts.push(`${wordsMatchCount} word articles`);
+    if (academyMatchCount) countParts.push(`${academyMatchCount} academy articles`);
     
     const matchCountsSummary = countParts.length > 0
       ? `SEARCH RESULTS FOUND:\n${countParts.map(c => `- ${c}`).join('\n')}\n`

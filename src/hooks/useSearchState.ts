@@ -29,6 +29,7 @@ export interface SearchResults {
   notes: ResourceSearchResult | null;
   questions: ResourceSearchResult | null;
   words: ResourceSearchResult | null;
+  academy: ResourceSearchResult | null;
   toolCalls: Array<{ tool: string; args: Record<string, any> }>;
 }
 
@@ -73,7 +74,7 @@ export function useSearchState() {
   const executeSearch = useCallback(async (
     query: string,
     scope: string = 'Bible',
-    resourceTypes: Array<'scripture' | 'notes' | 'questions' | 'words'> = ['scripture', 'notes', 'questions', 'words']
+    resourceTypes: Array<'scripture' | 'notes' | 'questions' | 'words' | 'academy'> = ['scripture', 'notes', 'questions', 'words', 'academy']
   ): Promise<SearchResults | null> => {
     // Cancel any in-flight requests
     if (abortControllerRef.current) {
@@ -109,7 +110,7 @@ export function useSearchState() {
 
       const results = data as SearchResults;
       
-      trace('search-agent', 'complete', `Found ${results.scripture?.totalCount || 0} scripture, ${results.notes?.totalCount || 0} notes`);
+      trace('search-agent', 'complete', `Found ${results.scripture?.totalCount || 0} scripture, ${results.notes?.totalCount || 0} notes, ${results.academy?.totalCount || 0} academy`);
       
       setState({
         results,
@@ -147,7 +148,7 @@ export function useSearchState() {
     const { reference, filter, resource } = searchCall.args;
     
     // Determine which resource types to search based on all tool calls
-    const resourceTypes: Array<'scripture' | 'notes' | 'questions' | 'words'> = [];
+    const resourceTypes: Array<'scripture' | 'notes' | 'questions' | 'words' | 'academy'> = [];
     
     for (const tc of toolCalls) {
       if (tc.tool === 'get_scripture_passage' && tc.args.filter) {
