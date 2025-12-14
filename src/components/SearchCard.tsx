@@ -165,25 +165,6 @@ export function SearchCard({
 
           {isExpanded && (
             <div className="p-4 border-t border-border/30">
-              {/* Show breakdown badges for scripture */}
-              {key === 'scripture' && data.breakdown?.byBook && (
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {Object.entries(data.breakdown.byBook)
-                    .sort((a, b) => (b[1] as number) - (a[1] as number))
-                    .slice(0, 8)
-                    .map(([book, count]) => (
-                      <Badge
-                        key={book}
-                        variant="outline"
-                        className="cursor-pointer hover:bg-accent text-xs"
-                        onClick={() => onVerseClick(`${book} 1`)}
-                      >
-                        {book}: {count as number}
-                      </Badge>
-                    ))}
-                </div>
-              )}
-
               {/* Special rendering for word articles - expandable */}
               {key === 'words' ? (
                 <div className="space-y-2">
