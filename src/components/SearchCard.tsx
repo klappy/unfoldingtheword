@@ -1,12 +1,12 @@
-import { Search, X, ChevronDown, ChevronUp, Book, Loader2 } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, Book } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { createMarkdownComponents, createCombinedTransformer } from '@/lib/markdownTransformers';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { SearchResultItem, type SearchResultType } from '@/components/SearchResultItem';
 import type { SearchResults as NewSearchResults } from '@/hooks/useSearchState';
 import type { SearchResults as LegacySearchResults, Resource } from '@/types';
 
@@ -17,6 +17,9 @@ interface SearchCardProps {
   results: SearchCardResults;
   onClearSearch: () => void;
   onVerseClick: (reference: string) => void;
+  onAddToNotes?: (text: string) => void;
+  onSearch?: (query: string) => void;
+  currentLanguage?: string;
   // Legacy props for backwards compatibility
   filterQuery?: string | null;
   filterReference?: string | null;
@@ -33,6 +36,9 @@ export function SearchCard({
   results,
   onClearSearch,
   onVerseClick,
+  onAddToNotes,
+  onSearch,
+  currentLanguage,
   filterQuery,
   filterReference,
   resourceMatchCount,
@@ -42,7 +48,6 @@ export function SearchCard({
   const getInitialExpandedSections = () => {
     if (isNewFormat(results)) {
       const { scripture, notes, questions, words, academy } = results;
-      // Expand first section that has content
       if (scripture?.totalCount) return { scripture: true, notes: false, questions: false, words: false, academy: false };
       if (notes?.totalCount) return { scripture: false, notes: true, questions: false, words: false, academy: false };
       if (questions?.totalCount) return { scripture: false, notes: false, questions: true, words: false, academy: false };
@@ -53,96 +58,6 @@ export function SearchCard({
   };
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(getInitialExpandedSections);
-  
-  // Track expanded word articles and their fetched content
-  const [expandedWords, setExpandedWords] = useState<Record<string, boolean>>({});
-  const [wordArticles, setWordArticles] = useState<Record<string, string>>({});
-  const [loadingWords, setLoadingWords] = useState<Record<string, boolean>>({});
-
-  // Track expanded academy articles and their fetched content
-  const [expandedAcademy, setExpandedAcademy] = useState<Record<string, boolean>>({});
-  const [academyArticles, setAcademyArticles] = useState<Record<string, string>>({});
-  const [loadingAcademy, setLoadingAcademy] = useState<Record<string, boolean>>({});
-
-  // Fetch full word article content
-  const fetchWordArticle = useCallback(async (term: string) => {
-    if (wordArticles[term]) return; // Already fetched
-    
-    setLoadingWords(prev => ({ ...prev, [term]: true }));
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
-        body: {
-          endpoint: 'fetch-translation-word',
-          params: {
-            term: term.toLowerCase(),
-            language: 'en',
-            organization: 'unfoldingWord',
-          },
-        },
-      });
-
-      if (error) throw error;
-      
-      // Handle markdown response
-      const content = typeof data === 'string' ? data : (data?.content || data?.definition || '');
-      setWordArticles(prev => ({ ...prev, [term]: content }));
-    } catch (err) {
-      console.error('Failed to fetch word article:', err);
-      setWordArticles(prev => ({ ...prev, [term]: 'Failed to load article content.' }));
-    } finally {
-      setLoadingWords(prev => ({ ...prev, [term]: false }));
-    }
-  }, [wordArticles]);
-
-  // Fetch full academy article content
-  const fetchAcademyArticle = useCallback(async (moduleId: string) => {
-    if (academyArticles[moduleId]) return; // Already fetched
-    
-    setLoadingAcademy(prev => ({ ...prev, [moduleId]: true }));
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
-        body: {
-          endpoint: 'fetch-translation-academy',
-          params: {
-            moduleId,
-            language: 'en',
-            organization: 'unfoldingWord',
-          },
-        },
-      });
-
-      if (error) throw error;
-      
-      // Handle markdown response
-      const content = typeof data === 'string' ? data : (data?.content || '');
-      setAcademyArticles(prev => ({ ...prev, [moduleId]: content }));
-    } catch (err) {
-      console.error('Failed to fetch academy article:', err);
-      setAcademyArticles(prev => ({ ...prev, [moduleId]: 'Failed to load article content.' }));
-    } finally {
-      setLoadingAcademy(prev => ({ ...prev, [moduleId]: false }));
-    }
-  }, [academyArticles]);
-
-  const toggleWordArticle = useCallback((term: string) => {
-    const isExpanding = !expandedWords[term];
-    setExpandedWords(prev => ({ ...prev, [term]: isExpanding }));
-    
-    if (isExpanding && !wordArticles[term]) {
-      fetchWordArticle(term);
-    }
-  }, [expandedWords, wordArticles, fetchWordArticle]);
-
-  const toggleAcademyArticle = useCallback((moduleId: string) => {
-    const isExpanding = !expandedAcademy[moduleId];
-    setExpandedAcademy(prev => ({ ...prev, [moduleId]: isExpanding }));
-    
-    if (isExpanding && !academyArticles[moduleId]) {
-      fetchAcademyArticle(moduleId);
-    }
-  }, [expandedAcademy, academyArticles, fetchAcademyArticle]);
 
   // Memoize markdown components with current search term and click handler
   const searchQuery = results?.query || filterQuery || '';
@@ -165,7 +80,7 @@ export function SearchCard({
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // New format rendering
+  // New format rendering with unified SearchResultItem
   if (isNewFormat(results)) {
     const { query, scope, scripture, notes, questions, words, academy } = results;
 
@@ -178,7 +93,7 @@ export function SearchCard({
 
     const renderSection = (
       title: string,
-      key: string,
+      key: SearchResultType,
       data: { markdown: string; matches: any[]; totalCount: number; breakdown?: any } | null,
       icon: string
     ) => {
@@ -187,12 +102,11 @@ export function SearchCard({
       const isExpanded = expandedSections[key];
 
       return (
-        <div key={key} className="border border-border/50 rounded-lg">
+        <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
           <button
             className={cn(
-              "w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors rounded-t-lg",
-              isExpanded && "sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/30",
-              !isExpanded && "rounded-b-lg"
+              "w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors",
+              isExpanded && "sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/30"
             )}
             onClick={() => toggleSection(key)}
           >
@@ -211,170 +125,22 @@ export function SearchCard({
           </button>
 
           {isExpanded && (
-            <div className="p-4 border-t border-border/30">
-              {/* Special rendering for word articles - expandable */}
-              {key === 'words' ? (
-                <div className="space-y-2">
-                  {data.matches.map((match, idx) => {
-                    const term = match.reference || 'unknown';
-                    const isWordExpanded = expandedWords[term];
-                    const isLoading = loadingWords[term];
-                    const articleContent = wordArticles[term];
-
-                    return (
-                      <div key={idx} className="border border-border/30 rounded-md overflow-hidden">
-                        <button
-                          className={cn(
-                            "w-full flex items-center justify-between p-3 bg-muted/20 hover:bg-muted/40 transition-colors text-left",
-                            isWordExpanded && "border-b border-border/30"
-                          )}
-                          onClick={() => toggleWordArticle(term)}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium capitalize text-primary">
-                              {term}
-                            </div>
-                            {!isWordExpanded && (
-                              <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                                {match.text}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 ml-2">
-                            {isLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                            ) : isWordExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                        </button>
-                        
-                        {isWordExpanded && (
-                          <div className="p-3 bg-background">
-                            {isLoading ? (
-                              <div className="flex items-center justify-center py-4">
-                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                                <span className="ml-2 text-sm text-muted-foreground">Loading article...</span>
-                              </div>
-                            ) : articleContent ? (
-                              <div className="prose prose-sm dark:prose-invert max-w-none">
-                                <ReactMarkdown components={markdownComponents}>
-                                  {articleContent.replace(/\\n/g, '\n')}
-                                </ReactMarkdown>
-                              </div>
-                            ) : (
-                              <div className="text-sm text-muted-foreground">
-                                {match.text}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : key === 'academy' ? (
-                /* Special rendering for academy articles - expandable */
-                <div className="space-y-2">
-                  {data.matches.map((match, idx) => {
-                    const moduleId = match.reference || 'unknown';
-                    const isAcademyExpanded = expandedAcademy[moduleId];
-                    const isLoading = loadingAcademy[moduleId];
-                    const articleContent = academyArticles[moduleId];
-
-                    return (
-                      <div key={idx} className="border border-border/30 rounded-md overflow-hidden">
-                        <button
-                          className={cn(
-                            "w-full flex items-center justify-between p-3 bg-muted/20 hover:bg-muted/40 transition-colors text-left",
-                            isAcademyExpanded && "border-b border-border/30"
-                          )}
-                          onClick={() => toggleAcademyArticle(moduleId)}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-primary">
-                              {moduleId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                            </div>
-                            {!isAcademyExpanded && match.text && (
-                              <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                                {match.text}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 ml-2">
-                            {isLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                            ) : isAcademyExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                        </button>
-                        
-                        {isAcademyExpanded && (
-                          <div className="p-3 bg-background">
-                            {isLoading ? (
-                              <div className="flex items-center justify-center py-4">
-                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                                <span className="ml-2 text-sm text-muted-foreground">Loading article...</span>
-                              </div>
-                            ) : articleContent ? (
-                              <div className="prose prose-sm dark:prose-invert max-w-none">
-                                <ReactMarkdown components={markdownComponents}>
-                                  {articleContent.replace(/\\n/g, '\n')}
-                                </ReactMarkdown>
-                              </div>
-                            ) : (
-                              <div className="text-sm text-muted-foreground">
-                                Tap to load article content
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : data.markdown ? (
-                /* Render markdown content with transformations */
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown components={markdownComponents}>
-                    {data.markdown.replace(/\\n/g, '\n')}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                /* Fallback: render structured matches */
-                <div className="space-y-3">
-                  {data.matches.slice(0, 50).map((match, idx) => (
-                    <button
-                      key={idx}
-                      className="block text-left w-full p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors border border-border/30"
-                      onClick={() => {
-                        if (match.book && match.chapter) {
-                          onVerseClick(`${match.book} ${match.chapter}${match.verse ? `:${match.verse}` : ''}`);
-                        } else if (match.reference) {
-                          onVerseClick(match.reference);
-                        }
-                      }}
-                    >
-                      <div className="text-xs text-muted-foreground mb-1 font-medium">
-                        {match.reference || (match.book ? `${match.book} ${match.chapter}:${match.verse}` : '')}
-                      </div>
-                      <div className="text-sm line-clamp-3">
-                        <HighlightedText text={match.text} term={query} onReferenceClick={onVerseClick} />
-                      </div>
-                    </button>
-                  ))}
-                  {data.matches.length > 50 && (
-                    <p className="text-xs text-muted-foreground text-center pt-2">
-                      Showing first 50 of {data.matches.length} matches
-                    </p>
-                  )}
-                </div>
-              )}
+            <div className="p-3 space-y-2">
+              {/* Render each match using unified SearchResultItem */}
+              {data.matches.map((match, idx) => (
+                <SearchResultItem
+                  key={`${key}-${match.reference || idx}`}
+                  type={key}
+                  reference={match.reference || ''}
+                  rawMarkdown={match.rawMarkdown || match.text || ''}
+                  searchQuery={query}
+                  onVerseClick={onVerseClick}
+                  onAddToNotes={onAddToNotes}
+                  onSearch={onSearch}
+                  currentLanguage={currentLanguage}
+                  articleId={match.metadata?.moduleId || match.metadata?.term}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -494,7 +260,7 @@ export function SearchCard({
             <X className="h-4 w-4" />
           </Button>
         </div>
-        
+
         {/* Stats */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
           {hasScriptureResults && (
@@ -631,12 +397,12 @@ export function SearchCard({
 }
 
 // Combined highlight + scripture link component for fallback rendering
-function HighlightedText({ 
-  text, 
-  term, 
-  onReferenceClick 
-}: { 
-  text: string; 
+function HighlightedText({
+  text,
+  term,
+  onReferenceClick
+}: {
+  text: string;
   term: string;
   onReferenceClick?: (ref: string) => void;
 }) {

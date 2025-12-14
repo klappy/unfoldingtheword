@@ -8,6 +8,8 @@ export interface SearchMatch {
   chapter?: number;
   verse?: number;
   text: string;
+  rawMarkdown: string;    // Raw content from MCP - render 100% of this
+  metadata?: Record<string, any>;  // Full MCP response item
   matchedTerms?: string[];
 }
 
