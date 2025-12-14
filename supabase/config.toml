@@ -6,6 +6,15 @@ verify_jwt = false
 [functions.search-agent]
 verify_jwt = false
 
+[functions.scripture-agent]
+verify_jwt = false
+
+[functions.resource-agent]
+verify_jwt = false
+
+[functions.note-agent]
+verify_jwt = false
+
 [functions.translation-helps-proxy]
 verify_jwt = false
 
