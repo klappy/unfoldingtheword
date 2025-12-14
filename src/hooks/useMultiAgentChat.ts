@@ -71,8 +71,11 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     
-    // Start trace
-    trace('multi-agent-chat', 'start', `User: ${content.substring(0, 50)}...`);
+    // Start trace with entity metadata (DRY - metadata defined at source)
+    trace('multi-agent-chat', 'start', `User: ${content.substring(0, 50)}...`, {
+      displayName: 'Orchestrator',
+      layer: 'edge',
+    });
     let firstTokenReceived = false;
 
     try {

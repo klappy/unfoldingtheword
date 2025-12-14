@@ -11,9 +11,15 @@ export interface TraceEvent {
   metadata?: Record<string, any>;
 }
 
+export interface EntityMetadata {
+  displayName: string;
+  layer: 'edge' | 'client' | 'external';
+}
+
 interface TraceContextValue {
   traces: TraceEvent[];
   activeEntities: Set<string>;
+  entityMetadata: Map<string, EntityMetadata>;
   trace: (entity: string, phase: TraceEvent['phase'], message?: string, metadata?: Record<string, any>) => void;
   clearTraces: () => void;
   getEntityTraces: (entity: string) => TraceEvent[];
@@ -25,6 +31,7 @@ const TraceContext = createContext<TraceContextValue | null>(null);
 export function TraceProvider({ children }: { children: React.ReactNode }) {
   const [traces, setTraces] = useState<TraceEvent[]>([]);
   const [activeEntities, setActiveEntities] = useState<Set<string>>(new Set());
+  const [entityMetadata, setEntityMetadata] = useState<Map<string, EntityMetadata>>(new Map());
   const startTimers = useRef<Map<string, number>>(new Map());
 
   const trace = useCallback((
@@ -35,6 +42,16 @@ export function TraceProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const now = Date.now();
     let duration: number | undefined;
+
+    // Capture entity metadata from first trace call (DRY - metadata lives with trace calls)
+    if (metadata?.displayName && metadata?.layer) {
+      setEntityMetadata(prev => {
+        if (prev.has(entity)) return prev;
+        const next = new Map(prev);
+        next.set(entity, { displayName: metadata.displayName, layer: metadata.layer });
+        return next;
+      });
+    }
 
     if (phase === 'start') {
       startTimers.current.set(entity, now);
@@ -78,6 +95,7 @@ export function TraceProvider({ children }: { children: React.ReactNode }) {
   const clearTraces = useCallback(() => {
     setTraces([]);
     setActiveEntities(new Set());
+    setEntityMetadata(new Map());
     startTimers.current.clear();
   }, []);
 
@@ -88,7 +106,8 @@ export function TraceProvider({ children }: { children: React.ReactNode }) {
   return (
     <TraceContext.Provider value={{ 
       traces, 
-      activeEntities, 
+      activeEntities,
+      entityMetadata,
       trace, 
       clearTraces, 
       getEntityTraces,
@@ -106,6 +125,7 @@ export function useTrace() {
     return {
       traces: [],
       activeEntities: new Set<string>(),
+      entityMetadata: new Map<string, EntityMetadata>(),
       trace: () => {},
       clearTraces: () => {},
       getEntityTraces: () => [],
