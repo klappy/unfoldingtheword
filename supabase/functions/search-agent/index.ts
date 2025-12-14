@@ -96,10 +96,11 @@ function normalizeScopes(scope: string, scopeType: SearchScope): string[] {
   return [normalizeScopeValue(scope)];
 }
 
-// Build search parameters for MCP endpoint - CORRECT testament vs reference handling
+// Build search parameters for MCP endpoint
+// For bible-wide searches, omit testament/reference to search everything
 function buildSearchParams(
   scopeType: SearchScope,
-  scopeValue: string,
+  scopeValue: string | null,
   filter: string,
   language: string,
   organization: string,
@@ -107,11 +108,13 @@ function buildSearchParams(
 ): URLSearchParams {
   const params = new URLSearchParams();
   
-  // Use testament param for OT/NT, reference for book/chapter/verse
-  if (scopeType === 'testament' || scopeType === 'bible') {
-    params.set('testament', scopeValue);
-  } else {
-    params.set('reference', scopeValue);
+  // Only add scope params for non-bible searches
+  if (scopeValue) {
+    if (scopeType === 'testament') {
+      params.set('testament', scopeValue);
+    } else if (scopeType !== 'bible') {
+      params.set('reference', scopeValue);
+    }
   }
   
   params.set('filter', filter);
@@ -122,6 +125,7 @@ function buildSearchParams(
 }
 
 // Search scripture with filter
+// For bible-wide, make single request; for narrower scopes, use reference/testament
 async function searchScripture(
   scopes: string[],
   scopeType: SearchScope,
@@ -136,7 +140,10 @@ async function searchScripture(
   const byTestament: Record<string, number> = {};
   let totalCount = 0;
 
-  for (const scope of scopes) {
+  // For bible scope, make single request without testament/reference
+  const searchScopes = scopeType === 'bible' ? [null] : scopes;
+
+  for (const scope of searchScopes) {
     const params = buildSearchParams(scopeType, scope, filter, language, organization, resource);
     const url = `${MCP_BASE_URL}/api/fetch-scripture?${params.toString()}`;
     
@@ -240,6 +247,7 @@ async function searchScripture(
 }
 
 // Search translation notes with filter
+// For bible-wide, make single request; for narrower scopes, use reference/testament
 async function searchNotes(
   scopes: string[],
   scopeType: SearchScope,
@@ -251,7 +259,10 @@ async function searchNotes(
   const allMarkdown: string[] = [];
   let totalCount = 0;
 
-  for (const scope of scopes) {
+  // For bible scope, make single request without testament/reference
+  const searchScopes = scopeType === 'bible' ? [null] : scopes;
+
+  for (const scope of searchScopes) {
     const params = buildSearchParams(scopeType, scope, filter, language, organization);
     const url = `${MCP_BASE_URL}/api/fetch-translation-notes?${params.toString()}`;
     
@@ -269,7 +280,7 @@ async function searchNotes(
         
         for (const item of items) {
           allMatches.push({
-            reference: item.reference || scope,
+            reference: item.reference || (scope || 'Bible'),
             text: item.note || item.content || '',
             matchedTerms: item.matchedTerms,
           });
@@ -304,6 +315,7 @@ async function searchNotes(
 }
 
 // Search translation questions with filter
+// For bible-wide, make single request; for narrower scopes, use reference/testament
 async function searchQuestions(
   scopes: string[],
   scopeType: SearchScope,
@@ -315,7 +327,10 @@ async function searchQuestions(
   const allMarkdown: string[] = [];
   let totalCount = 0;
 
-  for (const scope of scopes) {
+  // For bible scope, make single request without testament/reference
+  const searchScopes = scopeType === 'bible' ? [null] : scopes;
+
+  for (const scope of searchScopes) {
     const params = buildSearchParams(scopeType, scope, filter, language, organization);
     const url = `${MCP_BASE_URL}/api/fetch-translation-questions?${params.toString()}`;
     
@@ -334,7 +349,7 @@ async function searchQuestions(
         for (const item of items) {
           const answer = item.response || item.answer || item.content || '';
           allMatches.push({
-            reference: item.reference || scope,
+            reference: item.reference || (scope || 'Bible'),
             text: `**Q:** ${item.question || ''}\n\n**A:** ${answer}`,
             matchedTerms: item.matchedTerms,
           });
