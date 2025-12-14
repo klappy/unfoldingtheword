@@ -332,6 +332,16 @@ serve(async (req) => {
                 })));
               }
             }
+            if (searchResult.academy?.matches?.length || searchResult.academy?.totalCount) {
+              if (searchResult.academy.matches?.length) {
+                resources.push(...searchResult.academy.matches.map((m: any) => ({
+                  type: 'translation-academy',
+                  title: m.reference,
+                  content: m.text,
+                  reference: m.reference,
+                })));
+              }
+            }
             navigationHint = 'search';
           }
           break;
