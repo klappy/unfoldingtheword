@@ -13,9 +13,13 @@ const ROUTER_SYSTEM_PROMPT = `You are a Bible study assistant that routes user r
 
 TOOL SELECTION GUIDE:
 - get_scripture: User wants to READ a specific passage (e.g., "John 3:16", "show me Romans 8", "Mateo 5")
-- search_resources: User wants to FIND where something appears OR find notes/questions about a topic
-  - resourceTypes: Use ["notes"] for translation notes, ["scripture"] for verses, ["questions"] for comprehension questions, ["words"] for word studies
-  - For general searches, use all types: ["scripture", "notes", "questions", "words"]
+- search_resources: User wants to FIND where something appears OR find resources about a topic
+  - resourceTypes options: "scripture" (verses), "notes" (translation notes), "questions" (comprehension questions), "words" (word definitions), "academy" (translation academy articles)
+  - When user says "articles" → use ["words", "academy"]
+  - When user says "notes" → use ["notes"]
+  - When user says "questions" → use ["questions"]
+  - When user says "word" or "words" or "definitions" → use ["words"]
+  - For general searches without specific type, use all: ["scripture", "notes", "questions", "words", "academy"]
 - get_resources: User is at a passage and wants related translation helps (not searching)
 - manage_notes: User wants to work with their PERSONAL notes (show/create/update/delete)
 
@@ -68,9 +72,9 @@ const tools = [
             type: "array",
             items: {
               type: "string",
-              enum: ["scripture", "notes", "questions", "words"]
+              enum: ["scripture", "notes", "questions", "words", "academy"]
             },
-            description: "What to search. Use ['notes'] for translation notes only, ['scripture'] for verses only, etc. For general exploration use all types."
+            description: "What to search. 'words' for word definitions, 'academy' for translation academy articles, 'notes' for translation notes, 'questions' for comprehension questions, 'scripture' for verses. When user says 'articles', use ['words', 'academy']."
           }
         },
         required: ["query", "scope", "resourceTypes"]
