@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { createMarkdownComponents } from '@/lib/markdownTransformers';
+import { cn } from '@/lib/utils';
 import type { SearchResults as NewSearchResults } from '@/hooks/useSearchState';
 import type { SearchResults as LegacySearchResults, Resource } from '@/types';
 
@@ -95,7 +96,10 @@ export function SearchCard({
       return (
         <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
           <button
-            className="w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors"
+            className={cn(
+              "w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors",
+              isExpanded && "sticky top-0 z-10 bg-background border-b border-border/30"
+            )}
             onClick={() => toggleSection(key)}
           >
             <div className="flex items-center gap-2">
