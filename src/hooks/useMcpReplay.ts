@@ -12,7 +12,7 @@ export interface ToolCall {
 // Search result section from search-agent
 interface ResourceSearchResult {
   markdown: string;
-  matches: Array<{ reference?: string; book?: string; chapter?: number; verse?: number; text: string }>;
+  matches: Array<{ reference?: string; book?: string; chapter?: number; verse?: number; text: string; rawMarkdown?: string; metadata?: Record<string, any> }>;
   totalCount: number;
   breakdown?: {
     byTestament?: Record<string, number>;

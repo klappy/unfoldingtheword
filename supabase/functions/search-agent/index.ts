@@ -25,7 +25,9 @@ interface SearchMatch {
   book?: string;
   chapter?: number;
   verse?: number;
-  text: string;
+  text: string;           // Keep for backwards compat, now equals rawMarkdown
+  rawMarkdown: string;    // Raw content from MCP - render 100% of this
+  metadata?: Record<string, any>;  // Full MCP response item
   matchedTerms?: string[];
 }
 
@@ -176,13 +178,16 @@ async function searchScripture(
               const book = refMatch[1];
               const chapter = parseInt(refMatch[2], 10);
               const verse = parseInt(refMatch[3], 10);
+              const rawContent = match.rawMarkdown || match.text || match.content || '';
               
               allMatches.push({
                 reference: refStr,
                 book,
                 chapter,
                 verse,
-                text: match.text || match.content || '',
+                text: rawContent,
+                rawMarkdown: rawContent,
+                metadata: match,
                 matchedTerms: match.matchedTerms,
               });
               
@@ -230,6 +235,7 @@ async function searchScripture(
               chapter,
               verse,
               text: verseText,
+              rawMarkdown: verseText,
             });
             
             byBook[book] = (byBook[book] || 0) + 1;
@@ -285,9 +291,12 @@ async function searchNotes(
         const items = Array.isArray(data) ? data : (data.matches || []);
         
         for (const item of items) {
+          const rawContent = item.rawMarkdown || item.note || item.content || JSON.stringify(item);
           allMatches.push({
             reference: item.reference || (scope || 'Bible'),
-            text: item.note || item.content || '',
+            text: rawContent,
+            rawMarkdown: rawContent,
+            metadata: item,
             matchedTerms: item.matchedTerms,
           });
         }
@@ -311,11 +320,13 @@ async function searchNotes(
             if (headerMatch) {
               // Save previous section if exists
               if (lastRef && currentContent.trim()) {
-                allMatches.push({
-                  reference: lastRef,
-                  text: currentContent.trim().substring(0, 300),
-                });
-              }
+              const rawContent = currentContent.trim();
+              allMatches.push({
+                reference: lastRef,
+                text: rawContent,
+                rawMarkdown: rawContent,
+              });
+            }
               lastRef = headerMatch[1].trim();
               currentContent = '';
             } else if (lastRef) {
@@ -324,9 +335,11 @@ async function searchNotes(
           }
           // Don't forget the last section
           if (lastRef && currentContent.trim()) {
+            const rawContent = currentContent.trim();
             allMatches.push({
               reference: lastRef,
-              text: currentContent.trim().substring(0, 300),
+              text: rawContent,
+              rawMarkdown: rawContent,
             });
           }
           
@@ -385,10 +398,14 @@ async function searchQuestions(
         const items = Array.isArray(data) ? data : (data.matches || []);
         
         for (const item of items) {
-          const answer = item.response || item.answer || item.content || '';
+          // Pass raw markdown if available, otherwise construct Q&A format
+          const rawContent = item.rawMarkdown || item.content || 
+            (item.question ? `**Q:** ${item.question}\n\n**A:** ${item.response || item.answer || ''}` : '');
           allMatches.push({
             reference: item.reference || (scope || 'Bible'),
-            text: `**Q:** ${item.question || ''}\n\n**A:** ${answer}`,
+            text: rawContent,
+            rawMarkdown: rawContent,
+            metadata: item,
             matchedTerms: item.matchedTerms,
           });
         }
@@ -458,17 +475,23 @@ async function searchWords(
       
       if (data.matches && Array.isArray(data.matches)) {
         for (const item of data.matches) {
+          const rawContent = item.rawMarkdown || item.definition || item.excerpt || item.content || '';
           allMatches.push({
             reference: item.term || item.reference || filter,
-            text: item.definition || item.content || '',
+            text: rawContent,
+            rawMarkdown: rawContent,
+            metadata: item,
           });
         }
-      } else if (data.term || data.definition) {
+      } else if (data.term || data.definition || data.content) {
+        const rawContent = data.rawMarkdown || data.definition || data.content || '';
         allMatches.push({
           reference: data.term || filter,
-          text: data.definition || data.content || '',
+          text: rawContent,
+          rawMarkdown: rawContent,
+          metadata: data,
         });
-        allMarkdown.push(`## ${data.term || filter}\n\n${data.definition || data.content || ''}`);
+        allMarkdown.push(`## ${data.term || filter}\n\n${rawContent}`);
       }
     } else {
       const text = await response.text();
@@ -477,6 +500,7 @@ async function searchWords(
         allMatches.push({
           reference: filter,
           text: text.trim(),
+          rawMarkdown: text.trim(),
         });
       }
     }
@@ -524,17 +548,24 @@ async function searchAcademy(
       
       if (data.matches && Array.isArray(data.matches)) {
         for (const item of data.matches) {
+          // Use excerpt first (that's where MCP puts the preview), then content
+          const rawContent = item.rawMarkdown || item.excerpt || item.content || '';
           allMatches.push({
-            reference: item.title || item.article || filter,
-            text: item.content || item.definition || '',
+            reference: item.moduleId || item.title || item.article || filter,
+            text: rawContent,
+            rawMarkdown: rawContent,
+            metadata: item,
           });
         }
-      } else if (data.title || data.content) {
+      } else if (data.title || data.content || data.excerpt) {
+        const rawContent = data.rawMarkdown || data.excerpt || data.content || '';
         allMatches.push({
-          reference: data.title || data.article || filter,
-          text: data.content || '',
+          reference: data.moduleId || data.title || data.article || filter,
+          text: rawContent,
+          rawMarkdown: rawContent,
+          metadata: data,
         });
-        allMarkdown.push(`## ${data.title || filter}\n\n${data.content || ''}`);
+        allMarkdown.push(`## ${data.title || filter}\n\n${rawContent}`);
       }
     } else {
       const text = await response.text();
@@ -549,9 +580,11 @@ async function searchAcademy(
           const headerMatch = line.match(/^#{1,3}\s+(.+)$/);
           if (headerMatch) {
             if (lastRef && currentContent.trim()) {
+              const rawContent = currentContent.trim();
               allMatches.push({
                 reference: lastRef,
-                text: currentContent.trim().substring(0, 300),
+                text: rawContent,
+                rawMarkdown: rawContent,
               });
             }
             lastRef = headerMatch[1].trim();
@@ -561,9 +594,11 @@ async function searchAcademy(
           }
         }
         if (lastRef && currentContent.trim()) {
+          const rawContent = currentContent.trim();
           allMatches.push({
             reference: lastRef,
-            text: currentContent.trim().substring(0, 300),
+            text: rawContent,
+            rawMarkdown: rawContent,
           });
         }
       }
