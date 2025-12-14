@@ -7,6 +7,8 @@ const corsHeaders = {
 };
 
 const MCP_BASE_URL = 'https://translation-helps-mcp.pages.dev';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 
 // Shared conversational prompt - used by both text and voice
 const CONVERSATIONAL_SYSTEM_PROMPT = `You are a Bible study resource finder. You help users discover scripture and translation resources by using the tools provided. You speak naturally and conversationally.
@@ -768,6 +770,99 @@ This works in ANY language - classify based on intent patterns, not keywords.`
   return 'read';
 }
 
+// Parse search query to extract term and scope
+function parseSearchQuery(message: string): { query: string; scope: string } {
+  const lowerMessage = message.toLowerCase();
+  
+  // Common patterns for search queries in various languages
+  const patterns = [
+    // English patterns
+    /(?:find|search|look for|where is|locate)\s+["']?([^"']+?)["']?\s+(?:in|within|across|throughout)\s+(.+)/i,
+    /(?:find|search|look for|where is|locate)\s+["']?(.+?)["']?\s+(?:in|within|across|throughout)\s+(.+)/i,
+    /["']([^"']+)["']\s+(?:in|within|across)\s+(.+)/i,
+    // Spanish patterns
+    /(?:buscar?|encontrar?|dónde está)\s+["']?([^"']+?)["']?\s+(?:en|dentro de)\s+(.+)/i,
+    // Portuguese patterns  
+    /(?:procurar?|buscar?|encontrar?|onde está)\s+["']?([^"']+?)["']?\s+(?:em|dentro de)\s+(.+)/i,
+    // French patterns
+    /(?:chercher|trouver|où est)\s+["']?([^"']+?)["']?\s+(?:dans|en)\s+(.+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match) {
+      return {
+        query: match[1].trim(),
+        scope: match[2].trim(),
+      };
+    }
+  }
+  
+  // Fallback: if no pattern matches, use the whole message as query with Bible scope
+  // Try to extract just key terms
+  const words = message.split(/\s+/).filter(w => 
+    w.length > 2 && 
+    !['find', 'search', 'look', 'for', 'where', 'the', 'in', 'a', 'an'].includes(w.toLowerCase())
+  );
+  
+  return {
+    query: words.join(' ') || message,
+    scope: 'Bible',
+  };
+}
+
+// Dispatch to search-agent sub-agent
+async function dispatchToSearchAgent(
+  userMessage: string,
+  userPrefs: { language?: string; organization?: string; resource?: string }
+): Promise<{
+  searchResults: any | null;
+  toolCalls: Array<{ tool: string; args: any }>;
+  navigationHint: 'search' | null;
+}> {
+  console.log('[multi-agent-chat] Dispatching to search-agent');
+  
+  const { query, scope } = parseSearchQuery(userMessage);
+  console.log(`[multi-agent-chat] Parsed search: query="${query}", scope="${scope}"`);
+  
+  try {
+    const searchAgentUrl = `${SUPABASE_URL}/functions/v1/search-agent`;
+    
+    const response = await fetch(searchAgentUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        query,
+        scope,
+        resourceTypes: ['scripture', 'notes', 'questions', 'words'],
+        language: userPrefs.language || 'en',
+        organization: userPrefs.organization || 'unfoldingWord',
+        resource: userPrefs.resource || 'ult',
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error(`[multi-agent-chat] search-agent returned ${response.status}`);
+      return { searchResults: null, toolCalls: [], navigationHint: null };
+    }
+    
+    const searchResults = await response.json();
+    console.log(`[multi-agent-chat] search-agent returned: scripture=${searchResults.scripture?.totalCount || 0}, notes=${searchResults.notes?.totalCount || 0}`);
+    
+    return {
+      searchResults,
+      toolCalls: searchResults.toolCalls || [],
+      navigationHint: 'search',
+    };
+  } catch (error) {
+    console.error('[multi-agent-chat] Error dispatching to search-agent:', error);
+    return { searchResults: null, toolCalls: [], navigationHint: null };
+  }
+}
+
 // Direct scripture/resource fetch without AI (for scripture references)
 async function fetchDirectResources(reference: string, userPrefs?: { language?: string; organization?: string; resource?: string }): Promise<{
   resources: any[],
@@ -1168,10 +1263,10 @@ serve(async (req) => {
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
-    let resources: any[];
-    let scriptureText: string | null;
-    let scriptureReference: string | null;
-    let searchQuery: string | null;
+    let resources: any[] = [];
+    let scriptureText: string | null = null;
+    let scriptureReference: string | null = null;
+    let searchQuery: string | null = null;
     let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
     let searchMatches: ScriptureSearchMatch[] = [];
 
@@ -1201,6 +1296,7 @@ serve(async (req) => {
     }
 
     let toolCalls: Array<{ tool: string; args: any }> = [];
+    let searchAgentResults: any = null; // Store search-agent results for metadata
 
     if (isReference) {
       console.log("Detected scripture reference, using direct fetch");
@@ -1224,8 +1320,69 @@ serve(async (req) => {
         searchMatches = searchResult.searchMatches;
         toolCalls = searchResult.toolCalls;
       }
+    } else if (intentHint === 'locate') {
+      // DISPATCH TO SEARCH-AGENT for locate intent
+      console.log("Intent is 'locate', dispatching to search-agent");
+      const searchAgentResult = await dispatchToSearchAgent(effectiveMessage, effectivePrefs);
+      
+      if (searchAgentResult.searchResults) {
+        searchAgentResults = searchAgentResult.searchResults;
+        toolCalls = searchAgentResult.toolCalls;
+        navigationHint = searchAgentResult.navigationHint;
+        searchQuery = searchAgentResult.searchResults.query;
+        scriptureReference = searchAgentResult.searchResults.scope;
+        
+        // Extract search matches from scripture results for backwards compatibility
+        if (searchAgentResult.searchResults.scripture?.matches) {
+          searchMatches = searchAgentResult.searchResults.scripture.matches.map((m: any) => ({
+            book: m.book || '',
+            chapter: m.chapter || 0,
+            verse: m.verse || 0,
+            text: m.text || '',
+          }));
+        }
+        
+        // Build context from search results for AI response generation
+        if (searchAgentResult.searchResults.scripture?.markdown) {
+          scriptureText = searchAgentResult.searchResults.scripture.markdown;
+        }
+        
+        // Collect resources from search results
+        if (searchAgentResult.searchResults.notes?.matches) {
+          resources.push(...searchAgentResult.searchResults.notes.matches.map((m: any) => ({
+            resourceType: 'tn',
+            reference: m.reference,
+            content: m.text,
+          })));
+        }
+        if (searchAgentResult.searchResults.questions?.matches) {
+          resources.push(...searchAgentResult.searchResults.questions.matches.map((m: any) => ({
+            resourceType: 'tq',
+            reference: m.reference,
+            question: m.text,
+          })));
+        }
+        if (searchAgentResult.searchResults.words?.matches) {
+          resources.push(...searchAgentResult.searchResults.words.matches.map((m: any) => ({
+            resourceType: 'tw',
+            term: m.reference,
+            content: m.text,
+          })));
+        }
+      } else {
+        // Fallback to AI tools if search-agent fails
+        console.log("search-agent returned no results, falling back to AI tools");
+        const result = await callAIWithTools(effectiveMessage, conversationHistory, scriptureContext, intentHint, effectivePrefs);
+        resources = result.resources;
+        scriptureText = result.scriptureText;
+        scriptureReference = result.scriptureReference;
+        searchQuery = result.searchQuery;
+        navigationHint = result.navigationHint;
+        searchMatches = result.searchMatches;
+        toolCalls = result.toolCalls;
+      }
     } else {
-      console.log("Using AI search with intent:", intentHint);
+      console.log("Using AI tools with intent:", intentHint);
       const result = await callAIWithTools(effectiveMessage, conversationHistory, scriptureContext, intentHint, effectivePrefs);
       resources = result.resources;
       scriptureText = result.scriptureText;
@@ -1261,15 +1418,21 @@ serve(async (req) => {
         async start(controller) {
           try {
             // First, send metadata as a special event
-            const metadata = {
+            const metadata: any = {
               type: 'metadata',
               scripture_reference: scriptureReference,
               search_query: searchQuery || message,
               tool_calls: toolCalls, // Tool call signatures for replay
               navigation_hint: navigationHint,
               search_matches: searchMatches,
-              search_resource: effectivePrefs.resource || 'ult'
+              search_resource: effectivePrefs.resource || 'ult',
             };
+            
+            // Include full search-agent results for new SearchCard format
+            if (searchAgentResults) {
+              metadata.search_agent_results = searchAgentResults;
+            }
+            
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n\n`));
             
             // Stream the AI response
