@@ -368,7 +368,8 @@ async function searchQuestions(
   };
 }
 
-// Search translation words with filter - FIXED to use filter instead of term
+// Search translation words with filter
+// Word articles are GLOBAL - not scoped by testament/reference
 async function searchWords(
   scopes: string[],
   scopeType: SearchScope,
@@ -379,48 +380,55 @@ async function searchWords(
   const allMatches: SearchMatch[] = [];
   const allMarkdown: string[] = [];
 
-  for (const scope of scopes) {
-    const params = buildSearchParams(scopeType, scope, filter, language, organization);
-    const url = `${MCP_BASE_URL}/api/fetch-translation-word?${params.toString()}`;
-    
-    console.log(`[search-agent] Words search: ${url}`);
-    
-    try {
-      const response = await fetch(url);
-      if (!response.ok) continue;
-      
-      const contentType = response.headers.get('content-type') || '';
-      
-      if (contentType.includes('application/json')) {
-        const data = await response.json();
-        
-        if (data.matches && Array.isArray(data.matches)) {
-          for (const item of data.matches) {
-            allMatches.push({
-              reference: item.term || item.reference || filter,
-              text: item.definition || item.content || '',
-            });
-          }
-        } else if (data.term || data.definition) {
-          allMatches.push({
-            reference: data.term || filter,
-            text: data.definition || data.content || '',
-          });
-          allMarkdown.push(`## ${data.term || filter}\n\n${data.definition || data.content || ''}`);
-        }
-      } else {
-        const text = await response.text();
-        if (text.trim()) {
-          allMarkdown.push(text);
-          allMatches.push({
-            reference: filter,
-            text: text.trim(),
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`[search-agent] Error searching words for scope ${scope}:`, error);
+  // Word articles are global - make a single request without testament/reference params
+  // Only use filter, language, organization
+  const params = new URLSearchParams();
+  params.set('filter', filter);
+  params.set('language', language);
+  params.set('organization', organization);
+  
+  const url = `${MCP_BASE_URL}/api/fetch-translation-word?${params.toString()}`;
+  
+  console.log(`[search-agent] Words search (global): ${url}`);
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[search-agent] Words search failed: ${response.status}`);
+      return { markdown: '', matches: [], totalCount: 0 };
     }
+    
+    const contentType = response.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      
+      if (data.matches && Array.isArray(data.matches)) {
+        for (const item of data.matches) {
+          allMatches.push({
+            reference: item.term || item.reference || filter,
+            text: item.definition || item.content || '',
+          });
+        }
+      } else if (data.term || data.definition) {
+        allMatches.push({
+          reference: data.term || filter,
+          text: data.definition || data.content || '',
+        });
+        allMarkdown.push(`## ${data.term || filter}\n\n${data.definition || data.content || ''}`);
+      }
+    } else {
+      const text = await response.text();
+      if (text.trim()) {
+        allMarkdown.push(text);
+        allMatches.push({
+          reference: filter,
+          text: text.trim(),
+        });
+      }
+    }
+  } catch (error) {
+    console.error(`[search-agent] Error searching words:`, error);
   }
 
   return {
