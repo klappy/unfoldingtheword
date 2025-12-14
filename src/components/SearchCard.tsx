@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { createMarkdownComponents } from '@/lib/markdownTransformers';
+import { createMarkdownComponents, createCombinedTransformer } from '@/lib/markdownTransformers';
 import { cn } from '@/lib/utils';
 import type { SearchResults as NewSearchResults } from '@/hooks/useSearchState';
 import type { SearchResults as LegacySearchResults, Resource } from '@/types';
@@ -164,7 +164,7 @@ export function SearchCard({
                         {match.reference || (match.book ? `${match.book} ${match.chapter}:${match.verse}` : '')}
                       </div>
                       <div className="text-sm line-clamp-3">
-                        <HighlightedText text={match.text} term={query} />
+                        <HighlightedText text={match.text} term={query} onReferenceClick={onVerseClick} />
                       </div>
                     </button>
                   ))}
@@ -369,7 +369,7 @@ export function SearchCard({
                       {match.book} {match.chapter}:{match.verse}
                     </div>
                     <div className="text-sm line-clamp-2">
-                      <HighlightedText text={match.text} term={displayQuery} />
+                      <HighlightedText text={match.text} term={displayQuery} onReferenceClick={onVerseClick} />
                     </div>
                   </button>
                 ))}
@@ -406,7 +406,7 @@ export function SearchCard({
                         {res.title}
                       </div>
                       <div className="text-sm text-muted-foreground line-clamp-3">
-                        <HighlightedText text={res.content} term={displayQuery} />
+                        <HighlightedText text={res.content} term={displayQuery} onReferenceClick={onVerseClick} />
                       </div>
                     </div>
                   ))}
@@ -426,9 +426,26 @@ export function SearchCard({
   );
 }
 
-// Simple highlight component for fallback rendering
-function HighlightedText({ text, term }: { text: string; term: string }) {
-  if (!term || !text) return <>{text}</>;
+// Combined highlight + scripture link component for fallback rendering
+function HighlightedText({ 
+  text, 
+  term, 
+  onReferenceClick 
+}: { 
+  text: string; 
+  term: string;
+  onReferenceClick?: (ref: string) => void;
+}) {
+  if (!text) return null;
+
+  // If we have a reference click handler, use the combined transformer
+  if (onReferenceClick) {
+    const transform = createCombinedTransformer(term, onReferenceClick);
+    return <>{transform(text)}</>;
+  }
+
+  // Fallback: just highlight
+  if (!term) return <>{text}</>;
 
   const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
   const parts = text.split(regex);
