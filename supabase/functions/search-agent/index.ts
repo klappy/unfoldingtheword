@@ -452,10 +452,6 @@ serve(async (req) => {
     const searchPromises: Promise<[string, ResourceSearchResult]>[] = [];
 
     if (resourceTypes.includes('scripture')) {
-      toolCalls.push({ 
-        tool: 'get_scripture_passage', 
-        args: { reference: scope, filter: query, resource } 
-      });
       searchPromises.push(
         searchScripture(normalizedScopes, query, language, organization, resource)
           .then(r => ['scripture', r] as [string, ResourceSearchResult])
@@ -463,10 +459,6 @@ serve(async (req) => {
     }
 
     if (resourceTypes.includes('notes')) {
-      toolCalls.push({ 
-        tool: 'get_translation_notes', 
-        args: { reference: scope, filter: query } 
-      });
       searchPromises.push(
         searchNotes(normalizedScopes, query, language, organization)
           .then(r => ['notes', r] as [string, ResourceSearchResult])
@@ -474,10 +466,6 @@ serve(async (req) => {
     }
 
     if (resourceTypes.includes('questions')) {
-      toolCalls.push({ 
-        tool: 'get_translation_questions', 
-        args: { reference: scope, filter: query } 
-      });
       searchPromises.push(
         searchQuestions(normalizedScopes, query, language, organization)
           .then(r => ['questions', r] as [string, ResourceSearchResult])
@@ -485,15 +473,18 @@ serve(async (req) => {
     }
 
     if (resourceTypes.includes('words')) {
-      toolCalls.push({ 
-        tool: 'get_translation_word', 
-        args: { term: query, reference: scope } 
-      });
       searchPromises.push(
         searchWords(query, normalizedScopes, language, organization)
           .then(r => ['words', r] as [string, ResourceSearchResult])
       );
     }
+
+    // Store a single search-agent tool call for replay (not individual MCP calls)
+    // This allows client to replay the entire search via search-agent endpoint
+    toolCalls.push({
+      tool: 'search-agent',
+      args: { query, scope, resourceTypes, language, organization, resource },
+    });
 
     const results = await Promise.all(searchPromises);
     
