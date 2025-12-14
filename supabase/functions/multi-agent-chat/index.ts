@@ -287,7 +287,7 @@ serve(async (req) => {
           const searchResult = await invokeSubAgent('search-agent', {
             query: args.query,
             scope: args.scope,
-            resourceTypes: args.resourceTypes || ['scripture', 'notes', 'questions', 'words'],
+            resourceTypes: args.resourceTypes || ['scripture', 'notes', 'questions', 'words', 'academy'],
             language: prefs.language,
             organization: prefs.organization,
             resource: prefs.resource,
