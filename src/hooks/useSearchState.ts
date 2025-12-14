@@ -83,7 +83,11 @@ export function useSearchState() {
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     
-    trace('search-agent', 'start', `Query: "${query}" Scope: ${scope}`);
+    // Trace with entity metadata (DRY - metadata defined at source)
+    trace('search-agent', 'start', `Query: "${query}" Scope: ${scope}`, {
+      displayName: 'Search Agent',
+      layer: 'edge',
+    });
 
     const prefs = getResourcePrefs();
 

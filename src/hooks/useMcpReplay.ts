@@ -293,7 +293,11 @@ export function useMcpReplay() {
       return;
     }
     
-    trace('mcp-replay', 'start', `Replaying ${toolCalls.length} tool calls`);
+    // Trace with entity metadata (DRY - metadata defined at source)
+    trace('mcp-replay', 'start', `Replaying ${toolCalls.length} tool calls`, {
+      displayName: 'MCP Replay',
+      layer: 'client',
+    });
 
     // Cancel any in-flight requests
     if (abortControllerRef.current) {

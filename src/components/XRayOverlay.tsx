@@ -1,4 +1,4 @@
-import { useTrace, TraceEvent } from '@/contexts/TraceContext';
+import { useTrace, TraceEvent, EntityMetadata } from '@/contexts/TraceContext';
 import { X, Activity, Clock, AlertCircle, CheckCircle, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,8 +33,12 @@ function formatDuration(ms: number) {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-// Derive entities dynamically from traces (DRY principle - no static list)
-function deriveEntities(traces: TraceEvent[], activeEntities: Set<string>) {
+// Derive entities dynamically from traces with metadata (DRY principle - metadata comes from trace calls)
+function deriveEntities(
+  traces: TraceEvent[], 
+  activeEntities: Set<string>,
+  entityMetadata: Map<string, EntityMetadata>
+) {
   const entityMap = new Map<string, { hasError: boolean; hasComplete: boolean }>();
   
   traces.forEach(t => {
@@ -44,19 +48,24 @@ function deriveEntities(traces: TraceEvent[], activeEntities: Set<string>) {
     entityMap.set(t.entity, current);
   });
   
-  return Array.from(entityMap.entries()).map(([id, state]) => ({
-    id,
-    isActive: activeEntities.has(id),
-    hasError: state.hasError,
-    hasComplete: state.hasComplete,
-  }));
+  return Array.from(entityMap.entries()).map(([id, state]) => {
+    const meta = entityMetadata.get(id);
+    return {
+      id,
+      displayName: meta?.displayName || id,
+      layer: meta?.layer || 'unknown',
+      isActive: activeEntities.has(id),
+      hasError: state.hasError,
+      hasComplete: state.hasComplete,
+    };
+  });
 }
 
 export function XRayOverlay({ onClose }: XRayOverlayProps) {
-  const { traces, activeEntities, clearTraces } = useTrace();
+  const { traces, activeEntities, entityMetadata, clearTraces } = useTrace();
 
-  // Derive entities from actual traces (no static list)
-  const entities = deriveEntities(traces, activeEntities);
+  // Derive entities from actual traces with metadata (no static list)
+  const entities = deriveEntities(traces, activeEntities, entityMetadata);
 
   // Calculate metrics
   const ttftEvents = traces.filter(t => t.phase === 'first_token');
@@ -117,8 +126,11 @@ export function XRayOverlay({ onClose }: XRayOverlayProps) {
                       entity.isActive ? "bg-yellow-500 animate-pulse" : 
                       entity.hasError ? "bg-red-500" : "bg-green-500"
                     )} />
-                    <span className="font-mono text-xs">{entity.id}</span>
+                    <span>{entity.displayName}</span>
                   </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {entity.layer}
+                  </Badge>
                 </div>
               ))
             )}
