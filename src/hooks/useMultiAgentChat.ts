@@ -88,6 +88,9 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
 
       // Get current user preferences for resources
       const userPrefs = getResourcePrefs();
+      
+      // Include deviceId for note operations
+      const deviceId = localStorage.getItem('device-id');
 
       const response = await fetch(CHAT_URL, {
         method: 'POST',
@@ -100,7 +103,10 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
           conversationHistory,
           scriptureContext,
           responseLanguage,
-          userPrefs,
+          userPrefs: {
+            ...userPrefs,
+            deviceId,
+          },
           stream: true,
         }),
       });
