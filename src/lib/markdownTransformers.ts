@@ -1,7 +1,36 @@
 import React from 'react';
 
-// Regex to detect scripture references in text
-const SCRIPTURE_REF_PATTERN = /\b((?:1|2|3|I|II|III)?\s*[A-Za-záéíóúüñâêôãõç]+)\s+(\d+)(?::(\d+)(?:-(\d+))?)?\b/gi;
+// Common Bible book names for detection (English + some Spanish/Portuguese)
+const BIBLE_BOOKS = [
+  'genesis', 'gen', 'exodus', 'ex', 'leviticus', 'lev', 'numbers', 'num',
+  'deuteronomy', 'deut', 'joshua', 'josh', 'judges', 'judg', 'ruth',
+  '1 samuel', '2 samuel', '1 kings', '2 kings', '1 chronicles', '2 chronicles',
+  'ezra', 'nehemiah', 'neh', 'esther', 'job', 'psalms', 'psalm', 'ps',
+  'proverbs', 'prov', 'ecclesiastes', 'eccl', 'song of solomon', 'songs',
+  'isaiah', 'isa', 'jeremiah', 'jer', 'lamentations', 'lam', 'ezekiel', 'ezek',
+  'daniel', 'dan', 'hosea', 'joel', 'amos', 'obadiah', 'obad', 'jonah',
+  'micah', 'mic', 'nahum', 'habakkuk', 'hab', 'zephaniah', 'zeph',
+  'haggai', 'hag', 'zechariah', 'zech', 'malachi', 'mal',
+  'matthew', 'matt', 'mark', 'luke', 'john', 'acts',
+  'romans', 'rom', '1 corinthians', '2 corinthians', 'galatians', 'gal',
+  'ephesians', 'eph', 'philippians', 'phil', 'colossians', 'col',
+  '1 thessalonians', '2 thessalonians', '1 timothy', '2 timothy',
+  'titus', 'philemon', 'phlm', 'hebrews', 'heb', 'james', 'jas',
+  '1 peter', '2 peter', '1 john', '2 john', '3 john', 'jude', 'revelation', 'rev',
+  // Spanish
+  'génesis', 'éxodo', 'levítico', 'números', 'deuteronomio', 'josué', 'jueces', 'rut',
+  'salmos', 'proverbios', 'eclesiastés', 'cantares', 'isaías', 'jeremías', 'ezequiel',
+  'mateo', 'marcos', 'lucas', 'juan', 'hechos', 'romanos', 'apocalipsis',
+  // Portuguese
+  'gênesis', 'êxodo', 'provérbios', 'mateus', 'joão', 'atos',
+];
+
+// Build a regex pattern from the book list
+const bookPattern = BIBLE_BOOKS.map(b => b.replace(/\s+/g, '\\s+')).join('|');
+const SCRIPTURE_REF_PATTERN = new RegExp(
+  `\\b((?:${bookPattern}))\\s*(\\d+)(?:\\s*:\\s*(\\d+)(?:\\s*[-–]\\s*(\\d+))?)?\\b`,
+  'gi'
+);
 
 /**
  * Transform plain text scripture references into clickable elements
