@@ -332,9 +332,10 @@ async function searchQuestions(
         const items = Array.isArray(data) ? data : (data.matches || []);
         
         for (const item of items) {
+          const answer = item.response || item.answer || item.content || '';
           allMatches.push({
             reference: item.reference || scope,
-            text: `**Q:** ${item.question || ''}\n**A:** ${item.response || item.answer || ''}`,
+            text: `**Q:** ${item.question || ''}\n\n**A:** ${answer}`,
             matchedTerms: item.matchedTerms,
           });
         }
