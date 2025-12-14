@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Message, ToolCall } from '@/types';
+import { useTrace } from '@/contexts/TraceContext';
 
 interface SearchMatch {
   book: string;
@@ -45,6 +46,7 @@ function getResourcePrefs() {
 }
 
 export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
+  const { trace } = useTrace();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +70,10 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
     };
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
+    
+    // Start trace
+    trace('multi-agent-chat', 'start', `User: ${content.substring(0, 50)}...`);
+    let firstTokenReceived = false;
 
     try {
       setError(null);
@@ -155,6 +161,11 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
                 onScriptureReference(parsed.scripture_reference);
               }
             } else if (parsed.type === 'content') {
+              // Trace first token (TTFT)
+              if (!firstTokenReceived) {
+                firstTokenReceived = true;
+                trace('multi-agent-chat', 'first_token', 'First content token received');
+              }
               assistantContent += parsed.content;
               // Update the assistant message with streaming content
               setMessages(prev => prev.map(m => 
@@ -190,6 +201,9 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         m.id === assistantMessageId ? finalAssistantMessage : m
       ));
       
+      // Trace completion
+      trace('multi-agent-chat', 'complete', `Tools: ${metadata?.tool_calls?.length || 0}, Nav: ${metadata?.navigation_hint || 'none'}`);
+      
       return {
         scriptureReference: metadata?.scripture_reference || null,
         searchQuery: metadata?.search_query || null,
@@ -203,6 +217,9 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
       console.error('Chat error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
+      
+      // Trace error
+      trace('multi-agent-chat', 'error', errorMsg);
       
       // Create bug report for chat errors
       options.onBugReport?.(

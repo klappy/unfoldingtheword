@@ -16,6 +16,7 @@ import { LanguageSelectionChat } from '@/components/LanguageSelectionChat';
 import { TranslationDialog } from '@/components/TranslationDialog';
 import { DismissConfirmDialog } from '@/components/DismissConfirmDialog';
 import { PersistentInputBar } from '@/components/PersistentInputBar';
+import { XRayOverlay } from '@/components/XRayOverlay';
 
 import { ResourceLink, HistoryItem, Message, CardType } from '@/types';
 import { useScriptureData } from '@/hooks/useScriptureData';
@@ -43,10 +44,23 @@ const Index = () => {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showXRay, setShowXRay] = useState(false);
   const [dismissCard, setDismissCard] = useState<CardType | null>(null);
   const [pendingSearchNavigation, setPendingSearchNavigation] = useState(false);
   const [resourceFilterInfo, setResourceFilterInfo] = useState<{ query: string; reference?: string | null } | null>(null);
   const [resourceSearchResults, setResourceSearchResults] = useState<Resource[] | null>(null);
+  
+  // X-Ray keyboard shortcut (Ctrl+Shift+X)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'X') {
+        e.preventDefault();
+        setShowXRay(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
   const { scripture, resources, searchResults, isLoading: scriptureLoading, isResourcesLoading, error: scriptureError, verseFilter, fallbackState, loadScriptureData, loadKeywordResources, loadFilteredSearch, filterByVerse, clearVerseFilter, clearSearchResults, setSearchResultsFromMetadata, navigateToVerse, clearData: clearScriptureData, setScripture, setResources, setSearchResults } = useScriptureData();
   const { notes, addNote, addBugReport, deleteNote, updateNote, refetchNotes } = useNotes();
   const { messages, isLoading: chatLoading, sendMessage, setMessages, clearMessages } = useMultiAgentChat({
@@ -687,6 +701,9 @@ const Index = () => {
           onResetCommand={() => setShowResetConfirm(true)}
         />
       )}
+      
+      {/* X-Ray Debugger Overlay (Ctrl+Shift+X) */}
+      {showXRay && <XRayOverlay onClose={() => setShowXRay(false)} />}
     </div>
   );
 };
