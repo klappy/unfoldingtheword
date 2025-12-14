@@ -11,7 +11,7 @@ interface XRayOverlayProps {
 
 function getPhaseIcon(phase: TraceEvent['phase']) {
   switch (phase) {
-    case 'start': return <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />;
+    case 'start': return <Activity className="h-3 w-3 text-yellow-500" />;
     case 'first_token': return <Activity className="h-3 w-3 text-blue-500" />;
     case 'tool_call': return <Activity className="h-3 w-3 text-purple-500" />;
     case 'complete': return <CheckCircle className="h-3 w-3 text-green-500" />;
@@ -179,7 +179,7 @@ export function XRayOverlay({ onClose }: XRayOverlayProps) {
               </div>
             ) : (
               <div className="space-y-1">
-                {[...traces].reverse().map(event => (
+                {traces.map(event => (
                   <div 
                     key={event.id}
                     className={cn(
