@@ -94,11 +94,12 @@ export function SearchCard({
       const isExpanded = expandedSections[key];
 
       return (
-        <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
+        <div key={key} className="border border-border/50 rounded-lg">
           <button
             className={cn(
-              "w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors",
-              isExpanded && "sticky top-0 z-10 bg-background border-b border-border/30"
+              "w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors rounded-t-lg",
+              isExpanded && "sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/30",
+              !isExpanded && "rounded-b-lg"
             )}
             onClick={() => toggleSection(key)}
           >
