@@ -9,16 +9,6 @@ interface XRayOverlayProps {
   onClose: () => void;
 }
 
-// Known entities in our architecture
-const ENTITIES = [
-  { id: 'multi-agent-chat', name: 'Orchestrator', layer: 'edge' },
-  { id: 'search-agent', name: 'Search Agent', layer: 'edge' },
-  { id: 'mcp-replay', name: 'MCP Replay', layer: 'client' },
-  { id: 'search-state', name: 'Search State', layer: 'client' },
-  { id: 'voice', name: 'Voice', layer: 'client' },
-  { id: 'mcp-server', name: 'MCP Server', layer: 'external' },
-];
-
 function getPhaseIcon(phase: TraceEvent['phase']) {
   switch (phase) {
     case 'start': return <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />;
@@ -43,8 +33,30 @@ function formatDuration(ms: number) {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
+// Derive entities dynamically from traces (DRY principle - no static list)
+function deriveEntities(traces: TraceEvent[], activeEntities: Set<string>) {
+  const entityMap = new Map<string, { hasError: boolean; hasComplete: boolean }>();
+  
+  traces.forEach(t => {
+    const current = entityMap.get(t.entity) || { hasError: false, hasComplete: false };
+    if (t.phase === 'error') current.hasError = true;
+    if (t.phase === 'complete') current.hasComplete = true;
+    entityMap.set(t.entity, current);
+  });
+  
+  return Array.from(entityMap.entries()).map(([id, state]) => ({
+    id,
+    isActive: activeEntities.has(id),
+    hasError: state.hasError,
+    hasComplete: state.hasComplete,
+  }));
+}
+
 export function XRayOverlay({ onClose }: XRayOverlayProps) {
   const { traces, activeEntities, clearTraces } = useTrace();
+
+  // Derive entities from actual traces (no static list)
+  const entities = deriveEntities(traces, activeEntities);
 
   // Calculate metrics
   const ttftEvents = traces.filter(t => t.phase === 'first_token');
@@ -86,37 +98,30 @@ export function XRayOverlay({ onClose }: XRayOverlayProps) {
         <div className="w-64 border-r border-border p-4">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Entities</h3>
           <div className="space-y-2">
-            {ENTITIES.map(entity => {
-              const isActive = activeEntities.has(entity.id);
-              const entityTraces = traces.filter(t => t.entity === entity.id);
-              const lastTrace = entityTraces[entityTraces.length - 1];
-              const hasError = entityTraces.some(t => t.phase === 'error');
-              
-              return (
+            {entities.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No entities traced yet</p>
+            ) : (
+              entities.map(entity => (
                 <div 
                   key={entity.id}
                   className={cn(
                     "flex items-center justify-between p-2 rounded-md text-sm",
-                    isActive && "bg-yellow-500/10 border border-yellow-500/30",
-                    hasError && "bg-red-500/10 border border-red-500/30",
-                    !isActive && !hasError && "bg-muted/50"
+                    entity.isActive && "bg-yellow-500/10 border border-yellow-500/30",
+                    entity.hasError && !entity.isActive && "bg-red-500/10 border border-red-500/30",
+                    !entity.isActive && !entity.hasError && "bg-muted/50"
                   )}
                 >
                   <div className="flex items-center gap-2">
                     <div className={cn(
                       "w-2 h-2 rounded-full",
-                      isActive ? "bg-yellow-500 animate-pulse" : 
-                      hasError ? "bg-red-500" :
-                      entityTraces.length > 0 ? "bg-green-500" : "bg-muted-foreground/30"
+                      entity.isActive ? "bg-yellow-500 animate-pulse" : 
+                      entity.hasError ? "bg-red-500" : "bg-green-500"
                     )} />
-                    <span>{entity.name}</span>
+                    <span className="font-mono text-xs">{entity.id}</span>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {entity.layer}
-                  </Badge>
                 </div>
-              );
-            })}
+              ))
+            )}
           </div>
 
           {/* Metrics */}
