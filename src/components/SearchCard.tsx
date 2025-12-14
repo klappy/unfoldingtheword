@@ -1,11 +1,12 @@
-import { Search, X, ChevronDown, ChevronUp, Book } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, Book, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { createMarkdownComponents, createCombinedTransformer } from '@/lib/markdownTransformers';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import type { SearchResults as NewSearchResults } from '@/hooks/useSearchState';
 import type { SearchResults as LegacySearchResults, Resource } from '@/types';
 
@@ -51,6 +52,51 @@ export function SearchCard({
   };
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(getInitialExpandedSections);
+  
+  // Track expanded word articles and their fetched content
+  const [expandedWords, setExpandedWords] = useState<Record<string, boolean>>({});
+  const [wordArticles, setWordArticles] = useState<Record<string, string>>({});
+  const [loadingWords, setLoadingWords] = useState<Record<string, boolean>>({});
+
+  // Fetch full word article content
+  const fetchWordArticle = useCallback(async (term: string) => {
+    if (wordArticles[term]) return; // Already fetched
+    
+    setLoadingWords(prev => ({ ...prev, [term]: true }));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('translation-helps-proxy', {
+        body: {
+          endpoint: 'fetch-translation-word',
+          params: {
+            term: term.toLowerCase(),
+            language: 'en',
+            organization: 'unfoldingWord',
+          },
+        },
+      });
+
+      if (error) throw error;
+      
+      // Handle markdown response
+      const content = typeof data === 'string' ? data : (data?.content || data?.definition || '');
+      setWordArticles(prev => ({ ...prev, [term]: content }));
+    } catch (err) {
+      console.error('Failed to fetch word article:', err);
+      setWordArticles(prev => ({ ...prev, [term]: 'Failed to load article content.' }));
+    } finally {
+      setLoadingWords(prev => ({ ...prev, [term]: false }));
+    }
+  }, [wordArticles]);
+
+  const toggleWordArticle = useCallback((term: string) => {
+    const isExpanding = !expandedWords[term];
+    setExpandedWords(prev => ({ ...prev, [term]: isExpanding }));
+    
+    if (isExpanding && !wordArticles[term]) {
+      fetchWordArticle(term);
+    }
+  }, [expandedWords, wordArticles, fetchWordArticle]);
 
   // Memoize markdown components with current search term and click handler
   const searchQuery = results?.query || filterQuery || '';
@@ -138,8 +184,71 @@ export function SearchCard({
                 </div>
               )}
 
-              {/* Render markdown content with transformations */}
-              {data.markdown ? (
+              {/* Special rendering for word articles - expandable */}
+              {key === 'words' ? (
+                <div className="space-y-2">
+                  {data.matches.map((match, idx) => {
+                    const term = match.reference || 'unknown';
+                    const isWordExpanded = expandedWords[term];
+                    const isLoading = loadingWords[term];
+                    const articleContent = wordArticles[term];
+
+                    return (
+                      <div key={idx} className="border border-border/30 rounded-md overflow-hidden">
+                        <button
+                          className={cn(
+                            "w-full flex items-center justify-between p-3 bg-muted/20 hover:bg-muted/40 transition-colors text-left",
+                            isWordExpanded && "border-b border-border/30"
+                          )}
+                          onClick={() => toggleWordArticle(term)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium capitalize text-primary">
+                              {term}
+                            </div>
+                            {!isWordExpanded && (
+                              <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                {match.text}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-shrink-0 ml-2">
+                            {isLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : isWordExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                        </button>
+                        
+                        {isWordExpanded && (
+                          <div className="p-3 bg-background">
+                            {isLoading ? (
+                              <div className="flex items-center justify-center py-4">
+                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                <span className="ml-2 text-sm text-muted-foreground">Loading article...</span>
+                              </div>
+                            ) : articleContent ? (
+                              <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown components={markdownComponents}>
+                                  {articleContent.replace(/\\n/g, '\n')}
+                                </ReactMarkdown>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-muted-foreground">
+                                {match.text}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : data.markdown ? (
+                /* Render markdown content with transformations */
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown components={markdownComponents}>
                     {data.markdown.replace(/\\n/g, '\n')}
