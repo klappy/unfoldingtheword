@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useTrace } from '@/contexts/TraceContext';
 
 export interface SearchMatch {
   reference: string;
@@ -59,6 +60,7 @@ function getResourcePrefs() {
 }
 
 export function useSearchState() {
+  const { trace } = useTrace();
   const [state, setState] = useState<SearchState>({
     results: null,
     isLoading: false,
@@ -80,6 +82,8 @@ export function useSearchState() {
     abortControllerRef.current = new AbortController();
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    trace('search-agent', 'start', `Query: "${query}" Scope: ${scope}`);
 
     const prefs = getResourcePrefs();
 
@@ -101,6 +105,8 @@ export function useSearchState() {
 
       const results = data as SearchResults;
       
+      trace('search-agent', 'complete', `Found ${results.scripture?.totalCount || 0} scripture, ${results.notes?.totalCount || 0} notes`);
+      
       setState({
         results,
         isLoading: false,
@@ -110,6 +116,7 @@ export function useSearchState() {
       return results;
     } catch (error) {
       console.error('[useSearchState] Error executing search:', error);
+      trace('search-agent', 'error', error instanceof Error ? error.message : 'Unknown error');
       setState(prev => ({
         ...prev,
         isLoading: false,

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Resource, ScripturePassage } from '@/types';
+import { useTrace } from '@/contexts/TraceContext';
 
 // Tool call signature stored in messages
 export interface ToolCall {
@@ -275,6 +276,7 @@ function getResourceType(resourceType: string): Resource['type'] {
 }
 
 export function useMcpReplay() {
+  const { trace } = useTrace();
   const [state, setState] = useState<McpState>({
     scripture: null,
     resources: [],
@@ -290,6 +292,8 @@ export function useMcpReplay() {
     if (!toolCalls || toolCalls.length === 0) {
       return;
     }
+    
+    trace('mcp-replay', 'start', `Replaying ${toolCalls.length} tool calls`);
 
     // Cancel any in-flight requests
     if (abortControllerRef.current) {
@@ -323,6 +327,8 @@ export function useMcpReplay() {
         }
       }
 
+      trace('mcp-replay', 'complete', `Scripture: ${scripture ? 'yes' : 'no'}, Resources: ${resources.length}, Search: ${searchResults ? 'yes' : 'no'}`);
+      
       setState({
         scripture,
         resources,
@@ -332,13 +338,14 @@ export function useMcpReplay() {
       });
     } catch (error) {
       console.error('[McpReplay] Error replaying tool calls:', error);
+      trace('mcp-replay', 'error', error instanceof Error ? error.message : 'Unknown error');
       setState(prev => ({
         ...prev,
         isLoading: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       }));
     }
-  }, []);
+  }, [trace]);
 
   // Clear state
   const clearState = useCallback(() => {
