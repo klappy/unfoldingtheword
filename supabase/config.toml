@@ -3,6 +3,9 @@ project_id = "nhevmmkyxfvufyzshzrj"
 [functions.multi-agent-chat]
 verify_jwt = false
 
+[functions.search-agent]
+verify_jwt = false
+
 [functions.translation-helps-proxy]
 verify_jwt = false
 

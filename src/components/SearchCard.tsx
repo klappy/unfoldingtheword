@@ -1,37 +1,30 @@
-import { Search, Book, X, ChevronRight } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, Book } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import type { Resource } from '@/types';
+import { useState, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { createMarkdownComponents } from '@/lib/markdownTransformers';
+import type { SearchResults as NewSearchResults } from '@/hooks/useSearchState';
+import type { SearchResults as LegacySearchResults, Resource } from '@/types';
 
-interface SearchMatch {
-  book: string;
-  chapter: number;
-  verse: number;
-  text: string;
-}
+// Union type to support both old and new formats during migration
+type SearchCardResults = NewSearchResults | LegacySearchResults | null;
 
 interface SearchCardProps {
-  results: {
-    query: string;
-    reference?: string;
-    matches: SearchMatch[];
-    resource?: string;
-    totalMatches: number;
-    breakdown: {
-      byTestament?: Record<string, number>;
-      byBook: Record<string, number>;
-    };
-  } | null;
+  results: SearchCardResults;
   onClearSearch: () => void;
   onVerseClick: (reference: string) => void;
-  // When searching non-scripture resources (notes/questions), we still want
-  // to show the active filter and match count even if there are no scripture matches.
+  // Legacy props for backwards compatibility
   filterQuery?: string | null;
   filterReference?: string | null;
   resourceMatchCount?: number;
-  // Optional: actual resource results so we can render a preview list
   resourceResults?: Resource[];
+}
+
+// Type guard to check if results are in the new format
+function isNewFormat(results: SearchCardResults): results is NewSearchResults {
+  return results !== null && 'scopeType' in results;
 }
 
 export function SearchCard({
@@ -43,7 +36,21 @@ export function SearchCard({
   resourceMatchCount,
   resourceResults,
 }: SearchCardProps) {
-  // If we have neither scripture search results nor a resource-level filter, show empty state
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    scripture: true,
+    notes: false,
+    questions: false,
+    words: false,
+  });
+
+  // Memoize markdown components with current search term and click handler
+  const searchQuery = results?.query || filterQuery || '';
+  const markdownComponents = useMemo(
+    () => createMarkdownComponents(searchQuery, onVerseClick),
+    [searchQuery, onVerseClick]
+  );
+
+  // Handle empty state
   if (!results && !filterQuery) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center p-6 text-muted-foreground">
@@ -53,6 +60,177 @@ export function SearchCard({
     );
   }
 
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // New format rendering
+  if (isNewFormat(results)) {
+    const { query, scope, scripture, notes, questions, words } = results;
+
+    const totalScriptureMatches = scripture?.totalCount || 0;
+    const totalNotesMatches = notes?.totalCount || 0;
+    const totalQuestionsMatches = questions?.totalCount || 0;
+    const totalWordsMatches = words?.totalCount || 0;
+    const totalMatches = totalScriptureMatches + totalNotesMatches + totalQuestionsMatches + totalWordsMatches;
+
+    const renderSection = (
+      title: string,
+      key: string,
+      data: { markdown: string; matches: any[]; totalCount: number; breakdown?: any } | null,
+      icon: string
+    ) => {
+      if (!data || data.totalCount === 0) return null;
+
+      const isExpanded = expandedSections[key];
+
+      return (
+        <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors"
+            onClick={() => toggleSection(key)}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm">{icon}</span>
+              <span className="font-medium text-sm">{title}</span>
+              <Badge variant="secondary" className="text-xs">
+                {data.totalCount}
+              </Badge>
+            </div>
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+
+          {isExpanded && (
+            <div className="p-4 border-t border-border/30">
+              {/* Show breakdown badges for scripture */}
+              {key === 'scripture' && data.breakdown?.byBook && (
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {Object.entries(data.breakdown.byBook)
+                    .sort((a, b) => (b[1] as number) - (a[1] as number))
+                    .slice(0, 8)
+                    .map(([book, count]) => (
+                      <Badge
+                        key={book}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-accent text-xs"
+                        onClick={() => onVerseClick(`${book} 1`)}
+                      >
+                        {book}: {count as number}
+                      </Badge>
+                    ))}
+                </div>
+              )}
+
+              {/* Render markdown content with transformations */}
+              {data.markdown ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown components={markdownComponents}>
+                    {data.markdown}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                /* Fallback: render structured matches */
+                <div className="space-y-3">
+                  {data.matches.slice(0, 50).map((match, idx) => (
+                    <button
+                      key={idx}
+                      className="block text-left w-full p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors border border-border/30"
+                      onClick={() => {
+                        if (match.book && match.chapter) {
+                          onVerseClick(`${match.book} ${match.chapter}${match.verse ? `:${match.verse}` : ''}`);
+                        } else if (match.reference) {
+                          onVerseClick(match.reference);
+                        }
+                      }}
+                    >
+                      <div className="text-xs text-muted-foreground mb-1 font-medium">
+                        {match.reference || (match.book ? `${match.book} ${match.chapter}:${match.verse}` : '')}
+                      </div>
+                      <div className="text-sm line-clamp-3">
+                        <HighlightedText text={match.text} term={query} />
+                      </div>
+                    </button>
+                  ))}
+                  {data.matches.length > 50 && (
+                    <p className="text-xs text-muted-foreground text-center pt-2">
+                      Showing first 50 of {data.matches.length} matches
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="h-full w-full flex flex-col bg-background">
+        {/* Header */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-border/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-primary" />
+              <span className="font-medium text-sm">
+                "{query}"
+                <span className="text-muted-foreground ml-1">in {scope}</span>
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onClearSearch}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Summary stats */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+            <Badge variant="secondary" className="text-xs">
+              {totalMatches} total matches
+            </Badge>
+            {totalScriptureMatches > 0 && (
+              <span>📖 {totalScriptureMatches}</span>
+            )}
+            {totalNotesMatches > 0 && (
+              <span>📝 {totalNotesMatches}</span>
+            )}
+            {totalQuestionsMatches > 0 && (
+              <span>❓ {totalQuestionsMatches}</span>
+            )}
+            {totalWordsMatches > 0 && (
+              <span>📚 {totalWordsMatches}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Results sections */}
+        <ScrollArea className="flex-1">
+          <div className="p-4 space-y-3 pb-24">
+            {renderSection('Scripture', 'scripture', scripture, '📖')}
+            {renderSection('Translation Notes', 'notes', notes, '📝')}
+            {renderSection('Translation Questions', 'questions', questions, '❓')}
+            {renderSection('Translation Words', 'words', words, '📚')}
+
+            {totalMatches === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No results found for "{query}" in {scope}.</p>
+                <p className="text-sm mt-2">Try a different search term or broader scope.</p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  }
+
+  // Legacy format rendering (backwards compatible)
   const hasScriptureResults = !!results;
   const displayQuery = results?.query ?? filterQuery ?? '';
   const displayReference = results?.reference ?? filterReference ?? undefined;
@@ -64,28 +242,13 @@ export function SearchCard({
   const breakdown = results?.breakdown ?? { byTestament: {}, byBook: {} };
 
   // Group matches by book
-  const matchesByBook: Record<string, SearchMatch[]> = {};
+  const matchesByBook: Record<string, typeof matches> = {};
   for (const match of matches) {
     if (!matchesByBook[match.book]) {
       matchesByBook[match.book] = [];
     }
     matchesByBook[match.book].push(match);
   }
-
-  const highlightTerm = (text: string, term: string) => {
-    if (!term) return text;
-    const regex = new RegExp(`(${term})`, 'gi');
-    const parts = text.split(regex);
-    return parts.map((part, i) =>
-      regex.test(part) ? (
-        <mark key={i} className="bg-primary/30 text-foreground rounded px-0.5">
-          {part}
-        </mark>
-      ) : (
-        part
-      )
-    );
-  };
 
   return (
     <div className="h-full w-full flex flex-col bg-background">
@@ -181,7 +344,6 @@ export function SearchCard({
               >
                 <Book className="h-3 w-3" />
                 {book}
-                <ChevronRight className="h-3 w-3" />
               </button>
               <div className="space-y-2 pl-5">
                 {bookMatches.map((match, idx) => (
@@ -194,7 +356,7 @@ export function SearchCard({
                       {match.book} {match.chapter}:{match.verse}
                     </div>
                     <div className="text-sm line-clamp-2">
-                      {highlightTerm(match.text, displayQuery)}
+                      <HighlightedText text={match.text} term={displayQuery} />
                     </div>
                   </button>
                 ))}
@@ -231,7 +393,7 @@ export function SearchCard({
                         {res.title}
                       </div>
                       <div className="text-sm text-muted-foreground line-clamp-3">
-                        {highlightTerm(res.content, displayQuery)}
+                        <HighlightedText text={res.content} term={displayQuery} />
                       </div>
                     </div>
                   ))}
@@ -248,5 +410,27 @@ export function SearchCard({
         </div>
       </ScrollArea>
     </div>
+  );
+}
+
+// Simple highlight component for fallback rendering
+function HighlightedText({ text, term }: { text: string; term: string }) {
+  if (!term || !text) return <>{text}</>;
+
+  const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-primary/30 text-foreground rounded px-0.5">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
   );
 }
