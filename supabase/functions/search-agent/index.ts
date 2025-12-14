@@ -9,7 +9,7 @@ const MCP_BASE_URL = 'https://translation-helps-mcp.pages.dev';
 
 // Scope types the search agent understands
 type SearchScope = 'verse' | 'chapter' | 'book' | 'testament' | 'bible';
-type ResourceType = 'scripture' | 'notes' | 'questions' | 'words';
+type ResourceType = 'scripture' | 'notes' | 'questions' | 'words' | 'academy';
 
 interface SearchRequest {
   query: string;              // The search term/phrase
@@ -47,6 +47,7 @@ interface SearchResponse {
   notes: ResourceSearchResult | null;
   questions: ResourceSearchResult | null;
   words: ResourceSearchResult | null;
+  academy: ResourceSearchResult | null;
   toolCalls: Array<{ tool: string; args: Record<string, any> }>;
   _timing?: { startMs: number; endMs: number; durationMs: number };
 }
@@ -490,6 +491,94 @@ async function searchWords(
   };
 }
 
+// Search translation academy articles with filter
+// Academy articles are GLOBAL - not scoped by testament/reference
+async function searchAcademy(
+  filter: string,
+  language: string,
+  organization: string
+): Promise<ResourceSearchResult> {
+  const allMatches: SearchMatch[] = [];
+  const allMarkdown: string[] = [];
+
+  const params = new URLSearchParams();
+  params.set('filter', filter);
+  params.set('language', language);
+  params.set('organization', organization);
+  
+  const url = `${MCP_BASE_URL}/api/fetch-translation-academy?${params.toString()}`;
+  
+  console.log(`[search-agent] Academy search (global): ${url}`);
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[search-agent] Academy search failed: ${response.status}`);
+      return { markdown: '', matches: [], totalCount: 0 };
+    }
+    
+    const contentType = response.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      
+      if (data.matches && Array.isArray(data.matches)) {
+        for (const item of data.matches) {
+          allMatches.push({
+            reference: item.title || item.article || filter,
+            text: item.content || item.definition || '',
+          });
+        }
+      } else if (data.title || data.content) {
+        allMatches.push({
+          reference: data.title || data.article || filter,
+          text: data.content || '',
+        });
+        allMarkdown.push(`## ${data.title || filter}\n\n${data.content || ''}`);
+      }
+    } else {
+      const text = await response.text();
+      if (text.trim()) {
+        allMarkdown.push(text);
+        // Parse sections from markdown
+        const lines = text.split('\n');
+        let lastRef = '';
+        let currentContent = '';
+        
+        for (const line of lines) {
+          const headerMatch = line.match(/^#{1,3}\s+(.+)$/);
+          if (headerMatch) {
+            if (lastRef && currentContent.trim()) {
+              allMatches.push({
+                reference: lastRef,
+                text: currentContent.trim().substring(0, 300),
+              });
+            }
+            lastRef = headerMatch[1].trim();
+            currentContent = '';
+          } else if (lastRef) {
+            currentContent += line + '\n';
+          }
+        }
+        if (lastRef && currentContent.trim()) {
+          allMatches.push({
+            reference: lastRef,
+            text: currentContent.trim().substring(0, 300),
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[search-agent] Error searching academy:`, error);
+  }
+
+  return {
+    markdown: allMarkdown.join('\n\n'),
+    matches: allMatches,
+    totalCount: allMatches.length,
+  };
+}
+
 serve(async (req) => {
   const startMs = Date.now();
   
@@ -502,7 +591,7 @@ serve(async (req) => {
     const { 
       query, 
       scope = 'Bible', 
-      resourceTypes = ['scripture', 'notes', 'questions', 'words'],
+      resourceTypes = ['scripture', 'notes', 'questions', 'words', 'academy'],
       language = 'en',
       organization = 'unfoldingWord',
       resource = 'ult'
@@ -546,6 +635,13 @@ serve(async (req) => {
       );
     }
 
+    if (resourceTypes.includes('academy')) {
+      searchPromises.push(
+        searchAcademy(query, language, organization)
+          .then(r => ['academy', r] as [string, ResourceSearchResult])
+      );
+    }
+
     toolCalls.push({
       tool: 'search-agent',
       args: { query, scope, resourceTypes, language, organization, resource },
@@ -563,6 +659,7 @@ serve(async (req) => {
       notes: null,
       questions: null,
       words: null,
+      academy: null,
       toolCalls,
       _timing: { startMs, endMs, durationMs: endMs - startMs },
     };
@@ -578,6 +675,7 @@ serve(async (req) => {
       response.notes ? `notes:${response.notes.totalCount}` : null,
       response.questions ? `questions:${response.questions.totalCount}` : null,
       response.words ? `words:${response.words.totalCount}` : null,
+      response.academy ? `academy:${response.academy.totalCount}` : null,
     ].filter(Boolean).join(', ');
     
     console.log(`[search-agent] Results: ${summary || 'none'} (${endMs - startMs}ms)`);
