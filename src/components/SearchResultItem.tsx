@@ -21,9 +21,11 @@ interface SearchResultItemProps {
   currentLanguage?: string;
   // For word/academy - allows fetching full content
   articleId?: string;
+  // Optional metadata from search results
+  metadata?: Record<string, any>;
 }
 
-const typeIcons = {
+const typeIcons: Record<SearchResultType, React.ComponentType<{ className?: string }>> = {
   scripture: BookMarked,
   notes: FileText,
   questions: HelpCircle,
@@ -31,23 +33,32 @@ const typeIcons = {
   academy: GraduationCap,
 };
 
-const typeColors = {
-  scripture: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-  notes: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-  questions: 'text-violet-400 bg-violet-500/10 border-violet-500/20',
-  words: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
-  academy: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
+const typeColors: Record<SearchResultType, { text: string; bg: string; border: string }> = {
+  scripture: { text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+  notes: { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+  questions: { text: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
+  words: { text: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
+  academy: { text: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/20' },
 };
 
-const typeLabels = {
+const typeLabels: Record<SearchResultType, string> = {
   scripture: 'Scripture',
-  notes: 'Translation Note',
-  questions: 'Checking Question',
-  words: 'Key Term',
-  academy: 'Academy Article',
+  notes: 'Note',
+  questions: 'Question',
+  words: 'Term',
+  academy: 'Article',
 };
 
 const PREVIEW_LENGTH = 200;
+
+// Extract a prominent display title from metadata or reference
+function getDisplayTitle(type: SearchResultType, reference: string, metadata?: Record<string, any>): string {
+  if (type === 'words') return metadata?.term || metadata?.title || reference;
+  if (type === 'academy') return metadata?.title || metadata?.moduleId || reference;
+  if (type === 'questions') return metadata?.question || reference;
+  if (type === 'notes') return metadata?.title || reference;
+  return reference; // Scripture - reference is the title
+}
 
 function SearchResultItemInner({
   type,
@@ -59,14 +70,17 @@ function SearchResultItemInner({
   onSearch,
   currentLanguage,
   articleId,
+  metadata,
 }: SearchResultItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [isLoadingFull, setIsLoadingFull] = useState(false);
 
   const Icon = typeIcons[type];
-  const colorClasses = typeColors[type];
+  const colors = typeColors[type];
   const label = typeLabels[type];
+  const displayTitle = getDisplayTitle(type, reference, metadata);
+  const isScriptureType = type === 'scripture';
 
   // Use full content if fetched, otherwise use raw markdown from search
   const displayContent = fullContent || rawMarkdown;
@@ -141,6 +155,15 @@ function SearchResultItemInner({
   // Create markdown components with search highlighting and reference clicking
   const markdownComponents = createMarkdownComponents(searchQuery, onVerseClick);
 
+  // Handle click - for scripture, navigate directly; for others, expand
+  const handleClick = () => {
+    if (isScriptureType && onVerseClick) {
+      onVerseClick(reference);
+    } else {
+      handleExpand();
+    }
+  };
+
   return (
     <div className="glass-card rounded-xl overflow-hidden group relative animate-fade-in border border-border/30">
       {/* Action buttons */}
@@ -161,24 +184,38 @@ function SearchResultItemInner({
       <div
         role="button"
         tabIndex={0}
-        onClick={handleExpand}
-        onKeyDown={(e) => e.key === 'Enter' && handleExpand()}
+        onClick={handleClick}
+        onKeyDown={(e) => e.key === 'Enter' && handleClick()}
         className={cn(
           "w-full p-4 text-left transition-colors",
-          canExpand && "hover:bg-white/5 cursor-pointer"
+          (canExpand || isScriptureType) && "hover:bg-white/5 cursor-pointer"
         )}
       >
         <div className="flex items-start gap-3">
-          <div className={cn('p-2 rounded-lg border shrink-0', colorClasses)}>
+          <div className={cn('p-2 rounded-lg border shrink-0', colors.bg, colors.border, colors.text)}>
             <Icon className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0 pr-16">
-            <div className="flex items-center gap-2 mb-1">
-              <span className={cn('text-[10px] uppercase tracking-wider font-medium', colorClasses.split(' ')[0])}>
+            {/* Prominent title */}
+            <h3 className="font-medium text-foreground text-sm mb-1 line-clamp-2">
+              {displayTitle}
+            </h3>
+            
+            {/* Type label and clickable reference (if different from title) */}
+            <div className="flex items-center gap-2">
+              <span className={cn('text-[10px] uppercase tracking-wider font-medium', colors.text)}>
                 {label}
               </span>
-              {reference && (
-                <span className="text-[10px] text-muted-foreground">• {reference}</span>
+              {reference && reference !== displayTitle && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onVerseClick?.(reference);
+                  }}
+                  className="text-[10px] text-primary hover:underline truncate"
+                >
+                  • {reference}
+                </button>
               )}
             </div>
 

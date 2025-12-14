@@ -1,4 +1,4 @@
-import { Search, X, ChevronDown, ChevronUp, Book } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, Book, BookMarked, FileText, HelpCircle, BookOpen, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,19 @@ import { cn } from '@/lib/utils';
 import { SearchResultItem, type SearchResultType } from '@/components/SearchResultItem';
 import type { SearchResults as NewSearchResults } from '@/hooks/useSearchState';
 import type { SearchResults as LegacySearchResults, Resource } from '@/types';
+
+// Section icon and color configuration
+const sectionConfig: Record<SearchResultType, { 
+  icon: React.ComponentType<{ className?: string }>; 
+  color: string; 
+  bgColor: string;
+}> = {
+  scripture: { icon: BookMarked, color: 'text-amber-400', bgColor: 'bg-amber-400/10' },
+  notes: { icon: FileText, color: 'text-emerald-400', bgColor: 'bg-emerald-400/10' },
+  questions: { icon: HelpCircle, color: 'text-violet-400', bgColor: 'bg-violet-400/10' },
+  words: { icon: BookOpen, color: 'text-rose-400', bgColor: 'bg-rose-400/10' },
+  academy: { icon: GraduationCap, color: 'text-sky-400', bgColor: 'bg-sky-400/10' },
+};
 
 // Union type to support both old and new formats during migration
 type SearchCardResults = NewSearchResults | LegacySearchResults | null;
@@ -94,12 +107,13 @@ export function SearchCard({
     const renderSection = (
       title: string,
       key: SearchResultType,
-      data: { markdown: string; matches: any[]; totalCount: number; breakdown?: any } | null,
-      icon: string
+      data: { markdown: string; matches: any[]; totalCount: number; breakdown?: any } | null
     ) => {
       if (!data || data.totalCount === 0) return null;
 
       const isExpanded = expandedSections[key];
+      const config = sectionConfig[key];
+      const Icon = config.icon;
 
       return (
         <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
@@ -111,9 +125,9 @@ export function SearchCard({
             onClick={() => toggleSection(key)}
           >
             <div className="flex items-center gap-2">
-              <span className="text-sm">{icon}</span>
+              <Icon className={cn("h-4 w-4", config.color)} />
               <span className="font-medium text-sm">{title}</span>
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className={cn("text-xs", config.bgColor, config.color)}>
                 {data.totalCount}
               </Badge>
             </div>
@@ -139,6 +153,7 @@ export function SearchCard({
                   onSearch={onSearch}
                   currentLanguage={currentLanguage}
                   articleId={match.metadata?.moduleId || match.metadata?.term}
+                  metadata={match.metadata}
                 />
               ))}
             </div>
@@ -169,25 +184,40 @@ export function SearchCard({
             </Button>
           </div>
 
-          {/* Summary stats */}
+          {/* Summary stats with icons */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
             <Badge variant="secondary" className="text-xs">
-              {totalMatches} total matches
+              {totalMatches} total
             </Badge>
             {totalScriptureMatches > 0 && (
-              <span>📖 {totalScriptureMatches}</span>
+              <span className="flex items-center gap-1">
+                <BookMarked className="h-3 w-3 text-amber-400" />
+                <span className="text-amber-400">{totalScriptureMatches}</span>
+              </span>
             )}
             {totalNotesMatches > 0 && (
-              <span>📝 {totalNotesMatches}</span>
+              <span className="flex items-center gap-1">
+                <FileText className="h-3 w-3 text-emerald-400" />
+                <span className="text-emerald-400">{totalNotesMatches}</span>
+              </span>
             )}
             {totalQuestionsMatches > 0 && (
-              <span>❓ {totalQuestionsMatches}</span>
+              <span className="flex items-center gap-1">
+                <HelpCircle className="h-3 w-3 text-violet-400" />
+                <span className="text-violet-400">{totalQuestionsMatches}</span>
+              </span>
             )}
             {totalWordsMatches > 0 && (
-              <span>📚 {totalWordsMatches}</span>
+              <span className="flex items-center gap-1">
+                <BookOpen className="h-3 w-3 text-rose-400" />
+                <span className="text-rose-400">{totalWordsMatches}</span>
+              </span>
             )}
             {totalAcademyMatches > 0 && (
-              <span>🎓 {totalAcademyMatches}</span>
+              <span className="flex items-center gap-1">
+                <GraduationCap className="h-3 w-3 text-sky-400" />
+                <span className="text-sky-400">{totalAcademyMatches}</span>
+              </span>
             )}
           </div>
         </div>
@@ -195,11 +225,11 @@ export function SearchCard({
         {/* Results sections */}
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-3 pb-24">
-            {renderSection('Scripture', 'scripture', scripture, '📖')}
-            {renderSection('Translation Notes', 'notes', notes, '📝')}
-            {renderSection('Translation Questions', 'questions', questions, '❓')}
-            {renderSection('Translation Words', 'words', words, '📚')}
-            {renderSection('Academy Articles', 'academy', academy, '🎓')}
+            {renderSection('Scripture', 'scripture', scripture)}
+            {renderSection('Translation Notes', 'notes', notes)}
+            {renderSection('Translation Questions', 'questions', questions)}
+            {renderSection('Translation Words', 'words', words)}
+            {renderSection('Academy Articles', 'academy', academy)}
 
             {totalMatches === 0 && (
               <div className="text-center py-8 text-muted-foreground">
