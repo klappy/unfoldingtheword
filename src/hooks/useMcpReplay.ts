@@ -9,21 +9,34 @@ export interface ToolCall {
   args: Record<string, any>;
 }
 
+// Search result section from search-agent
+interface ResourceSearchResult {
+  markdown: string;
+  matches: Array<{ reference?: string; book?: string; chapter?: number; verse?: number; text: string }>;
+  totalCount: number;
+  breakdown?: {
+    byTestament?: Record<string, number>;
+    byBook?: Record<string, number>;
+  };
+}
+
+// Full search results format matching SearchCard expectations
+export interface SearchResults {
+  query: string;
+  scope: string;
+  scopeType: 'verse' | 'chapter' | 'book' | 'testament' | 'bible';
+  scripture: ResourceSearchResult | null;
+  notes: ResourceSearchResult | null;
+  questions: ResourceSearchResult | null;
+  words: ResourceSearchResult | null;
+  toolCalls: Array<{ tool: string; args: Record<string, any> }>;
+}
+
 // Aggregated state from replaying tool calls
 export interface McpState {
   scripture: ScripturePassage | null;
   resources: Resource[];
-  searchResults: {
-    query: string;
-    reference: string;
-    matches: Array<{ book: string; chapter: number; verse: number; text: string }>;
-    resource?: string;
-    totalMatches: number;
-    breakdown: {
-      byTestament?: Record<string, number>;
-      byBook: Record<string, number>;
-    };
-  } | null;
+  searchResults: SearchResults | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -159,24 +172,17 @@ async function replayToolCall(
           const notesCount = data.notes?.totalCount || 0;
           trace('search-agent', 'complete', `${scriptureCount} scripture, ${notesCount} notes`);
 
-          if (data.scripture?.matches) {
-            result.searchResults = {
-              query: data.query,
-              reference: data.scope,
-              matches: data.scripture.matches.map((m: any) => ({
-                book: m.book || '',
-                chapter: m.chapter || 0,
-                verse: m.verse || 0,
-                text: m.text || '',
-              })),
-              resource: args.resource || prefs.resource,
-              totalMatches: data.scripture.totalCount || 0,
-              breakdown: {
-                byTestament: data.scripture.breakdown?.byTestament || {},
-                byBook: data.scripture.breakdown?.byBook || {},
-              },
-            };
-          }
+          // Return the full search-agent response in new format
+          result.searchResults = {
+            query: data.query,
+            scope: data.scope,
+            scopeType: data.scopeType || 'book',
+            scripture: data.scripture || null,
+            notes: data.notes || null,
+            questions: data.questions || null,
+            words: data.words || null,
+            toolCalls: data.toolCalls || [],
+          };
 
           // Collect resources from search results
           const resources: Resource[] = [];
