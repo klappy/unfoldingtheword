@@ -317,8 +317,8 @@ const Index = () => {
           if (convId) {
             await updateConversation(convId, { scriptureReference: scriptureRef });
           }
-          // Navigate to scripture card after loading
-          navigateToCard('scripture');
+          // NOTE: Don't navigate here - let the navigationHint from result control navigation
+          // This prevents search intent from incorrectly navigating to scripture
         } catch (error) {
           console.error('[Index] Failed to load scripture:', error);
         }
