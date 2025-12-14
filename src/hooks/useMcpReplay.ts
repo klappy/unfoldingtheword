@@ -109,7 +109,8 @@ function parseSearchMarkdown(markdown: string): {
 // Replay a single tool call against MCP server
 async function replayToolCall(
   toolCall: ToolCall,
-  prefs: { language: string; organization: string; resource: string }
+  prefs: { language: string; organization: string; resource: string },
+  trace: (entity: string, phase: 'start' | 'first_token' | 'tool_call' | 'complete' | 'error', message?: string, metadata?: Record<string, any>) => void
 ): Promise<{
   scripture?: ScripturePassage;
   resources?: Resource[];
@@ -117,6 +118,12 @@ async function replayToolCall(
 }> {
   const { tool, args } = toolCall;
   const result: ReturnType<typeof replayToolCall> extends Promise<infer T> ? T : never = {};
+
+  // Trace MCP server call with entity metadata (DRY - metadata defined at source)
+  trace('mcp-server', 'start', `${tool}: ${JSON.stringify(args).substring(0, 50)}...`, {
+    displayName: 'MCP Server',
+    layer: 'external',
+  });
 
   try {
     switch (tool) {
@@ -258,8 +265,12 @@ async function replayToolCall(
         break;
       }
     }
+    
+    // Trace MCP server completion
+    trace('mcp-server', 'complete', `${tool} returned ${result.scripture ? 'scripture' : result.resources ? `${result.resources.length} resources` : result.searchResults ? 'search results' : 'no data'}`);
   } catch (error) {
     console.error(`[McpReplay] Error replaying ${tool}:`, error);
+    trace('mcp-server', 'error', `${tool}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 
   return result;
@@ -313,9 +324,9 @@ export function useMcpReplay() {
     let searchResults: McpState['searchResults'] = null;
 
     try {
-      // Replay all tool calls in parallel
+      // Replay all tool calls in parallel, passing trace function for MCP server tracing
       const results = await Promise.all(
-        toolCalls.map(tc => replayToolCall(tc, prefs))
+        toolCalls.map(tc => replayToolCall(tc, prefs, trace))
       );
 
       // Aggregate results
