@@ -280,7 +280,7 @@ export function ChatCard({
                       hr: () => <hr className="border-border/30 my-3" />,
                     }}
                   >
-                    {message.content}
+                    {message.content.replace(/\\n/g, '\n')}
                   </ReactMarkdown>
                   
                   {/* Inline streaming indicator */}
