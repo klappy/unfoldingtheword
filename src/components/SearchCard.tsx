@@ -41,14 +41,15 @@ export function SearchCard({
   // Determine which section to auto-expand (first one with results)
   const getInitialExpandedSections = () => {
     if (isNewFormat(results)) {
-      const { scripture, notes, questions, words } = results;
+      const { scripture, notes, questions, words, academy } = results;
       // Expand first section that has content
-      if (scripture?.totalCount) return { scripture: true, notes: false, questions: false, words: false };
-      if (notes?.totalCount) return { scripture: false, notes: true, questions: false, words: false };
-      if (questions?.totalCount) return { scripture: false, notes: false, questions: true, words: false };
-      if (words?.totalCount) return { scripture: false, notes: false, questions: false, words: true };
+      if (scripture?.totalCount) return { scripture: true, notes: false, questions: false, words: false, academy: false };
+      if (notes?.totalCount) return { scripture: false, notes: true, questions: false, words: false, academy: false };
+      if (questions?.totalCount) return { scripture: false, notes: false, questions: true, words: false, academy: false };
+      if (words?.totalCount) return { scripture: false, notes: false, questions: false, words: true, academy: false };
+      if (academy?.totalCount) return { scripture: false, notes: false, questions: false, words: false, academy: true };
     }
-    return { scripture: true, notes: false, questions: false, words: false };
+    return { scripture: true, notes: false, questions: false, words: false, academy: false };
   };
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(getInitialExpandedSections);
@@ -121,13 +122,14 @@ export function SearchCard({
 
   // New format rendering
   if (isNewFormat(results)) {
-    const { query, scope, scripture, notes, questions, words } = results;
+    const { query, scope, scripture, notes, questions, words, academy } = results;
 
     const totalScriptureMatches = scripture?.totalCount || 0;
     const totalNotesMatches = notes?.totalCount || 0;
     const totalQuestionsMatches = questions?.totalCount || 0;
     const totalWordsMatches = words?.totalCount || 0;
-    const totalMatches = totalScriptureMatches + totalNotesMatches + totalQuestionsMatches + totalWordsMatches;
+    const totalAcademyMatches = academy?.totalCount || 0;
+    const totalMatches = totalScriptureMatches + totalNotesMatches + totalQuestionsMatches + totalWordsMatches + totalAcademyMatches;
 
     const renderSection = (
       title: string,
@@ -310,6 +312,9 @@ export function SearchCard({
             {totalWordsMatches > 0 && (
               <span>📚 {totalWordsMatches}</span>
             )}
+            {totalAcademyMatches > 0 && (
+              <span>🎓 {totalAcademyMatches}</span>
+            )}
           </div>
         </div>
 
@@ -320,6 +325,7 @@ export function SearchCard({
             {renderSection('Translation Notes', 'notes', notes, '📝')}
             {renderSection('Translation Questions', 'questions', questions, '❓')}
             {renderSection('Translation Words', 'words', words, '📚')}
+            {renderSection('Academy Articles', 'academy', academy, '🎓')}
 
             {totalMatches === 0 && (
               <div className="text-center py-8 text-muted-foreground">
