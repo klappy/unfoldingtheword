@@ -28,10 +28,22 @@ interface TraceContextValue {
 
 const TraceContext = createContext<TraceContextValue | null>(null);
 
+// Helper to derive active entities from counter map
+function deriveActiveEntities(counters: Map<string, number>): Set<string> {
+  const active = new Set<string>();
+  counters.forEach((count, entity) => {
+    if (count > 0) active.add(entity);
+  });
+  return active;
+}
+
 export function TraceProvider({ children }: { children: React.ReactNode }) {
   const [traces, setTraces] = useState<TraceEvent[]>([]);
-  const [activeEntities, setActiveEntities] = useState<Set<string>>(new Set());
   const [entityMetadata, setEntityMetadata] = useState<Map<string, EntityMetadata>>(new Map());
+  
+  // Use counter map for concurrent call tracking (fixes parallel call issue)
+  const activeCounters = useRef<Map<string, number>>(new Map());
+  const [activeEntities, setActiveEntities] = useState<Set<string>>(new Set());
   const startTimers = useRef<Map<string, number>>(new Map());
 
   const trace = useCallback((
@@ -54,23 +66,34 @@ export function TraceProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (phase === 'start') {
-      startTimers.current.set(entity, now);
-      setActiveEntities(prev => new Set([...prev, entity]));
+      // Increment counter for this entity (supports parallel calls)
+      const currentCount = activeCounters.current.get(entity) || 0;
+      activeCounters.current.set(entity, currentCount + 1);
+      startTimers.current.set(`${entity}-${now}`, now);
+      setActiveEntities(deriveActiveEntities(activeCounters.current));
     } else if (phase === 'complete' || phase === 'error') {
-      const startTime = startTimers.current.get(entity);
-      if (startTime) {
-        duration = now - startTime;
-        startTimers.current.delete(entity);
+      // Decrement counter (only mark inactive when all parallel calls complete)
+      const currentCount = activeCounters.current.get(entity) || 0;
+      activeCounters.current.set(entity, Math.max(0, currentCount - 1));
+      
+      // Find and use the oldest start timer for duration
+      const timerKey = Array.from(startTimers.current.keys()).find(k => k.startsWith(entity));
+      if (timerKey) {
+        const startTime = startTimers.current.get(timerKey);
+        if (startTime) {
+          duration = now - startTime;
+          startTimers.current.delete(timerKey);
+        }
       }
-      setActiveEntities(prev => {
-        const next = new Set(prev);
-        next.delete(entity);
-        return next;
-      });
+      setActiveEntities(deriveActiveEntities(activeCounters.current));
     } else if (phase === 'first_token') {
-      const startTime = startTimers.current.get(entity);
-      if (startTime) {
-        duration = now - startTime; // TTFT
+      // Find start timer for TTFT calculation
+      const timerKey = Array.from(startTimers.current.keys()).find(k => k.startsWith(entity));
+      if (timerKey) {
+        const startTime = startTimers.current.get(timerKey);
+        if (startTime) {
+          duration = now - startTime; // TTFT
+        }
       }
     }
 
@@ -94,6 +117,7 @@ export function TraceProvider({ children }: { children: React.ReactNode }) {
 
   const clearTraces = useCallback(() => {
     setTraces([]);
+    activeCounters.current.clear();
     setActiveEntities(new Set());
     setEntityMetadata(new Map());
     startTimers.current.clear();
