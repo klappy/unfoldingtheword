@@ -118,10 +118,7 @@ export function SearchCard({
       return (
         <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
           <button
-            className={cn(
-              "w-full flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 transition-colors",
-              isExpanded && "sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/30"
-            )}
+            className="w-full flex items-center justify-between p-3 sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/30 hover:bg-muted/50 transition-colors"
             onClick={() => toggleSection(key)}
           >
             <div className="flex items-center gap-2">
@@ -139,7 +136,7 @@ export function SearchCard({
           </button>
 
           {isExpanded && (
-            <div className="p-3 space-y-2">
+            <div className="p-3 space-y-2 max-w-xl mx-auto">
               {/* Render each match using unified SearchResultItem */}
               {data.matches.map((match, idx) => (
                 <SearchResultItem
@@ -223,7 +220,7 @@ export function SearchCard({
         </div>
 
         {/* Results sections */}
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           <div className="p-4 space-y-3 pb-24">
             {renderSection('Scripture', 'scripture', scripture)}
             {renderSection('Translation Notes', 'notes', notes)}
@@ -238,7 +235,7 @@ export function SearchCard({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
     );
   }

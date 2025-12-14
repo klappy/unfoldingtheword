@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronDown, ChevronUp, Loader2, BookMarked } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -7,7 +7,6 @@ import { CopyButton } from '@/components/CopyButton';
 import { PlayButton } from '@/components/PlayButton';
 import { supabase } from '@/integrations/supabase/client';
 import { createMarkdownComponents } from '@/lib/markdownTransformers';
-
 export type SearchResultType = 'scripture' | 'notes' | 'questions' | 'words' | 'academy';
 
 interface SearchResultItemProps {
@@ -164,8 +163,45 @@ function SearchResultItemInner({
     }
   };
 
+  // Memoize preview components that include scripture reference parsing
+  const previewComponents = useMemo(() => {
+    const fullComponents = createMarkdownComponents(searchQuery, onVerseClick);
+    return {
+      ...fullComponents,
+      // Override with line-clamping for preview while keeping reference parsing
+      p: ({ children, ...props }: any) => (
+        <p className="text-sm text-muted-foreground leading-relaxed mb-0 line-clamp-3" {...props}>
+          {typeof children === 'string' ? fullComponents.p({ children }).props.children : children}
+        </p>
+      ),
+      ul: ({ children }: any) => <ul className="list-disc list-inside text-sm text-muted-foreground mb-0 line-clamp-3">{children}</ul>,
+      ol: ({ children }: any) => <ol className="list-decimal list-inside text-sm text-muted-foreground mb-0 line-clamp-3">{children}</ol>,
+      li: ({ children }: any) => <li className="text-sm truncate">{children}</li>,
+      a: ({ href, children }: any) => {
+        const handleLinkClick = (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const searchTerm = typeof children === 'string' ? children :
+            (href?.split('/').pop()?.replace(/\.md$/, '').replace(/-/g, ' ') || 'topic');
+          onSearch?.(searchTerm);
+        };
+        return (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={handleLinkClick}
+            onKeyDown={(e) => e.key === 'Enter' && handleLinkClick(e as any)}
+            className="text-primary underline hover:text-primary/80 inline cursor-pointer"
+          >
+            {children}
+          </span>
+        );
+      },
+    };
+  }, [searchQuery, onVerseClick, onSearch]);
+
   return (
-    <div className="glass-card rounded-xl overflow-hidden group relative animate-fade-in border border-border/30">
+    <div className="glass-card rounded-xl overflow-hidden group relative animate-fade-in border border-border/30 max-w-full">
       {/* Action buttons */}
       <div
         className="absolute top-3 right-3 z-10 flex items-center gap-0.5"
@@ -195,14 +231,14 @@ function SearchResultItemInner({
           <div className={cn('p-2 rounded-lg border shrink-0', colors.bg, colors.border, colors.text)}>
             <Icon className="w-4 h-4" />
           </div>
-          <div className="flex-1 min-w-0 pr-16">
+          <div className="flex-1 min-w-0 pr-16 break-words">
             {/* Prominent title */}
             <h3 className="font-medium text-foreground text-sm mb-1 line-clamp-2">
               {displayTitle}
             </h3>
             
             {/* Type label and clickable reference (if different from title) */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-2">
               <span className={cn('text-[10px] uppercase tracking-wider font-medium', colors.text)}>
                 {label}
               </span>
@@ -219,43 +255,10 @@ function SearchResultItemInner({
               )}
             </div>
 
-            {/* Preview when collapsed */}
+            {/* Preview when collapsed - now uses previewComponents with scripture parsing */}
             {!isExpanded && (
               <div className="prose prose-sm prose-invert max-w-none">
-                <ReactMarkdown
-                  components={{
-                    p: ({ children }) => <p className="text-sm text-muted-foreground leading-relaxed mb-0 line-clamp-3">{children}</p>,
-                    strong: ({ children }) => <strong className="text-foreground font-semibold">{children}</strong>,
-                    em: ({ children }) => <em className="italic">{children}</em>,
-                    ul: ({ children }) => <ul className="list-disc list-inside text-sm text-muted-foreground mb-0 line-clamp-3">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal list-inside text-sm text-muted-foreground mb-0 line-clamp-3">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm truncate">{children}</li>,
-                    h1: ({ children }) => <span className="text-sm font-semibold text-foreground">{children}</span>,
-                    h2: ({ children }) => <span className="text-sm font-medium text-foreground">{children}</span>,
-                    h3: ({ children }) => <span className="text-sm font-medium text-foreground">{children}</span>,
-                    blockquote: ({ children }) => <span className="italic text-muted-foreground">{children}</span>,
-                    a: ({ href, children }) => {
-                      const handleClick = (e: React.MouseEvent) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const searchTerm = typeof children === 'string' ? children :
-                          (href?.split('/').pop()?.replace(/\.md$/, '').replace(/-/g, ' ') || 'topic');
-                        onSearch?.(searchTerm);
-                      };
-                      return (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={handleClick}
-                          onKeyDown={(e) => e.key === 'Enter' && handleClick(e as any)}
-                          className="text-primary underline hover:text-primary/80 inline cursor-pointer"
-                        >
-                          {children}
-                        </span>
-                      );
-                    },
-                  }}
-                >
+                <ReactMarkdown components={previewComponents}>
                   {contentPreview.replace(/\\n/g, '\n')}
                 </ReactMarkdown>
               </div>
@@ -291,7 +294,7 @@ function SearchResultItemInner({
               onMouseUp={handleTextSelection}
               onTouchEnd={handleTextSelection}
             >
-              <div className="pl-11 prose prose-sm prose-invert max-w-none">
+              <div className="pl-11 prose prose-sm prose-invert max-w-none break-words">
                 {isLoadingFull ? (
                   <div className="flex items-center gap-2 py-4 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin" />
