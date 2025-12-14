@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Resource, ScripturePassage } from '@/types';
 import { useTrace } from '@/contexts/TraceContext';
+import { supabase } from '@/integrations/supabase/client';
 
 // Tool call signature stored in messages
 export interface ToolCall {
@@ -272,6 +273,82 @@ async function replayToolCall(
                 content: text.trim(),
               }];
             }
+          }
+        }
+        break;
+      }
+
+      case 'search-agent': {
+        // Replay via the search-agent edge function
+        trace('mcp-server', 'tool_call', `Invoking search-agent: query="${args.query}" scope="${args.scope}"`);
+        
+        const { data, error } = await supabase.functions.invoke('search-agent', {
+          body: {
+            query: args.query,
+            scope: args.scope || 'Bible',
+            resourceTypes: args.resourceTypes || ['scripture', 'notes', 'questions', 'words'],
+            language: args.language || prefs.language,
+            organization: args.organization || prefs.organization,
+            resource: args.resource || prefs.resource,
+          },
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        if (data) {
+          // Extract scripture search results
+          if (data.scripture?.matches) {
+            result.searchResults = {
+              query: data.query,
+              reference: data.scope,
+              matches: data.scripture.matches.map((m: any) => ({
+                book: m.book || '',
+                chapter: m.chapter || 0,
+                verse: m.verse || 0,
+                text: m.text || '',
+              })),
+              resource: args.resource || prefs.resource,
+              totalMatches: data.scripture.totalCount || 0,
+              breakdown: {
+                byTestament: data.scripture.breakdown?.byTestament || {},
+                byBook: data.scripture.breakdown?.byBook || {},
+              },
+            };
+          }
+
+          // Collect resources from search results
+          const resources: Resource[] = [];
+          if (data.notes?.matches) {
+            resources.push(...data.notes.matches.map((m: any) => ({
+              id: `tn-${m.reference}-${Math.random()}`,
+              type: 'translation-note' as const,
+              title: m.reference,
+              content: m.text,
+              reference: m.reference,
+            })));
+          }
+          if (data.questions?.matches) {
+            resources.push(...data.questions.matches.map((m: any) => ({
+              id: `tq-${m.reference}-${Math.random()}`,
+              type: 'translation-question' as const,
+              title: m.reference,
+              content: m.text,
+              reference: m.reference,
+            })));
+          }
+          if (data.words?.matches) {
+            resources.push(...data.words.matches.map((m: any) => ({
+              id: `tw-${m.reference}-${Math.random()}`,
+              type: 'translation-word' as const,
+              title: m.reference,
+              content: m.text,
+              reference: m.reference,
+            })));
+          }
+          if (resources.length > 0) {
+            result.resources = resources;
           }
         }
         break;

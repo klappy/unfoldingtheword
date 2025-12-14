@@ -1320,9 +1320,10 @@ serve(async (req) => {
         searchMatches = searchResult.searchMatches;
         toolCalls = searchResult.toolCalls;
       }
-    } else if (intentHint === 'locate') {
-      // DISPATCH TO SEARCH-AGENT for locate intent
-      console.log("Intent is 'locate', dispatching to search-agent");
+    } else if (intentHint === 'locate' || intentHint === 'note' || intentHint === 'understand') {
+      // DISPATCH TO SEARCH-AGENT for locate, note with filter, and understand intents
+      // All filter-based discovery queries go to search-agent, not direct AI tool calling
+      console.log(`Intent is '${intentHint}', dispatching to search-agent`);
       const searchAgentResult = await dispatchToSearchAgent(effectiveMessage, effectivePrefs);
       
       if (searchAgentResult.searchResults) {
