@@ -182,13 +182,34 @@ export function createMarkdownComponents(
       return React.createElement('li', { ...props, className: 'mb-1' }, transformedChildren);
     },
 
-    // Style headings
-    h1: ({ children, ...props }: any) => 
-      React.createElement('h1', { ...props, className: 'text-xl font-bold mb-3 text-foreground' }, children),
-    h2: ({ children, ...props }: any) => 
-      React.createElement('h2', { ...props, className: 'text-lg font-semibold mb-2 text-foreground' }, children),
-    h3: ({ children, ...props }: any) => 
-      React.createElement('h3', { ...props, className: 'text-base font-medium mb-2 text-foreground' }, children),
+    // Style headings with scripture reference transformation
+    h1: ({ children, ...props }: any) => {
+      const transformedChildren = React.Children.map(children, child => {
+        if (typeof child === 'string') {
+          return React.createElement(React.Fragment, {}, ...transform(child));
+        }
+        return child;
+      });
+      return React.createElement('h1', { ...props, className: 'text-xl font-bold mb-3 text-foreground' }, transformedChildren);
+    },
+    h2: ({ children, ...props }: any) => {
+      const transformedChildren = React.Children.map(children, child => {
+        if (typeof child === 'string') {
+          return React.createElement(React.Fragment, {}, ...transform(child));
+        }
+        return child;
+      });
+      return React.createElement('h2', { ...props, className: 'text-lg font-semibold mb-2 text-foreground' }, transformedChildren);
+    },
+    h3: ({ children, ...props }: any) => {
+      const transformedChildren = React.Children.map(children, child => {
+        if (typeof child === 'string') {
+          return React.createElement(React.Fragment, {}, ...transform(child));
+        }
+        return child;
+      });
+      return React.createElement('h3', { ...props, className: 'text-base font-medium mb-2 text-foreground' }, transformedChildren);
+    },
 
     // Style blockquotes (often used for scripture)
     blockquote: ({ children, ...props }: any) => 
