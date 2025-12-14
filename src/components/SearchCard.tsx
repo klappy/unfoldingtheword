@@ -36,12 +36,20 @@ export function SearchCard({
   resourceMatchCount,
   resourceResults,
 }: SearchCardProps) {
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    scripture: true,
-    notes: false,
-    questions: false,
-    words: false,
-  });
+  // Determine which section to auto-expand (first one with results)
+  const getInitialExpandedSections = () => {
+    if (isNewFormat(results)) {
+      const { scripture, notes, questions, words } = results;
+      // Expand first section that has content
+      if (scripture?.totalCount) return { scripture: true, notes: false, questions: false, words: false };
+      if (notes?.totalCount) return { scripture: false, notes: true, questions: false, words: false };
+      if (questions?.totalCount) return { scripture: false, notes: false, questions: true, words: false };
+      if (words?.totalCount) return { scripture: false, notes: false, questions: false, words: true };
+    }
+    return { scripture: true, notes: false, questions: false, words: false };
+  };
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(getInitialExpandedSections);
 
   // Memoize markdown components with current search term and click handler
   const searchQuery = results?.query || filterQuery || '';
@@ -129,7 +137,7 @@ export function SearchCard({
               {data.markdown ? (
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   <ReactMarkdown components={markdownComponents}>
-                    {data.markdown}
+                    {data.markdown.replace(/\\n/g, '\n')}
                   </ReactMarkdown>
                 </div>
               ) : (
