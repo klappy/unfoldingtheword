@@ -26,33 +26,94 @@ WHAT YOU MUST NOT DO:
 - Never make up content if no resources are provided
 - Never say specific counts unless the data shows them`;
 
-// Detect if input is a scripture reference
-function isScriptureReference(input: string): boolean {
+// List of Bible book patterns for reference detection
+const BIBLE_BOOKS = [
+  'genesis', 'gen', 'exodus', 'ex', 'leviticus', 'lev', 'numbers', 'num', 
+  'deuteronomy', 'deut', 'joshua', 'josh', 'judges', 'ruth',
+  '1 samuel', '2 samuel', '1 kings', '2 kings', '1 chronicles', '2 chronicles',
+  'ezra', 'nehemiah', 'esther', 'job', 'psalms', 'psalm', 'ps', 'proverbs', 'prov',
+  'ecclesiastes', 'song of solomon', 'isaiah', 'isa', 'jeremiah', 'jer',
+  'lamentations', 'ezekiel', 'daniel', 'hosea', 'joel', 'amos', 'obadiah',
+  'jonah', 'micah', 'nahum', 'habakkuk', 'zephaniah', 'haggai', 'zechariah', 'malachi',
+  'matthew', 'matt', 'mark', 'luke', 'john', 'acts', 'romans', 'rom',
+  '1 corinthians', '2 corinthians', 'galatians', 'ephesians', 'philippians',
+  'colossians', '1 thessalonians', '2 thessalonians', '1 timothy', '2 timothy',
+  'titus', 'philemon', 'hebrews', 'james', '1 peter', '2 peter',
+  '1 john', '2 john', '3 john', 'jude', 'revelation', 'rev',
+  // Spanish
+  'génesis', 'éxodo', 'levítico', 'números', 'deuteronomio', 'josué', 'jueces', 'rut',
+  'salmos', 'proverbios', 'eclesiastés', 'cantares', 'isaías', 'jeremías', 'ezequiel',
+  'mateo', 'marcos', 'lucas', 'juan', 'hechos', 'romanos', 'apocalipsis',
+  // Portuguese
+  'gênesis', 'êxodo', 'salmos', 'provérbios', 'mateus', 'joão', 'atos',
+];
+
+// Extract scripture reference from a message
+// "Show me Ruth 3:2" → "Ruth 3:2"
+// "Read John 3:16" → "John 3:16"
+// "John 3:16" → "John 3:16"
+function extractScriptureReference(message: string): string | null {
+  const lower = message.toLowerCase();
+  
+  // Try to find a book name in the message
+  for (const book of BIBLE_BOOKS) {
+    const bookIndex = lower.indexOf(book);
+    if (bookIndex !== -1) {
+      // Extract from book name onwards
+      const restOfMessage = message.substring(bookIndex);
+      // Match book + optional chapter + optional verse
+      const match = restOfMessage.match(/^[\w\sáéíóúüñâêôãõç]+\s*\d+(?:\s*:\s*\d+(?:\s*-\s*\d+)?)?/i);
+      if (match) {
+        return match[0].trim();
+      }
+      // Just book name
+      const bookMatch = restOfMessage.match(/^[\w\sáéíóúüñâêôãõç]+/i);
+      if (bookMatch) {
+        const cleanBook = bookMatch[0].trim();
+        // Make sure it's not just a partial word
+        if (BIBLE_BOOKS.includes(cleanBook.toLowerCase())) {
+          return cleanBook;
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Detect if input starts with a scripture reference (for direct navigation)
+function startsWithScriptureReference(input: string): boolean {
   if (!input) return false;
   const trimmed = input.trim().toLowerCase();
-  
-  const bibleBooks = [
-    'genesis', 'gen', 'exodus', 'ex', 'leviticus', 'lev', 'numbers', 'num', 
-    'deuteronomy', 'deut', 'joshua', 'josh', 'judges', 'ruth',
-    '1 samuel', '2 samuel', '1 kings', '2 kings', '1 chronicles', '2 chronicles',
-    'ezra', 'nehemiah', 'esther', 'job', 'psalms', 'psalm', 'ps', 'proverbs', 'prov',
-    'ecclesiastes', 'song of solomon', 'isaiah', 'isa', 'jeremiah', 'jer',
-    'lamentations', 'ezekiel', 'daniel', 'hosea', 'joel', 'amos', 'obadiah',
-    'jonah', 'micah', 'nahum', 'habakkuk', 'zephaniah', 'haggai', 'zechariah', 'malachi',
-    'matthew', 'matt', 'mark', 'luke', 'john', 'acts', 'romans', 'rom',
-    '1 corinthians', '2 corinthians', 'galatians', 'ephesians', 'philippians',
-    'colossians', '1 thessalonians', '2 thessalonians', '1 timothy', '2 timothy',
-    'titus', 'philemon', 'hebrews', 'james', '1 peter', '2 peter',
-    '1 john', '2 john', '3 john', 'jude', 'revelation', 'rev',
+  return BIBLE_BOOKS.some(book => trimmed === book || trimmed.startsWith(book + ' '));
+}
+
+// Parse search query to extract term and scope
+function parseSearchQuery(message: string): { query: string; scope: string } {
+  const patterns = [
+    // "notes about X in Book" or "notes on X in Book"
+    /(?:notes?|translation notes?)\s+(?:about|on|for)\s+["']?([^"']+?)["']?\s+(?:in|from|within)\s+(.+)/i,
+    // "find X in Book"
+    /(?:find|search|locate|where is)\s+["']?([^"']+?)["']?\s+(?:in|within|across)\s+(.+)/i,
+    // "X in Book"
+    /["']([^"']+)["']\s+(?:in|within|across)\s+(.+)/i,
     // Spanish
-    'génesis', 'éxodo', 'levítico', 'números', 'deuteronomio', 'josué', 'jueces', 'rut',
-    'salmos', 'proverbios', 'eclesiastés', 'cantares', 'isaías', 'jeremías', 'ezequiel',
-    'mateo', 'marcos', 'lucas', 'juan', 'hechos', 'romanos', 'apocalipsis',
-    // Portuguese
-    'gênesis', 'êxodo', 'salmos', 'provérbios', 'mateus', 'joão', 'atos',
+    /(?:buscar?|encontrar?|dónde está)\s+["']?([^"']+?)["']?\s+(?:en)\s+(.+)/i,
   ];
   
-  return bibleBooks.some(book => trimmed === book || trimmed.startsWith(book + ' '));
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match) {
+      return { query: match[1].trim(), scope: match[2].trim() };
+    }
+  }
+  
+  // Fallback: use key terms and default scope
+  const words = message.split(/\s+/).filter(w => 
+    w.length > 2 && !['find', 'search', 'show', 'me', 'the', 'in', 'a', 'notes', 'about', 'from'].includes(w.toLowerCase())
+  );
+  
+  return { query: words.join(' ') || message, scope: 'Bible' };
 }
 
 // Classify user intent
@@ -69,10 +130,10 @@ async function classifyIntent(message: string, apiKey: string): Promise<'locate'
         messages: [{
           role: "system",
           content: `Classify intent. Respond with ONLY one word:
-- "locate" = find WHERE a word appears (e.g., "find love in Romans")
-- "understand" = learn ABOUT a concept (e.g., "what is justification")
-- "read" = read specific scripture (e.g., "John 3:16")
-- "note" = manage notes (e.g., "show my notes")`
+- "locate" = find WHERE a word appears OR find notes/resources containing a word (e.g., "find love in Romans", "notes about Boaz in Ruth")
+- "understand" = learn ABOUT a concept (e.g., "what is justification", "explain redemption")
+- "read" = read specific scripture (e.g., "John 3:16", "read Romans 8")
+- "note" = manage PERSONAL notes (e.g., "show my notes", "create a note", "delete note")`
         }, {
           role: "user",
           content: message
@@ -94,32 +155,10 @@ async function classifyIntent(message: string, apiKey: string): Promise<'locate'
   return 'read';
 }
 
-// Parse search query to extract term and scope
-function parseSearchQuery(message: string): { query: string; scope: string } {
-  const patterns = [
-    /(?:find|search|locate|where is)\s+["']?([^"']+?)["']?\s+(?:in|within|across)\s+(.+)/i,
-    /["']([^"']+)["']\s+(?:in|within|across)\s+(.+)/i,
-    /(?:buscar?|encontrar?|dónde está)\s+["']?([^"']+?)["']?\s+(?:en)\s+(.+)/i,
-  ];
-  
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
-    if (match) {
-      return { query: match[1].trim(), scope: match[2].trim() };
-    }
-  }
-  
-  const words = message.split(/\s+/).filter(w => 
-    w.length > 2 && !['find', 'search', 'the', 'in', 'a'].includes(w.toLowerCase())
-  );
-  
-  return { query: words.join(' ') || message, scope: 'Bible' };
-}
-
 // Dispatch to sub-agent
 async function invokeSubAgent(name: string, body: any): Promise<any> {
   const url = `${SUPABASE_URL}/functions/v1/${name}`;
-  console.log(`[multi-agent-chat] Dispatching to ${name}`);
+  console.log(`[multi-agent-chat] Dispatching to ${name}:`, JSON.stringify(body).substring(0, 100));
   
   try {
     const response = await fetch(url, {
@@ -133,6 +172,8 @@ async function invokeSubAgent(name: string, body: any): Promise<any> {
     
     if (!response.ok) {
       console.error(`[multi-agent-chat] ${name} returned ${response.status}`);
+      const text = await response.text();
+      console.error(`[multi-agent-chat] ${name} error:`, text);
       return null;
     }
     
@@ -246,7 +287,7 @@ serve(async (req) => {
       userPrefs = {}
     } = await req.json();
     
-    console.log(`[multi-agent-chat] Message: "${message.substring(0, 50)}..."`);
+    console.log(`[multi-agent-chat] Message: "${message}"`);
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
@@ -265,46 +306,50 @@ serve(async (req) => {
     let navigationHint: 'scripture' | 'resources' | 'search' | 'notes' | null = null;
     let toolCalls: Array<{ tool: string; args: any }> = [];
 
-    // Route based on intent
-    const isReference = isScriptureReference(message);
+    // Step 1: Check if message starts with a direct scripture reference
+    const isDirectReference = startsWithScriptureReference(message);
     
-    if (isReference) {
-      // Direct scripture fetch via scripture-agent
-      console.log(`[multi-agent-chat] Direct reference: ${message}`);
+    // Step 2: Try to extract a scripture reference from the message
+    const extractedRef = extractScriptureReference(message);
+    console.log(`[multi-agent-chat] Direct ref: ${isDirectReference}, Extracted: ${extractedRef}`);
+
+    if (isDirectReference && extractedRef) {
+      // Direct scripture navigation - fetch scripture and resources
+      console.log(`[multi-agent-chat] Direct reference: ${extractedRef}`);
       
       const [scriptureResult, resourceResult] = await Promise.all([
         invokeSubAgent('scripture-agent', {
-          reference: message,
+          reference: extractedRef,
           language: prefs.language,
           organization: prefs.organization,
           resource: prefs.resource,
         }),
         invokeSubAgent('resource-agent', {
-          reference: message,
+          reference: extractedRef,
           type: ['notes', 'questions', 'word-links'],
           language: prefs.language,
           organization: prefs.organization,
         }),
       ]);
 
-      if (scriptureResult) {
+      if (scriptureResult?.text) {
         scriptureText = scriptureResult.text;
-        scriptureReference = message;
-        toolCalls.push({ tool: 'scripture-agent', args: { reference: message } });
+        scriptureReference = extractedRef;
+        toolCalls.push({ tool: 'scripture-agent', args: { reference: extractedRef } });
       }
       if (resourceResult?.resources) {
         resources = resourceResult.resources;
-        toolCalls.push({ tool: 'resource-agent', args: { reference: message, type: ['notes', 'questions', 'word-links'] } });
+        toolCalls.push({ tool: 'resource-agent', args: { reference: extractedRef, type: ['notes', 'questions', 'word-links'] } });
       }
       navigationHint = 'scripture';
 
     } else {
-      // Classify intent for non-reference queries
+      // Non-direct reference - classify intent
       const intent = await classifyIntent(message, OPENAI_API_KEY);
       console.log(`[multi-agent-chat] Intent: ${intent}`);
 
       if (intent === 'locate' || intent === 'understand') {
-        // Search via search-agent
+        // Search via search-agent for discovery queries
         const { query, scope } = parseSearchQuery(message);
         console.log(`[multi-agent-chat] Search: query="${query}", scope="${scope}"`);
         
@@ -328,47 +373,89 @@ serve(async (req) => {
           if (searchResult.notes?.matches) {
             resources.push(...searchResult.notes.matches.map((m: any) => ({
               type: 'translation-note',
-              reference: m.reference,
+              title: m.reference,
               content: m.text,
+              reference: m.reference,
+            })));
+          }
+          if (searchResult.questions?.matches) {
+            resources.push(...searchResult.questions.matches.map((m: any) => ({
+              type: 'translation-question',
+              title: m.reference,
+              content: m.text,
+              reference: m.reference,
+            })));
+          }
+          if (searchResult.words?.matches) {
+            resources.push(...searchResult.words.matches.map((m: any) => ({
+              type: 'translation-word',
+              title: m.reference,
+              content: m.text,
+              reference: m.reference,
             })));
           }
           navigationHint = 'search';
         }
 
       } else if (intent === 'note') {
-        // Note operations via note-agent
-        const noteResult = await invokeSubAgent('note-agent', {
-          action: 'read',
-          device_id: prefs.deviceId,
-          scope: 'all',
-          limit: 10,
-        });
+        // Personal note management via note-agent
+        if (!prefs.deviceId) {
+          console.log(`[multi-agent-chat] Note intent but no deviceId`);
+          // Can't manage notes without deviceId
+        } else {
+          const noteResult = await invokeSubAgent('note-agent', {
+            action: 'read',
+            device_id: prefs.deviceId,
+            scope: 'all',
+            limit: 10,
+          });
 
-        if (noteResult?.notes) {
-          resources = noteResult.notes.map((n: any) => ({
-            type: 'note',
-            title: n.source_reference || 'Note',
-            content: n.content,
-            reference: n.source_reference,
-          }));
-          toolCalls.push({ tool: 'note-agent', args: { action: 'read' } });
+          if (noteResult?.notes) {
+            resources = noteResult.notes.map((n: any) => ({
+              type: 'note',
+              title: n.source_reference || 'Note',
+              content: n.content,
+              reference: n.source_reference,
+            }));
+            toolCalls.push({ tool: 'note-agent', args: { action: 'read' } });
+          }
         }
         navigationHint = 'notes';
 
       } else {
-        // Default: try as scripture reference or general query
-        const scriptureResult = await invokeSubAgent('scripture-agent', {
-          reference: scriptureContext || message,
-          language: prefs.language,
-          organization: prefs.organization,
-          resource: prefs.resource,
-        });
+        // Read intent - try to extract and fetch scripture reference
+        if (extractedRef) {
+          console.log(`[multi-agent-chat] Read intent with extracted ref: ${extractedRef}`);
+          
+          const [scriptureResult, resourceResult] = await Promise.all([
+            invokeSubAgent('scripture-agent', {
+              reference: extractedRef,
+              language: prefs.language,
+              organization: prefs.organization,
+              resource: prefs.resource,
+            }),
+            invokeSubAgent('resource-agent', {
+              reference: extractedRef,
+              type: ['notes', 'questions', 'word-links'],
+              language: prefs.language,
+              organization: prefs.organization,
+            }),
+          ]);
 
-        if (scriptureResult?.text) {
-          scriptureText = scriptureResult.text;
-          scriptureReference = scriptureContext || message;
-          toolCalls.push({ tool: 'scripture-agent', args: { reference: scriptureContext || message } });
-          navigationHint = 'scripture';
+          if (scriptureResult?.text) {
+            scriptureText = scriptureResult.text;
+            scriptureReference = extractedRef;
+            toolCalls.push({ tool: 'scripture-agent', args: { reference: extractedRef } });
+            navigationHint = 'scripture';
+          }
+          if (resourceResult?.resources) {
+            resources = resourceResult.resources;
+            toolCalls.push({ tool: 'resource-agent', args: { reference: extractedRef, type: ['notes', 'questions', 'word-links'] } });
+          }
+        } else if (scriptureContext) {
+          // Use existing scripture context
+          console.log(`[multi-agent-chat] Using scripture context: ${scriptureContext}`);
+          scriptureReference = scriptureContext;
         }
       }
     }
