@@ -385,10 +385,20 @@ serve(async (req) => {
     const isEnglish = !responseLanguage || responseLanguage.toLowerCase() === 'en';
     const langInstruction = isEnglish ? '' : `\n\nRespond ENTIRELY in ${responseLanguage}.`;
 
-    // Build resource context for the response generation
+    // Build resource context for the response generation with match counts
+    const scriptureMatchCount = searchResultsFull?.scripture?.totalCount || 0;
+    const notesMatchCount = searchResultsFull?.notes?.totalCount || 0;
+    const questionsMatchCount = searchResultsFull?.questions?.totalCount || 0;
+    const wordsMatchCount = searchResultsFull?.words?.totalCount || 0;
+    const totalMatchCount = scriptureMatchCount + notesMatchCount + questionsMatchCount + wordsMatchCount;
+
+    const matchCountsSummary = totalMatchCount > 0 
+      ? `MATCH COUNTS: ${totalMatchCount} total matches found${scriptureMatchCount ? ` (${scriptureMatchCount} scripture verses` : ''}${notesMatchCount ? `, ${notesMatchCount} translation notes` : ''}${questionsMatchCount ? `, ${questionsMatchCount} questions` : ''}${wordsMatchCount ? `, ${wordsMatchCount} word articles` : ''}).\n`
+      : '';
+
     const resourceContext = `
 AVAILABLE RESOURCES:
-${scriptureText ? `SCRIPTURE:\n${scriptureText.substring(0, 2000)}\n` : ''}
+${matchCountsSummary}${scriptureText ? `SCRIPTURE:\n${scriptureText.substring(0, 2000)}\n` : ''}
 ${searchMatches.length ? `SEARCH MATCHES (${searchMatches.length} verses):\n${searchMatches.slice(0, 10).map(m => `- ${m.book || ''} ${m.chapter || ''}:${m.verse || ''}: ${m.text?.substring(0, 80)}...`).join('\n')}\n` : ''}
 ${resources.length ? `RESOURCES (${resources.length}):\n${resources.slice(0, 8).map(r => `- [${r.type}] ${r.title || r.reference}: ${(r.content || '').substring(0, 100)}...`).join('\n')}\n` : ''}
 `;
@@ -398,7 +408,7 @@ ${resources.length ? `RESOURCES (${resources.length}):\n${resources.slice(0, 8).
 CRITICAL RULES:
 - Only share information from the resources below - never from your own knowledge
 - If no resources are provided, say "I couldn't find resources on that topic"
-- When mentioning counts, use exact numbers from the data
+- ALWAYS mention the exact match counts when search results are available (e.g., "I found 76 translation notes about Boaz in Ruth")
 
 ${resourceContext}${langInstruction}`;
 
