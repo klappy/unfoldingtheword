@@ -160,6 +160,11 @@ async function searchScripture(
       
       if (contentType.includes('application/json')) {
         const data = await response.json();
+        console.log(`[search-agent] Scripture JSON response keys:`, Object.keys(data));
+        if (data.statistics) {
+          console.log(`[search-agent] Statistics:`, JSON.stringify(data.statistics));
+        }
+        console.log(`[search-agent] First match:`, data.matches?.[0]);
         
         if (data.matches && Array.isArray(data.matches)) {
           for (const match of data.matches) {
