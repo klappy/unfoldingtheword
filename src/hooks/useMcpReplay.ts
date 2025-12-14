@@ -29,6 +29,7 @@ export interface SearchResults {
   notes: ResourceSearchResult | null;
   questions: ResourceSearchResult | null;
   words: ResourceSearchResult | null;
+  academy: ResourceSearchResult | null;
   toolCalls: Array<{ tool: string; args: Record<string, any> }>;
 }
 
@@ -155,7 +156,7 @@ async function replayToolCall(
           body: {
             query: args.query,
             scope: args.scope || 'Bible',
-            resourceTypes: args.resourceTypes || ['scripture', 'notes', 'questions', 'words'],
+            resourceTypes: args.resourceTypes || ['scripture', 'notes', 'questions', 'words', 'academy'],
             language: args.language || prefs.language,
             organization: args.organization || prefs.organization,
             resource: args.resource || prefs.resource,
@@ -181,6 +182,7 @@ async function replayToolCall(
             notes: data.notes || null,
             questions: data.questions || null,
             words: data.words || null,
+            academy: data.academy || null,
             toolCalls: data.toolCalls || [],
           };
 
@@ -208,6 +210,15 @@ async function replayToolCall(
             resources.push(...data.words.matches.map((m: any) => ({
               id: `tw-${m.reference}-${Math.random()}`,
               type: 'translation-word' as const,
+              title: m.reference,
+              content: m.text,
+              reference: m.reference,
+            })));
+          }
+          if (data.academy?.matches) {
+            resources.push(...data.academy.matches.map((m: any) => ({
+              id: `ta-${m.reference}-${Math.random()}`,
+              type: 'academy-article' as const,
               title: m.reference,
               content: m.text,
               reference: m.reference,
