@@ -392,23 +392,55 @@ serve(async (req) => {
     const wordsMatchCount = searchResultsFull?.words?.totalCount || 0;
     const totalMatchCount = scriptureMatchCount + notesMatchCount + questionsMatchCount + wordsMatchCount;
 
-    const matchCountsSummary = totalMatchCount > 0 
-      ? `MATCH COUNTS: ${totalMatchCount} total matches found${scriptureMatchCount ? ` (${scriptureMatchCount} scripture verses` : ''}${notesMatchCount ? `, ${notesMatchCount} translation notes` : ''}${questionsMatchCount ? `, ${questionsMatchCount} questions` : ''}${wordsMatchCount ? `, ${wordsMatchCount} word articles` : ''}).\n`
+    // Build match counts as clean array
+    const countParts: string[] = [];
+    if (scriptureMatchCount) countParts.push(`${scriptureMatchCount} scripture verses`);
+    if (notesMatchCount) countParts.push(`${notesMatchCount} translation notes`);
+    if (questionsMatchCount) countParts.push(`${questionsMatchCount} translation questions`);
+    if (wordsMatchCount) countParts.push(`${wordsMatchCount} word articles`);
+    
+    const matchCountsSummary = countParts.length > 0
+      ? `SEARCH RESULTS FOUND:\n${countParts.map(c => `- ${c}`).join('\n')}\n`
       : '';
+
+    // Extract book distribution for context
+    const bookDistribution = searchResultsFull?.scripture?.byBook 
+      ? Object.entries(searchResultsFull.scripture.byBook)
+          .sort((a: any, b: any) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([book, count]) => `${book}: ${count}`)
+          .join(', ')
+      : '';
+
+    // Extract word article terms if available
+    const wordTerms = searchResultsFull?.words?.items
+      ?.slice(0, 3)
+      .map((w: any) => w.term || w.title)
+      .filter(Boolean)
+      .join(', ') || '';
 
     const resourceContext = `
 AVAILABLE RESOURCES:
-${matchCountsSummary}${scriptureText ? `SCRIPTURE:\n${scriptureText.substring(0, 2000)}\n` : ''}
-${searchMatches.length ? `SEARCH MATCHES (${searchMatches.length} verses):\n${searchMatches.slice(0, 10).map(m => `- ${m.book || ''} ${m.chapter || ''}:${m.verse || ''}: ${m.text?.substring(0, 80)}...`).join('\n')}\n` : ''}
-${resources.length ? `RESOURCES (${resources.length}):\n${resources.slice(0, 8).map(r => `- [${r.type}] ${r.title || r.reference}: ${(r.content || '').substring(0, 100)}...`).join('\n')}\n` : ''}
+${matchCountsSummary}${bookDistribution ? `BOOK DISTRIBUTION: ${bookDistribution}\n` : ''}${wordTerms ? `WORD ARTICLES FOUND: ${wordTerms}\n` : ''}
+${scriptureText ? `SCRIPTURE:\n${scriptureText.substring(0, 2000)}\n` : ''}
+${searchMatches.length ? `SAMPLE VERSES (${searchMatches.length} total):\n${searchMatches.slice(0, 5).map(m => `- ${m.book || ''} ${m.chapter || ''}:${m.verse || ''}: ${m.text?.substring(0, 100)}...`).join('\n')}\n` : ''}
+${resources.length ? `RESOURCES (${resources.length}):\n${resources.slice(0, 6).map(r => `- [${r.type}] ${r.title || r.reference}: ${(r.content || '').substring(0, 80)}...`).join('\n')}\n` : ''}
 `;
 
-    const responsePrompt = `You are a Bible study resource finder. Keep responses brief (2-4 sentences).
+    const responsePrompt = `You are a warm, knowledgeable Bible study companion. Be conversational and inviting.
+
+RESPONSE STYLE:
+- Start with a brief thematic insight about what you found
+- Mention ALL resource types with their counts naturally (e.g., "I found 228 verses, 76 notes, and 4 word articles...")
+- Note where matches concentrate if book distribution is provided
+- Highlight interesting word articles (especially Greek/Hebrew terms) if found
+- End with a question or suggestion to invite further exploration
+- Keep it to 3-5 sentences, conversational and encouraging
 
 CRITICAL RULES:
 - Only share information from the resources below - never from your own knowledge
 - If no resources are provided, say "I couldn't find resources on that topic"
-- ALWAYS mention the exact match counts when search results are available (e.g., "I found 76 translation notes about Boaz in Ruth")
+- Mention ALL resource types found, not just one
 
 ${resourceContext}${langInstruction}`;
 
