@@ -106,6 +106,18 @@ function parseSearchMarkdown(markdown: string): {
   return { metadata, matches };
 }
 
+// Helper to fetch with TTFB tracing
+async function fetchWithTtfbTrace(
+  url: string,
+  tool: string,
+  trace: (entity: string, phase: 'start' | 'first_token' | 'tool_call' | 'complete' | 'error', message?: string, metadata?: Record<string, any>) => void
+): Promise<Response> {
+  const response = await fetch(url);
+  // Trace first_token when response headers received (TTFB)
+  trace('mcp-server', 'first_token', `${tool}: ${response.status} ${response.statusText}`);
+  return response;
+}
+
 // Replay a single tool call against MCP server
 async function replayToolCall(
   toolCall: ToolCall,
@@ -136,7 +148,7 @@ async function replayToolCall(
         url += `&organization=${encodeURIComponent(prefs.organization)}`;
         url += `&resource=${encodeURIComponent(effectiveResource)}`;
         
-        const response = await fetch(url);
+        const response = await fetchWithTtfbTrace(url, tool, trace);
         if (response.ok) {
           const contentType = response.headers.get('content-type') || '';
           
@@ -194,7 +206,7 @@ async function replayToolCall(
         url += `&organization=${encodeURIComponent(prefs.organization)}`;
         if (args.filter) url += `&filter=${encodeURIComponent(args.filter)}`;
         
-        const response = await fetch(url);
+        const response = await fetchWithTtfbTrace(url, tool, trace);
         if (response.ok) {
           const data = await response.json();
           // Handle both array (no filter) and {matches: [...]} (with filter) response formats
@@ -216,7 +228,7 @@ async function replayToolCall(
         url += `&organization=${encodeURIComponent(prefs.organization)}`;
         if (args.filter) url += `&filter=${encodeURIComponent(args.filter)}`;
         
-        const response = await fetch(url);
+        const response = await fetchWithTtfbTrace(url, tool, trace);
         if (response.ok) {
           const data = await response.json();
           // Handle both array (no filter) and {matches: [...]} (with filter) response formats
@@ -237,7 +249,7 @@ async function replayToolCall(
         // Support reference parameter for scoped lookups
         if (args.reference) url += `&reference=${encodeURIComponent(args.reference)}`;
         
-        const response = await fetch(url);
+        const response = await fetchWithTtfbTrace(url, tool, trace);
         if (response.ok) {
           const contentType = response.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
