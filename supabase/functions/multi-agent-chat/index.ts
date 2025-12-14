@@ -302,29 +302,35 @@ serve(async (req) => {
               searchMatches = [...searchMatches, ...searchResult.scripture.matches];
               scriptureText = searchResult.scripture.markdown;
             }
-            if (searchResult.notes?.matches) {
-              resources.push(...searchResult.notes.matches.map((m: any) => ({
-                type: 'translation-note',
-                title: m.reference,
-                content: m.text,
-                reference: m.reference,
-              })));
+            if (searchResult.notes?.matches?.length || searchResult.notes?.totalCount) {
+              if (searchResult.notes.matches?.length) {
+                resources.push(...searchResult.notes.matches.map((m: any) => ({
+                  type: 'translation-note',
+                  title: m.reference,
+                  content: m.text,
+                  reference: m.reference,
+                })));
+              }
             }
-            if (searchResult.questions?.matches) {
-              resources.push(...searchResult.questions.matches.map((m: any) => ({
-                type: 'translation-question',
-                title: m.reference,
-                content: m.text,
-                reference: m.reference,
-              })));
+            if (searchResult.questions?.matches?.length || searchResult.questions?.totalCount) {
+              if (searchResult.questions.matches?.length) {
+                resources.push(...searchResult.questions.matches.map((m: any) => ({
+                  type: 'translation-question',
+                  title: m.reference,
+                  content: m.text,
+                  reference: m.reference,
+                })));
+              }
             }
-            if (searchResult.words?.matches) {
-              resources.push(...searchResult.words.matches.map((m: any) => ({
-                type: 'translation-word',
-                title: m.reference,
-                content: m.text,
-                reference: m.reference,
-              })));
+            if (searchResult.words?.matches?.length || searchResult.words?.totalCount) {
+              if (searchResult.words.matches?.length) {
+                resources.push(...searchResult.words.matches.map((m: any) => ({
+                  type: 'translation-word',
+                  title: m.reference,
+                  content: m.text,
+                  reference: m.reference,
+                })));
+              }
             }
             navigationHint = 'search';
           }

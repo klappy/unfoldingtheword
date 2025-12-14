@@ -296,8 +296,40 @@ async function searchNotes(
         const text = await response.text();
         if (text.trim()) {
           allMarkdown.push(text);
-          const lineCount = text.split('\n').filter(l => l.trim().startsWith('#') || l.trim().startsWith('-')).length;
-          totalCount += lineCount;
+          
+          // Parse markdown to extract matches for structured data
+          // Look for headers like "### Reference" or "## Reference"
+          const sectionRegex = /^#{2,3}\s+(.+?)$/gm;
+          let match;
+          let lastRef = '';
+          const lines = text.split('\n');
+          let currentContent = '';
+          
+          for (const line of lines) {
+            const headerMatch = line.match(/^#{2,3}\s+(.+)$/);
+            if (headerMatch) {
+              // Save previous section if exists
+              if (lastRef && currentContent.trim()) {
+                allMatches.push({
+                  reference: lastRef,
+                  text: currentContent.trim().substring(0, 300),
+                });
+              }
+              lastRef = headerMatch[1].trim();
+              currentContent = '';
+            } else if (lastRef) {
+              currentContent += line + '\n';
+            }
+          }
+          // Don't forget the last section
+          if (lastRef && currentContent.trim()) {
+            allMatches.push({
+              reference: lastRef,
+              text: currentContent.trim().substring(0, 300),
+            });
+          }
+          
+          totalCount += allMatches.length;
         }
       }
     } catch (error) {
