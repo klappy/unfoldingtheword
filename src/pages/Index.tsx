@@ -100,19 +100,8 @@ const Index = () => {
       }
     }
     if (mcpReplay.searchResults && !mcpReplay.isLoading) {
-      // Build breakdown from matches
-      const byBook: Record<string, number> = {};
-      for (const match of mcpReplay.searchResults.matches) {
-        byBook[match.book] = (byBook[match.book] || 0) + 1;
-      }
-      setSearchResults({
-        query: mcpReplay.searchResults.query,
-        reference: mcpReplay.searchResults.reference,
-        matches: mcpReplay.searchResults.matches,
-        resource: mcpReplay.searchResults.resource || 'ult',
-        totalMatches: mcpReplay.searchResults.matches.length,
-        breakdown: { byBook },
-      });
+      // New format: pass the full search results directly (includes scripture, notes, questions, words)
+      setSearchResults(mcpReplay.searchResults as any);
     }
   }, [mcpReplay.scripture, mcpReplay.resources, mcpReplay.searchResults, mcpReplay.isLoading, setScripture, setResources, setSearchResults, resourceFilterInfo, setResourceSearchResults]);
 
