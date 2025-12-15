@@ -307,43 +307,16 @@ async function searchNotes(
         if (text.trim()) {
           allMarkdown.push(text);
           
-          // Parse markdown to extract matches for structured data
-          // Look for headers like "### Reference" or "## Reference"
-          const sectionRegex = /^#{2,3}\s+(.+?)$/gm;
-          let match;
-          let lastRef = '';
-          const lines = text.split('\n');
-          let currentContent = '';
-          
-          for (const line of lines) {
-            const headerMatch = line.match(/^#{2,3}\s+(.+)$/);
-            if (headerMatch) {
-              // Save previous section if exists
-              if (lastRef && currentContent.trim()) {
-              const rawContent = currentContent.trim();
-              allMatches.push({
-                reference: lastRef,
-                text: rawContent,
-                rawMarkdown: rawContent,
-              });
-            }
-              lastRef = headerMatch[1].trim();
-              currentContent = '';
-            } else if (lastRef) {
-              currentContent += line + '\n';
-            }
-          }
-          // Don't forget the last section
-          if (lastRef && currentContent.trim()) {
-            const rawContent = currentContent.trim();
-            allMatches.push({
-              reference: lastRef,
-              text: rawContent,
-              rawMarkdown: rawContent,
-            });
-          }
-          
-          totalCount += allMatches.length;
+          // For text/markdown responses, DO NOT split into dozens of pseudo-notes.
+          // The MCP server may return large book/chapter notes with many headings.
+          // Treat the entire payload as a single match tied to the requested scope.
+          allMarkdown.push(text);
+          allMatches.push({
+            reference: scope || 'Bible',
+            text: text.trim(),
+            rawMarkdown: text.trim(),
+          });
+          totalCount += 1;
         }
       }
     } catch (error) {
