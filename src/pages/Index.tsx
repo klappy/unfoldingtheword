@@ -25,7 +25,7 @@ import { useNotes } from '@/hooks/useNotes';
 import { useConversations } from '@/hooks/useConversations';
 import { useTranslation, TranslationItem } from '@/hooks/useTranslation';
 import { useMcpReplay } from '@/hooks/useMcpReplay';
-import { parseScriptureReferences } from '@/lib/scriptureReferenceParser';
+
 
 const Index = () => {
   const {
@@ -305,27 +305,6 @@ const Index = () => {
 
     if (convId) {
       await saveMessage(convId, userMessage);
-    }
-
-    // Detect pure scripture references like "John 3:16" and navigate directly
-    const parsedReferences = parseScriptureReferences(content);
-    const directReference =
-      parsedReferences.length === 1 &&
-      content.trim().toLowerCase() === parsedReferences[0].full.toLowerCase()
-        ? parsedReferences[0].full
-        : null;
-
-    if (directReference) {
-      console.log('[Index] Direct scripture reference detected from user input:', directReference);
-      try {
-        await loadScriptureData(directReference);
-        if (convId) {
-          await updateConversation(convId, { scriptureReference: directReference });
-        }
-        navigateToCard('scripture');
-      } catch (error) {
-        console.error('[Index] Failed to load direct scripture reference:', error);
-      }
     }
 
     const result = await sendMessage(
