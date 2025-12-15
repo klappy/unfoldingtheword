@@ -259,7 +259,7 @@ async function searchScripture(
 }
 
 // Search translation notes with filter
-// For bible-wide, make single request; for narrower scopes, use reference/testament
+// Request JSON format for structured note data with proper boundaries
 async function searchNotes(
   scopes: string[],
   scopeType: SearchScope,
@@ -276,22 +276,33 @@ async function searchNotes(
 
   for (const scope of searchScopes) {
     const params = buildSearchParams(scopeType, scope, filter, language, organization);
+    // Request JSON format for structured note data
+    params.set('format', 'json');
     const url = `${MCP_BASE_URL}/api/fetch-translation-notes?${params.toString()}`;
     
-    console.log(`[search-agent] Notes search: ${url}`);
+    console.log(`[search-agent] Notes search (JSON): ${url}`);
     
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
       if (!response.ok) continue;
       
       const contentType = response.headers.get('content-type') || '';
       
       if (contentType.includes('application/json')) {
         const data = await response.json();
-        const items = Array.isArray(data) ? data : (data.matches || []);
+        console.log(`[search-agent] Notes JSON response keys:`, Object.keys(data));
+        
+        // Handle different JSON response formats
+        const items = Array.isArray(data) ? data : (data.matches || data.notes || data.items || []);
+        console.log(`[search-agent] Found ${items.length} note items from JSON`);
         
         for (const item of items) {
-          const rawContent = item.rawMarkdown || item.note || item.content || JSON.stringify(item);
+          // Each item from JSON should have its own reference boundary
+          const rawContent = item.rawMarkdown || item.note || item.content || item.text || '';
           allMatches.push({
             reference: item.reference || (scope || 'Bible'),
             text: rawContent,
@@ -301,9 +312,12 @@ async function searchNotes(
           });
         }
         
-        totalCount += data.totalMatches || items.length;
+        totalCount += data.totalMatches || data.total || items.length;
       } else {
+        // Fallback to markdown parsing if JSON not available
         const text = await response.text();
+        console.log(`[search-agent] Notes returned markdown (${text.length} chars), falling back to parse`);
+        
         if (text.trim()) {
           allMarkdown.push(text);
 

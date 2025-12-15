@@ -61,30 +61,44 @@ interface ResourceResponse {
   _timing?: { startMs: number; endMs: number; durationMs: number };
 }
 
-// Fetch translation notes
+// Fetch translation notes - request JSON format for structured note data
 async function fetchNotes(reference: string, language: string, organization: string): Promise<Resource[]> {
-  const url = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(reference)}&language=${encodeURIComponent(language)}&organization=${encodeURIComponent(organization)}`;
-  console.log(`[resource-agent] Fetching notes: ${url}`);
+  // Request JSON format to get structured note boundaries
+  const url = `${MCP_BASE_URL}/api/fetch-translation-notes?reference=${encodeURIComponent(reference)}&language=${encodeURIComponent(language)}&organization=${encodeURIComponent(organization)}&format=json`;
+  console.log(`[resource-agent] Fetching notes (JSON): ${url}`);
   
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
     if (!response.ok) return [];
     
     const contentType = response.headers.get('content-type') || '';
     
     if (contentType.includes('application/json')) {
       const data = await response.json();
-      const items = Array.isArray(data) ? data : (data.matches || []);
+      console.log(`[resource-agent] Notes JSON response keys:`, Object.keys(data));
+      
+      // Handle array of notes directly
+      const items = Array.isArray(data) ? data : (data.matches || data.notes || data.items || []);
+      console.log(`[resource-agent] Found ${items.length} note items`);
+      
       return items.map((r: any, i: number) => ({
         id: r.id || `tn-${i}`,
         type: 'translation-note',
-        title: r.title || r.quote || reference,
-        content: r.content || r.note || '',
+        title: r.title || r.quote || r.reference || reference,
+        content: r.content || r.note || r.text || '',
         reference: r.reference || reference,
         quote: r.quote,
+        // Preserve raw markdown for rendering
+        rawMarkdown: r.rawMarkdown || r.markdown || r.content || r.note || '',
       }));
     } else {
+      // Fallback to markdown if JSON not available
       const text = await response.text();
+      console.log(`[resource-agent] Notes returned markdown (${text.length} chars), falling back to parse`);
       if (text.trim()) {
         return parseMarkdownNotes(text, reference);
       }
@@ -95,31 +109,41 @@ async function fetchNotes(reference: string, language: string, organization: str
   return [];
 }
 
-// Fetch translation questions
+// Fetch translation questions - request JSON format
 async function fetchQuestions(reference: string, language: string, organization: string): Promise<Resource[]> {
-  const url = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(reference)}&language=${encodeURIComponent(language)}&organization=${encodeURIComponent(organization)}`;
-  console.log(`[resource-agent] Fetching questions: ${url}`);
+  const url = `${MCP_BASE_URL}/api/fetch-translation-questions?reference=${encodeURIComponent(reference)}&language=${encodeURIComponent(language)}&organization=${encodeURIComponent(organization)}&format=json`;
+  console.log(`[resource-agent] Fetching questions (JSON): ${url}`);
   
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
     if (!response.ok) return [];
     
     const contentType = response.headers.get('content-type') || '';
     
     if (contentType.includes('application/json')) {
       const data = await response.json();
-      const items = Array.isArray(data) ? data : (data.matches || []);
+      console.log(`[resource-agent] Questions JSON response keys:`, Object.keys(data));
+      
+      const items = Array.isArray(data) ? data : (data.matches || data.questions || data.items || []);
+      console.log(`[resource-agent] Found ${items.length} question items`);
+      
       return items.map((r: any, i: number) => ({
         id: r.id || `tq-${i}`,
         type: 'translation-question',
-        title: r.question || reference,
-        content: r.response || r.answer || '',
+        title: r.question || r.title || reference,
+        content: r.response || r.answer || r.content || '',
         reference: r.reference || reference,
         question: r.question,
         response: r.response || r.answer,
+        rawMarkdown: r.rawMarkdown || r.markdown || '',
       }));
     } else {
       const text = await response.text();
+      console.log(`[resource-agent] Questions returned markdown (${text.length} chars), falling back to parse`);
       if (text.trim()) {
         return parseMarkdownQuestions(text, reference);
       }
