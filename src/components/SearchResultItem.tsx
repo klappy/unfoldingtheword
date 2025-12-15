@@ -60,7 +60,11 @@ function getDisplayTitle(type: SearchResultType, reference: string, metadata?: R
   if (type === 'academy') return metadata?.title || metadata?.moduleId || reference;
   if (type === 'questions') return metadata?.question || reference;
   if (type === 'notes') return metadata?.title || reference;
-  return reference; // Scripture - reference is the title
+  // Scripture: show reference with resource version if available
+  if (type === 'scripture' && metadata?.resource) {
+    return `${reference} (${metadata.resource})`;
+  }
+  return reference;
 }
 
 function SearchResultItemInner({

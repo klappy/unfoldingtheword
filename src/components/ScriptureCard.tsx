@@ -188,13 +188,19 @@ export function ScriptureCard({
     lastTargetRef.current = newTarget;
   }, [passage?.targetChapter, passage?.targetVerse, passage?.book?.book, passage?.reference]);
 
-  // Reset scroll tracking when passage changes
+  // Reset scroll tracking when passage or target changes
   useEffect(() => {
-    if (passage?.reference !== passageRef.current) {
+    const currentBook = passage?.book?.book;
+    const prevRef = passageRef.current;
+    const prevBook = prevRef?.match(/^(.+?)\s+\d/)?.[1];
+    
+    // Reset scroll on any target change (including same-book navigation)
+    if (passage?.reference !== prevRef || 
+        (currentBook === prevBook && (passage?.targetChapter || passage?.targetVerse))) {
       passageRef.current = passage?.reference || null;
       hasScrolledToTarget.current = false;
     }
-  }, [passage?.reference]);
+  }, [passage?.reference, passage?.targetChapter, passage?.targetVerse, passage?.book?.book]);
 
   // Use virtualized scripture hook
   const chapters = passage?.book?.chapters || [];
