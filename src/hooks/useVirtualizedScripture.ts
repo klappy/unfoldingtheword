@@ -67,11 +67,16 @@ export function useVirtualizedScripture({
 
   // Reinitialize render state when chapters or target change (new passage/book)
   useEffect(() => {
+    if (chapters.length === 0) return;
+    
     const state = new Map<number, ChapterRenderState>();
+    
+    // If no target chapter, render the first chapter by default
+    const effectiveTargetChapter = targetChapter ?? chapters[0]?.chapter ?? 1;
 
     chapters.forEach(ch => {
       const estimatedHeight = estimateChapterHeight(ch);
-      const isTarget = ch.chapter === targetChapter;
+      const isTarget = ch.chapter === effectiveTargetChapter;
 
       state.set(ch.chapter, {
         rendered: isTarget,
@@ -89,6 +94,7 @@ export function useVirtualizedScripture({
       });
     });
 
+    console.log('[Virtualized] Init render state, chapters:', chapters.length, 'target:', effectiveTargetChapter);
     setRenderState(state);
     initialScrollDone.current = false;
   }, [chapters, targetChapter, targetVerse]);
