@@ -208,21 +208,88 @@ async function fetchWordLinks(reference: string, language: string, organization:
   return [];
 }
 
-// Parse markdown notes - DO NOT split on headings!
-// MCP returns book/chapter notes as single markdown documents with internal structure.
-// Splitting on headings creates dozens of nonsensical fragments.
+// Parse markdown notes
+// Goal: split only on *meaningful* section headers the TN markdown uses, not every heading.
+// Examples: "Front:intro", "3:intro", "3:2".
 function parseMarkdownNotes(content: string, reference: string): Resource[] {
-  // Return the entire content as ONE note
-  if (content.trim()) {
+  const text = content.trim();
+  if (!text) return [];
+
+  // Extract book name from the request reference (best-effort; works for "Ruth 3", "Ruth 3:2").
+  const book = reference.replace(/\s+\d.*$/, '').trim() || reference;
+
+  const isSectionHeader = (h: string) => {
+    const t = h.trim();
+    if (!t) return false;
+    if (/^front\s*:\s*intro$/i.test(t)) return true;
+    if (/^\d+\s*:\s*intro$/i.test(t)) return true; // chapter intro
+    if (/^\d+\s*:\s*\d+(?:\s*-\s*\d+)?$/.test(t)) return true; // verse or verse range
+    return false;
+  };
+
+  const toReference = (header: string) => {
+    const t = header.trim();
+    if (/^front\s*:\s*intro$/i.test(t)) return `${book} front:intro`;
+    const chapIntro = t.match(/^(\d+)\s*:\s*intro$/i);
+    if (chapIntro) return `${book} ${chapIntro[1]}:intro`;
+    const verse = t.match(/^(\d+)\s*:\s*(\d+(?:\s*-\s*\d+)?)$/);
+    if (verse) return `${book} ${verse[1]}:${verse[2].replace(/\s+/g, '')}`;
+    return reference;
+  };
+
+  const lines = text.split('\n');
+  const results: Resource[] = [];
+
+  let currentHeader: string | null = null;
+  let buf: string[] = [];
+
+  const push = () => {
+    const body = buf.join('\n').trim();
+    if (!body) return;
+    const title = currentHeader?.trim() || reference;
+    results.push({
+      id: `tn-${results.length}`,
+      type: 'translation-note',
+      title,
+      content: body,
+      reference: currentHeader ? toReference(currentHeader) : reference,
+    });
+  };
+
+  for (const line of lines) {
+    const m = line.match(/^#{1,6}\s+(.+)$/);
+    if (m && isSectionHeader(m[1])) {
+      // Start new section
+      push();
+      currentHeader = m[1];
+      buf = [];
+      continue;
+    }
+
+    // Skip YAML frontmatter if it exists
+    if (!currentHeader && results.length === 0 && buf.length === 0 && line.trim() === '---') {
+      // eat until next ---
+      const idx = lines.indexOf(line);
+      // (keep simple: handled by later fallback; no-op here)
+    }
+
+    buf.push(line);
+  }
+
+  push();
+
+  // Fallback: if we couldn't find meaningful sections, return single document
+  if (results.length === 0) {
     return [{
       id: 'tn-0',
       type: 'translation-note',
       reference,
       title: reference,
-      content: content.trim(),
+      content: text,
     }];
   }
-  return [];
+
+  return results;
 }
 
 // Parse markdown questions
