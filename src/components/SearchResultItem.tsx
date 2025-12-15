@@ -1,12 +1,14 @@
 import { useState, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronDown, ChevronUp, Loader2, BookMarked } from 'lucide-react';
+import { FileText, HelpCircle, BookOpen, GraduationCap, ChevronDown, ChevronUp, Loader2, BookMarked, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import { CopyButton } from '@/components/CopyButton';
 import { PlayButton } from '@/components/PlayButton';
 import { supabase } from '@/integrations/supabase/client';
 import { createMarkdownComponents } from '@/lib/markdownTransformers';
+import type { SearchInteraction } from '@/types/interactions';
+
 export type SearchResultType = 'scripture' | 'notes' | 'questions' | 'words' | 'academy';
 
 interface SearchResultItemProps {
@@ -14,9 +16,11 @@ interface SearchResultItemProps {
   reference: string;
   rawMarkdown: string;
   searchQuery: string;
-  onVerseClick: (reference: string) => void;
+  onVerseClick?: (reference: string) => void;
   onAddToNotes?: (text: string) => void;
   onSearch?: (query: string) => void;
+  // NEW: LLM-driven interaction handler (Prompt over code)
+  onInteraction?: (interaction: SearchInteraction) => void;
   currentLanguage?: string;
   // For word/academy - allows fetching full content
   articleId?: string;
@@ -67,6 +71,7 @@ function SearchResultItemInner({
   onVerseClick,
   onAddToNotes,
   onSearch,
+  onInteraction,
   currentLanguage,
   articleId,
   metadata,
@@ -154,10 +159,35 @@ function SearchResultItemInner({
   // Create markdown components with search highlighting and reference clicking
   const markdownComponents = createMarkdownComponents(searchQuery, onVerseClick);
 
-  // Handle click - for scripture, navigate directly; for others, expand
+  // Handle click - LLM-driven interactions (Prompt over code)
   const handleClick = () => {
-    if (isScriptureType && onVerseClick) {
-      onVerseClick(reference);
+    if (isScriptureType) {
+      // Scripture clicks send prompt to LLM: "Read Romans 8:39"
+      if (onInteraction) {
+        onInteraction({
+          type: 'read_scripture',
+          reference,
+          resource: metadata?.resource,
+        });
+      } else if (onVerseClick) {
+        // Fallback for backwards compatibility
+        onVerseClick(reference);
+      }
+    } else if (type === 'words' || type === 'academy') {
+      // Word/academy clicks can either expand locally or send to LLM
+      if (onInteraction && !isExpanded) {
+        // First click: expand locally for quick preview
+        handleExpand();
+      } else if (onInteraction && isExpanded) {
+        // Second click when expanded: send to LLM for deeper exploration
+        onInteraction({
+          type: 'expand_article',
+          term: displayTitle,
+          articleType: type,
+        });
+      } else {
+        handleExpand();
+      }
     } else {
       handleExpand();
     }

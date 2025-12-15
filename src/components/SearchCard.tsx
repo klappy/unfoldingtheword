@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { SearchResultItem, type SearchResultType } from '@/components/SearchResultItem';
 import type { SearchResults as NewSearchResults } from '@/hooks/useSearchState';
 import type { SearchResults as LegacySearchResults, Resource } from '@/types';
+import type { SearchInteraction } from '@/types/interactions';
 
 // Section icon and color configuration
 const sectionConfig: Record<SearchResultType, { 
@@ -29,9 +30,11 @@ type SearchCardResults = NewSearchResults | LegacySearchResults | null;
 interface SearchCardProps {
   results: SearchCardResults;
   onClearSearch: () => void;
-  onVerseClick: (reference: string) => void;
+  onVerseClick?: (reference: string) => void;
   onAddToNotes?: (text: string) => void;
   onSearch?: (query: string) => void;
+  // NEW: LLM-driven interaction handler (Prompt over code)
+  onInteraction?: (interaction: SearchInteraction) => void;
   currentLanguage?: string;
   // Legacy props for backwards compatibility
   filterQuery?: string | null;
@@ -51,6 +54,7 @@ export function SearchCard({
   onVerseClick,
   onAddToNotes,
   onSearch,
+  onInteraction,
   currentLanguage,
   filterQuery,
   filterReference,
@@ -148,6 +152,7 @@ export function SearchCard({
                   onVerseClick={onVerseClick}
                   onAddToNotes={onAddToNotes}
                   onSearch={onSearch}
+                  onInteraction={onInteraction}
                   currentLanguage={currentLanguage}
                   articleId={match.metadata?.moduleId || match.metadata?.term}
                   metadata={match.metadata}
