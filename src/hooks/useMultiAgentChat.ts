@@ -9,6 +9,17 @@ interface SearchMatch {
   text: string;
 }
 
+// Tool results structure - ALL data the LLM received from tools
+interface ToolResults {
+  scripture?: {
+    reference: string;
+    text: string;
+    resource: string;
+  } | null;
+  search?: any | null;  // Full search results from search-agent
+  resources?: any[] | null;
+}
+
 interface ChatMetadata {
   scripture_reference: string | null;
   search_query: string | null;
@@ -16,6 +27,7 @@ interface ChatMetadata {
   navigation_hint: 'scripture' | 'resources' | 'search' | 'notes' | null;
   search_matches?: SearchMatch[];
   search_resource?: string;
+  tool_results?: ToolResults;
 }
 
 interface UseMultiAgentChatOptions {
@@ -129,6 +141,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
       const decoder = new TextDecoder();
       let buffer = "";
       let metadata: ChatMetadata | null = null;
+      let toolResults: ToolResults | null = null;
       let assistantContent = "";
       const assistantMessageId = `${Date.now()}-response`;
 
@@ -163,8 +176,16 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
           try {
             const parsed = JSON.parse(jsonStr);
             
-            if (parsed.type === 'metadata') {
+            // Capture tool_results for immediate UI population
+            if (parsed.type === 'tool_results') {
+              toolResults = parsed.data;
+              console.log('[Chat] Received tool_results:', Object.keys(parsed.data || {}).filter(k => parsed.data[k]));
+            } else if (parsed.type === 'metadata') {
               metadata = parsed;
+              // Also capture tool_results from metadata if present
+              if (parsed.tool_results) {
+                toolResults = parsed.tool_results;
+              }
               // Notify about scripture reference if found
               if (parsed.scripture_reference && onScriptureReference) {
                 onScriptureReference(parsed.scripture_reference);
@@ -220,6 +241,7 @@ export function useMultiAgentChat(options: UseMultiAgentChatOptions = {}) {
         searchMatches: metadata?.search_matches || [],
         searchResource: metadata?.search_resource || null,
         toolCalls: metadata?.tool_calls || [],
+        toolResults,  // NEW: All data the LLM received
         newMessages: [finalAssistantMessage],
       };
     } catch (err) {

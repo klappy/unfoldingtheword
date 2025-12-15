@@ -483,11 +483,30 @@ ${resourceContext}${langInstruction}`;
     // Step 4: Generate and stream response
     const encoder = new TextEncoder();
 
+    // Build unified tool_results for client to display ALL data the LLM received
+    const toolResults = {
+      scripture: scriptureText ? {
+        reference: scriptureReference,
+        text: scriptureText,
+        resource: prefs.resource,
+      } : null,
+      search: searchResultsFull,
+      resources: resources.length > 0 ? resources : null,
+    };
+
     if (stream) {
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
-            // Send metadata first
+            // Send tool_results first so client can render immediately
+            if (Object.values(toolResults).some(v => v !== null)) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: 'tool_results', 
+                data: toolResults 
+              })}\n\n`));
+            }
+
+            // Send metadata
             const metadata = {
               type: 'metadata',
               scripture_reference: scriptureReference,
@@ -495,6 +514,8 @@ ${resourceContext}${langInstruction}`;
               navigation_hint: navigationHint,
               search_matches: searchMatches,
               search_resource: prefs.resource,
+              // Include tool_results in metadata for final message storage
+              tool_results: toolResults,
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(metadata)}\n\n`));
 

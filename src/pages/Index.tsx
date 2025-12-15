@@ -1,5 +1,6 @@
 import { useCallback, useState, useMemo, useEffect } from 'react';
 import { Resource, SearchResults, ToolCall } from '@/types';
+import { SearchInteraction, buildInteractionPrompt } from '@/types/interactions';
 import { useSwipeNavigation } from '@/hooks/useSwipeNavigation';
 import { useCardVisibility } from '@/hooks/useCardVisibility';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -501,6 +502,19 @@ const Index = () => {
     setResourceSearchResults(null);
   }, [clearSearchResults, setResourceFilterInfo, setResourceSearchResults]);
 
+  // LLM-driven interaction handler (Prompt over code principle)
+  // Interactions from SearchCard become prompts sent to the LLM
+  const handleSearchInteraction = useCallback(async (interaction: SearchInteraction) => {
+    console.log('[Index] Search interaction:', interaction);
+    
+    // Build natural language prompt from interaction
+    const prompt = buildInteractionPrompt(interaction);
+    console.log('[Index] Sending interaction as prompt:', prompt);
+    
+    // Send through LLM - response will update SearchCard
+    await handleSendMessage(prompt);
+  }, [handleSendMessage]);
+
   const renderCard = useCallback((card: CardType) => {
     switch (card) {
       case 'history':
@@ -546,6 +560,10 @@ const Index = () => {
             results={searchResults}
             onClearSearch={handleClearSearch}
             onVerseClick={handleSearchVerseClick}
+            onAddToNotes={(text) => handleAddToNotes(text)}
+            onSearch={(query) => handleSendMessage(query)}
+            onInteraction={handleSearchInteraction}
+            currentLanguage={language || undefined}
             filterQuery={resourceFilterInfo?.query || undefined}
             filterReference={resourceFilterInfo?.reference || undefined}
             resourceMatchCount={resourceFilterInfo ? resourceSearchResults?.length : undefined}
@@ -610,7 +628,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleResourceClick, handleScriptureReferenceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, resourcePreferences, setActiveResource, language, t, hasStaticTranslations, translateUiStrings, i18nLoading, showVoiceMode, voiceConversation, showResetConfirm, handleSendMessage, scrollToResourceType, clearVerseFilter, fallbackState, handleTranslateAllRequest, isTranslating, clearScriptureData, searchResults, handleClearSearch, handleSearchVerseClick]);
+  }, [conversations, handleHistorySelect, handleNewConversation, messages, handleResourceClick, handleScriptureReferenceClick, chatLoading, scripture, handleAddToNotes, handleVerseSelect, scriptureLoading, isResourcesLoading, scriptureError, loadScriptureData, resources, verseFilter, filterByVerse, navigateToCard, notes, handleDeleteNote, getCurrentLanguage, resourcePreferences, setActiveResource, language, t, hasStaticTranslations, translateUiStrings, i18nLoading, showVoiceMode, voiceConversation, showResetConfirm, handleSendMessage, scrollToResourceType, clearVerseFilter, fallbackState, handleTranslateAllRequest, isTranslating, clearScriptureData, searchResults, handleClearSearch, handleSearchVerseClick, handleSearchInteraction]);
 
   // Show chat-based language selection on first launch or when manually triggered
   if (needsSelection || showLanguageSelector) {
