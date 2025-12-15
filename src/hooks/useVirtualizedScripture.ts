@@ -136,36 +136,41 @@ export function useVirtualizedScripture({
     return offset;
   }, [chapters, renderState]);
 
-  // Initial scroll to target - wait for DOM to be ready
+  // Initial scroll to target - IMMEDIATE scroll before first paint to avoid flicker
   useEffect(() => {
     if (!containerRef.current || !targetChapter || initialScrollDone.current) return;
     if (chapters.length === 0) return;
     
-    // Use multiple rAF to ensure DOM is fully painted
-    const scrollToTarget = () => {
+    // Calculate offset IMMEDIATELY (sync) before any paint
+    const offset = getChapterOffset(targetChapter);
+    containerRef.current.scrollTop = offset;
+    console.log('[Virtualized] Immediate scroll to chapter', targetChapter, 'offset:', offset);
+    
+    // Then use rAF to refine scroll position once DOM is painted
+    const refineScroll = () => {
       if (!containerRef.current) return;
       
-      // Try to find the actual chapter element first
+      // Try to find the actual chapter element for precise positioning
       const targetElement = containerRef.current.querySelector(`[data-chapter="${targetChapter}"]`);
       
       if (targetElement) {
-        // Use scrollIntoView for reliable positioning
-        targetElement.scrollIntoView({ block: 'start', behavior: 'instant' });
-        initialScrollDone.current = true;
-        console.log('[Virtualized] Scrolled to chapter element:', targetChapter);
-      } else {
-        // Fallback to calculated offset
-        const offset = getChapterOffset(targetChapter);
-        containerRef.current.scrollTop = offset;
-        initialScrollDone.current = true;
-        console.log('[Virtualized] Initial scroll to chapter', targetChapter, 'offset:', offset);
+        // Get the element's position relative to container
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const elementRect = targetElement.getBoundingClientRect();
+        const currentScroll = containerRef.current.scrollTop;
+        const newScroll = currentScroll + (elementRect.top - containerRect.top);
+        
+        // Only adjust if significantly different (avoid micro-jumps)
+        if (Math.abs(newScroll - currentScroll) > 10) {
+          containerRef.current.scrollTop = newScroll;
+          console.log('[Virtualized] Refined scroll to chapter:', targetChapter, 'from:', currentScroll, 'to:', newScroll);
+        }
       }
+      initialScrollDone.current = true;
     };
     
-    // Double rAF ensures layout is complete
-    requestAnimationFrame(() => {
-      requestAnimationFrame(scrollToTarget);
-    });
+    // Single rAF for refinement after initial sync scroll
+    requestAnimationFrame(refineScroll);
   }, [targetChapter, getChapterOffset, chapters.length]);
 
   // Setup intersection observer for lazy loading
