@@ -89,12 +89,17 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.85" },
         },
+        "verse-highlight": {
+          "0%": { backgroundColor: "hsl(var(--primary) / 0.4)" },
+          "100%": { backgroundColor: "hsl(var(--primary) / 0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         shimmer: "shimmer 2s linear infinite",
         "pulse-slow": "pulse-slow 5s ease-in-out infinite",
+        "verse-highlight": "verse-highlight 1.5s ease-out forwards",
       },
       boxShadow: {
         soft: "var(--shadow-soft)",
