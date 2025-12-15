@@ -22,8 +22,8 @@ const DEFAULT_PREFS: DismissPrefs = {
   neverAskAgain: [],
 };
 
-// Cards that are always visible
-const ALWAYS_VISIBLE: CardType[] = ['chat'];
+// Cards that are always visible (core navigation)
+const ALWAYS_VISIBLE: CardType[] = ['chat', 'scripture', 'resources', 'notes'];
 
 // Full card order when all are visible
 const FULL_CARD_ORDER: CardType[] = ['history', 'chat', 'search', 'scripture', 'resources', 'notes'];
