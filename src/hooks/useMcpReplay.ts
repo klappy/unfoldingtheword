@@ -355,9 +355,14 @@ async function replayToolCall(
           layer: 'edge',
         });
 
+        // Don't use 'Bible' as fallback - pass undefined for global word lookups
+        const wordReference = args.reference && !['Bible', 'OT', 'NT'].includes(args.reference) 
+          ? args.reference 
+          : undefined;
+
         const { data, error } = await supabase.functions.invoke('resource-agent', {
           body: {
-            reference: args.reference || 'Bible',
+            reference: wordReference,
             type: ['words'],
             term: args.term,
             language: prefs.language,
