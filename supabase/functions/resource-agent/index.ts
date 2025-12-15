@@ -208,44 +208,21 @@ async function fetchWordLinks(reference: string, language: string, organization:
   return [];
 }
 
-// Parse markdown notes
+// Parse markdown notes - DO NOT split on headings!
+// MCP returns book/chapter notes as single markdown documents with internal structure.
+// Splitting on headings creates dozens of nonsensical fragments.
 function parseMarkdownNotes(content: string, reference: string): Resource[] {
-  const notes: Resource[] = [];
-  const lines = content.split('\n');
-  let currentNote: any = null;
-  
-  for (const line of lines) {
-    if (line.startsWith('#')) {
-      if (currentNote && currentNote.content) {
-        notes.push(currentNote);
-      }
-      currentNote = {
-        id: `tn-${notes.length}`,
-        type: 'translation-note',
-        reference,
-        title: line.replace(/^#+\s*/, '').trim(),
-        content: '',
-      };
-    } else if (currentNote) {
-      currentNote.content += line + '\n';
-    }
-  }
-  
-  if (currentNote && currentNote.content) {
-    notes.push(currentNote);
-  }
-  
-  if (notes.length === 0 && content.trim()) {
-    notes.push({
+  // Return the entire content as ONE note
+  if (content.trim()) {
+    return [{
       id: 'tn-0',
       type: 'translation-note',
       reference,
-      title: 'Translation Note',
+      title: reference,
       content: content.trim(),
-    });
+    }];
   }
-  
-  return notes;
+  return [];
 }
 
 // Parse markdown questions
