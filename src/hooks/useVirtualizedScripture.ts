@@ -136,17 +136,37 @@ export function useVirtualizedScripture({
     return offset;
   }, [chapters, renderState]);
 
-  // Initial scroll to target
+  // Initial scroll to target - wait for DOM to be ready
   useEffect(() => {
     if (!containerRef.current || !targetChapter || initialScrollDone.current) return;
+    if (chapters.length === 0) return;
     
-    // Immediate scroll to estimated position
-    const offset = getChapterOffset(targetChapter);
-    containerRef.current.scrollTop = offset;
-    initialScrollDone.current = true;
+    // Use multiple rAF to ensure DOM is fully painted
+    const scrollToTarget = () => {
+      if (!containerRef.current) return;
+      
+      // Try to find the actual chapter element first
+      const targetElement = containerRef.current.querySelector(`[data-chapter="${targetChapter}"]`);
+      
+      if (targetElement) {
+        // Use scrollIntoView for reliable positioning
+        targetElement.scrollIntoView({ block: 'start', behavior: 'instant' });
+        initialScrollDone.current = true;
+        console.log('[Virtualized] Scrolled to chapter element:', targetChapter);
+      } else {
+        // Fallback to calculated offset
+        const offset = getChapterOffset(targetChapter);
+        containerRef.current.scrollTop = offset;
+        initialScrollDone.current = true;
+        console.log('[Virtualized] Initial scroll to chapter', targetChapter, 'offset:', offset);
+      }
+    };
     
-    console.log('[Virtualized] Initial scroll to chapter', targetChapter, 'offset:', offset);
-  }, [targetChapter, getChapterOffset]);
+    // Double rAF ensures layout is complete
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToTarget);
+    });
+  }, [targetChapter, getChapterOffset, chapters.length]);
 
   // Setup intersection observer for lazy loading
   useEffect(() => {
