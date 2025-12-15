@@ -259,59 +259,104 @@ serve(async (req) => {
 
       switch (funcName) {
         case 'get_scripture': {
-          const [scriptureResult, resourceResult] = await Promise.all([
-            invokeSubAgent('scripture-agent', {
-              reference: args.reference,
-              language: prefs.language,
-              organization: prefs.organization,
-              resource: prefs.resource,
-            }),
+          // Fetch multiple scripture versions in parallel
+          const scriptureVersions = ['ult', 'ust'];
+          const [resourceResult, ...scriptureResults] = await Promise.all([
             invokeSubAgent('resource-agent', {
               reference: args.reference,
               type: ['notes', 'questions', 'word-links'],
               language: prefs.language,
               organization: prefs.organization,
             }),
+            ...scriptureVersions.map(res => 
+              invokeSubAgent('scripture-agent', {
+                reference: args.reference,
+                language: prefs.language,
+                organization: prefs.organization,
+                resource: res,
+              })
+            ),
           ]);
 
-          if (scriptureResult?.text) {
-            scriptureText = scriptureResult.text;
-            scriptureReference = args.reference;
-            toolCalls.push({ tool: 'scripture-agent', args: { reference: args.reference } });
+          // Build scripture matches from all versions
+          const scriptureMatches: any[] = [];
+          for (let i = 0; i < scriptureVersions.length; i++) {
+            const result = scriptureResults[i];
+            if (result?.text) {
+              scriptureMatches.push({
+                reference: args.reference,
+                text: result.text,
+                rawMarkdown: result.text,
+                metadata: { 
+                  resource: scriptureVersions[i].toUpperCase(),
+                  translation: result.translation,
+                  verses: result.verses,
+                },
+              });
+              // Use first successful result for primary scripture display
+              if (!scriptureText) {
+                scriptureText = result.text;
+                scriptureReference = args.reference;
+              }
+            }
           }
+          
+          toolCalls.push({ tool: 'scripture-agent', args: { reference: args.reference, versions: scriptureVersions } });
+
+          // Filter resources to only include verse-specific notes (not chapter intro notes)
+          const refParts = args.reference.match(/^(.+?)\s+(\d+):(\d+)/);
+          const isVerseRef = !!refParts;
+          
+          let notes: any[] = [];
+          let questions: any[] = [];
+          let words: any[] = [];
+          
           if (resourceResult?.resources) {
             resources = resourceResult.resources;
             toolCalls.push({ tool: 'resource-agent', args: { reference: args.reference, type: ['notes', 'questions', 'word-links'] } });
             
-            // Build searchResultsFull for unified SearchCard display
-            const notes = resourceResult.resources.filter((r: any) => r.type === 'translation-note' || r.type === 'note');
-            const questions = resourceResult.resources.filter((r: any) => r.type === 'translation-question' || r.type === 'question');
-            const words = resourceResult.resources.filter((r: any) => r.type === 'translation-word' || r.type === 'word' || r.type === 'word-link');
-            
-            searchResultsFull = {
-              query: args.reference,
-              scope: args.reference,
-              scopeType: 'verse',
-              scripture: null, // Scripture shown separately in scripture field
-              notes: notes.length > 0 ? {
-                markdown: '',
-                matches: notes.map((n: any) => ({ reference: n.reference, text: n.content, rawMarkdown: n.content, metadata: n })),
-                totalCount: notes.length,
-              } : null,
-              questions: questions.length > 0 ? {
-                markdown: '',
-                matches: questions.map((q: any) => ({ reference: q.reference, text: q.content, rawMarkdown: q.content, metadata: q })),
-                totalCount: questions.length,
-              } : null,
-              words: words.length > 0 ? {
-                markdown: '',
-                matches: words.map((w: any) => ({ reference: w.reference, text: w.content, rawMarkdown: w.content, metadata: w })),
-                totalCount: words.length,
-              } : null,
-              academy: null,
-              toolCalls: toolCalls,
-            };
+            // Filter notes to only include those matching the exact verse reference
+            notes = resourceResult.resources.filter((r: any) => {
+              if (r.type !== 'translation-note' && r.type !== 'note') return false;
+              // If it's a verse reference, only include notes that match the exact verse
+              if (isVerseRef) {
+                const noteRef = r.reference || '';
+                return noteRef.includes(`:${refParts[3]}`) || noteRef === args.reference;
+              }
+              return true;
+            });
+            questions = resourceResult.resources.filter((r: any) => r.type === 'translation-question' || r.type === 'question');
+            words = resourceResult.resources.filter((r: any) => r.type === 'translation-word' || r.type === 'word' || r.type === 'word-link');
           }
+          
+          searchResultsFull = {
+            query: args.reference,
+            scope: args.reference,
+            scopeType: isVerseRef ? 'verse' : 'chapter',
+            scripture: scriptureMatches.length > 0 ? {
+              markdown: '',
+              matches: scriptureMatches,
+              totalCount: scriptureMatches.length,
+            } : null,
+            notes: notes.length > 0 ? {
+              markdown: '',
+              matches: notes.map((n: any) => ({ reference: n.reference, text: n.content, rawMarkdown: n.content, metadata: n })),
+              totalCount: notes.length,
+            } : null,
+            questions: questions.length > 0 ? {
+              markdown: '',
+              matches: questions.map((q: any) => ({ reference: q.reference, text: q.content, rawMarkdown: q.content, metadata: q })),
+              totalCount: questions.length,
+            } : null,
+            words: words.length > 0 ? {
+              markdown: '',
+              matches: words.map((w: any) => ({ reference: w.reference, text: w.content, rawMarkdown: w.content, metadata: w })),
+              totalCount: words.length,
+            } : null,
+            academy: null,
+            toolCalls: toolCalls,
+          };
+          
           // Unified view: always navigate to search to show all resources
           navigationHint = 'search';
           break;
