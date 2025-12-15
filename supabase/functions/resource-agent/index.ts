@@ -9,6 +9,30 @@ const MCP_BASE_URL = 'https://translation-helps-mcp.pages.dev';
 
 type ResourceType = 'notes' | 'questions' | 'words' | 'word-links' | 'academy';
 
+// Check if reference is too broad for word-links (requires specific verse/chapter reference)
+function isValidWordLinksScope(reference: string): boolean {
+  const normalized = reference.toLowerCase().trim();
+  
+  // Broad scopes that don't work with word-links
+  const broadScopes = ['ot', 'nt', 'bible', 'old testament', 'new testament', 'all'];
+  if (broadScopes.includes(normalized)) {
+    return false;
+  }
+  
+  // Testament/collection scopes
+  if (['gospels', 'pentateuch', 'pauline epistles', 'prophets', 'wisdom', 'law', 'history'].includes(normalized)) {
+    return false;
+  }
+  
+  // Must have at least a chapter number to be valid (e.g., "John 3" or "John 3:16")
+  // Book-only references like "John" are too broad
+  if (!/\d/.test(reference)) {
+    return false;
+  }
+  
+  return true;
+}
+
 interface ResourceRequest {
   reference: string;
   type: ResourceType | ResourceType[];
@@ -327,7 +351,13 @@ serve(async (req) => {
           }
           break;
         case 'word-links':
-          fetchPromises.push(fetchWordLinks(reference, language, organization));
+          // Only fetch word-links for specific references (chapter or verse level)
+          // Broad scopes like OT, NT, Bible cause 500 errors from MCP server
+          if (isValidWordLinksScope(reference)) {
+            fetchPromises.push(fetchWordLinks(reference, language, organization));
+          } else {
+            console.log(`[resource-agent] Skipping word-links for broad scope: ${reference}`);
+          }
           break;
       }
     }
