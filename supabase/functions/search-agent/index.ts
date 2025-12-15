@@ -301,10 +301,11 @@ async function searchNotes(
         console.log(`[search-agent] Found ${items.length} note items from JSON`);
         
         for (const item of items) {
-          // Each item from JSON should have its own reference boundary
-          const rawContent = item.rawMarkdown || item.note || item.content || item.text || '';
+          // MCP JSON fields have capital letters: Note, Reference, Quote, ID, etc.
+          const rawContent = item.Note || item.rawMarkdown || item.note || item.content || item.text || '';
+          const itemRef = item.Reference || item.reference || (scope || 'Bible');
           allMatches.push({
-            reference: item.reference || (scope || 'Bible'),
+            reference: itemRef,
             text: rawContent,
             rawMarkdown: rawContent,
             metadata: item,
