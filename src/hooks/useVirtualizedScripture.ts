@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ScriptureChapter, ScriptureVerse } from '@/types';
 
+// Polyfill for requestIdleCallback (not available in Safari)
+const scheduleIdleCallback = (callback: () => void) => {
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(callback);
+  } else {
+    setTimeout(callback, 1);
+  }
+};
+
 // Estimated heights for virtualization
 const ESTIMATED_LINE_HEIGHT = 28; // px per line of text
 const ESTIMATED_CHARS_PER_LINE = 45;
@@ -302,11 +311,11 @@ export function useVirtualizedScripture({
         });
 
         if (idx < renderQueue.length) {
-          requestIdleCallback ? requestIdleCallback(renderBatch) : setTimeout(renderBatch, 0);
+          scheduleIdleCallback(renderBatch);
         }
       };
 
-      requestIdleCallback ? requestIdleCallback(renderBatch) : setTimeout(renderBatch, 0);
+      scheduleIdleCallback(renderBatch);
     }
   }, [targetChapter, targetVerse, chapters, renderState]);
 
@@ -323,7 +332,7 @@ export function useVirtualizedScripture({
     );
 
     if (adjacentChapters.length > 0) {
-      requestIdleCallback?.(() => {
+      scheduleIdleCallback(() => {
         setRenderState(prev => {
           const next = new Map(prev);
           adjacentChapters.forEach(chNum => {
@@ -336,20 +345,7 @@ export function useVirtualizedScripture({
           });
           return next;
         });
-      }) ?? setTimeout(() => {
-        setRenderState(prev => {
-          const next = new Map(prev);
-          adjacentChapters.forEach(chNum => {
-            const existing = next.get(chNum);
-            if (existing && !existing.rendered) {
-              next.set(chNum, { ...existing, rendered: true, verses: new Map(
-                Array.from(existing.verses.entries()).map(([vNum, vs]) => [vNum, { ...vs, rendered: true }])
-              )});
-            }
-          });
-          return next;
-        });
-      }, 0);
+      });
     }
   }, [targetChapter, chapters.length, renderState]);
 
