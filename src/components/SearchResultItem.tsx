@@ -90,19 +90,22 @@ function SearchResultItemInner({
   const displayTitle = getDisplayTitle(type, reference, metadata);
   const isScriptureType = type === 'scripture';
 
-  // For scripture: extract verse text from markdown (strip YAML frontmatter)
+  // For scripture: extract ONLY verse text (strip all metadata, frontmatter, headings)
   const extractScriptureContent = (markdown: string): string => {
     // Remove YAML frontmatter (---...---)
-    const withoutFrontmatter = markdown.replace(/^---[\s\S]*?---\n*/m, '');
-    // Remove any remaining metadata lines (lines starting with key:)
-    const lines = withoutFrontmatter.split('\n');
-    const contentLines = lines.filter(line => {
-      const trimmed = line.trim();
-      // Skip metadata-like lines
-      if (/^(reference|book|chapter|verse|resource|language|organization|testament|matches):/i.test(trimmed)) return false;
-      return true;
-    });
-    return contentLines.join('\n').trim();
+    let content = markdown.replace(/^---[\s\S]*?---\n*/m, '');
+    // Remove markdown headings (# Ruth 3:2, ## Title, etc.)
+    content = content.replace(/^#+\s+.*$/gm, '');
+    // Remove resource metadata lines (ULT v87, unfoldingWord® Literal Text, etc.)
+    content = content.replace(/^(ULT|UST|T4T|UEB|UDB)\s*(v\d+)?.*$/gim, '');
+    content = content.replace(/^\(.*?\)$/gm, ''); // Lines that are just (parenthetical)
+    content = content.replace(/^unfoldingWord.*$/gim, '');
+    // Remove metadata-like lines (key: value patterns)
+    content = content.replace(/^(reference|book|chapter|verse|resource|language|organization|testament|matches|version):\s*.*$/gim, '');
+    // Remove bold metadata like **Ruth 3:2** or **ULT**
+    content = content.replace(/^\*\*[^*]+\*\*\s*$/gm, '');
+    // Clean up excessive whitespace
+    return content.split('\n').filter(line => line.trim()).join('\n').trim();
   };
 
   // Use full content if fetched, otherwise use raw markdown from search
@@ -287,12 +290,12 @@ function SearchResultItemInner({
               {displayTitle}
             </h3>
             
-            {/* Type label and clickable reference (if different from title) */}
+            {/* Type label - hide redundant reference for scripture since it's in title */}
             <div className="flex items-center gap-2 mb-2">
               <span className={cn('text-[10px] uppercase tracking-wider font-medium', colors.text)}>
                 {label}
               </span>
-              {reference && reference !== displayTitle && (
+              {!isScriptureType && reference && reference !== displayTitle && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
