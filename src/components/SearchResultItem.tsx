@@ -90,8 +90,24 @@ function SearchResultItemInner({
   const displayTitle = getDisplayTitle(type, reference, metadata);
   const isScriptureType = type === 'scripture';
 
+  // For scripture: extract verse text from markdown (strip YAML frontmatter)
+  const extractScriptureContent = (markdown: string): string => {
+    // Remove YAML frontmatter (---...---)
+    const withoutFrontmatter = markdown.replace(/^---[\s\S]*?---\n*/m, '');
+    // Remove any remaining metadata lines (lines starting with key:)
+    const lines = withoutFrontmatter.split('\n');
+    const contentLines = lines.filter(line => {
+      const trimmed = line.trim();
+      // Skip metadata-like lines
+      if (/^(reference|book|chapter|verse|resource|language|organization|testament|matches):/i.test(trimmed)) return false;
+      return true;
+    });
+    return contentLines.join('\n').trim();
+  };
+
   // Use full content if fetched, otherwise use raw markdown from search
-  const displayContent = fullContent || rawMarkdown;
+  const rawContent = fullContent || rawMarkdown;
+  const displayContent = isScriptureType ? extractScriptureContent(rawContent) : rawContent;
   const contentPreview = displayContent.length > PREVIEW_LENGTH
     ? displayContent.substring(0, PREVIEW_LENGTH) + '...'
     : displayContent;
