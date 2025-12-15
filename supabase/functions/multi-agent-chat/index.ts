@@ -282,8 +282,38 @@ serve(async (req) => {
           if (resourceResult?.resources) {
             resources = resourceResult.resources;
             toolCalls.push({ tool: 'resource-agent', args: { reference: args.reference, type: ['notes', 'questions', 'word-links'] } });
+            
+            // Build searchResultsFull for unified SearchCard display
+            const notes = resourceResult.resources.filter((r: any) => r.type === 'translation-note' || r.type === 'note');
+            const questions = resourceResult.resources.filter((r: any) => r.type === 'translation-question' || r.type === 'question');
+            const words = resourceResult.resources.filter((r: any) => r.type === 'translation-word' || r.type === 'word' || r.type === 'word-link');
+            
+            searchResultsFull = {
+              query: args.reference,
+              scope: args.reference,
+              scopeType: 'verse',
+              scripture: null, // Scripture shown separately in scripture field
+              notes: notes.length > 0 ? {
+                markdown: '',
+                matches: notes.map((n: any) => ({ reference: n.reference, text: n.content, rawMarkdown: n.content, metadata: n })),
+                totalCount: notes.length,
+              } : null,
+              questions: questions.length > 0 ? {
+                markdown: '',
+                matches: questions.map((q: any) => ({ reference: q.reference, text: q.content, rawMarkdown: q.content, metadata: q })),
+                totalCount: questions.length,
+              } : null,
+              words: words.length > 0 ? {
+                markdown: '',
+                matches: words.map((w: any) => ({ reference: w.reference, text: w.content, rawMarkdown: w.content, metadata: w })),
+                totalCount: words.length,
+              } : null,
+              academy: null,
+              toolCalls: toolCalls,
+            };
           }
-          navigationHint = 'scripture';
+          // Unified view: always navigate to search to show all resources
+          navigationHint = 'search';
           break;
         }
 
