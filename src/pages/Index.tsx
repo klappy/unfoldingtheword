@@ -340,10 +340,14 @@ const Index = () => {
     }
 
     if (result) {
-      const { toolCalls, navigationHint, scriptureReference, searchQuery, searchMatches, searchResource } = result;
+      const { toolCalls, navigationHint, scriptureReference, searchQuery, searchMatches, searchResource, toolResults } = result;
       
-      // Always update scripture search results when search intent is detected (clears stale results if empty)
-      if (navigationHint === 'search' && searchQuery) {
+      // Use unified tool_results.search directly when available (unified search view)
+      if (toolResults?.search) {
+        console.log('[Index] Setting search results from tool_results:', { query: toolResults.search.query });
+        setSearchResults(toolResults.search as any);
+      } else if (navigationHint === 'search' && searchQuery) {
+        // Fallback: use searchMatches for legacy format
         const ref = scriptureReference || scripture?.reference || 'Bible';
         if (searchMatches && searchMatches.length > 0) {
           console.log('[Index] Setting search results from metadata:', { ref, searchQuery, count: searchMatches.length });
