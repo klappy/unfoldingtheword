@@ -9,11 +9,12 @@ const MCP_BASE_URL = 'https://translation-helps-mcp.pages.dev';
 
 type ResourceType = 'notes' | 'questions' | 'words' | 'word-links' | 'academy';
 
-// Check if reference is too broad for word-links (requires specific verse/chapter reference)
-function isValidWordLinksScope(reference: string): boolean {
+// Check if reference is too broad for MCP resource endpoints (requires specific book/chapter/verse reference)
+// "Bible", "OT", "NT" are not valid references - they cause 404/500 errors from MCP server
+function isValidResourceScope(reference: string): boolean {
   const normalized = reference.toLowerCase().trim();
   
-  // Broad scopes that don't work with word-links
+  // Broad scopes that don't work with resource endpoints
   const broadScopes = ['ot', 'nt', 'bible', 'old testament', 'new testament', 'all'];
   if (broadScopes.includes(normalized)) {
     return false;
@@ -24,8 +25,15 @@ function isValidWordLinksScope(reference: string): boolean {
     return false;
   }
   
+  return true;
+}
+
+// Check if reference is valid for word-links (requires chapter or verse level)
+function isValidWordLinksScope(reference: string): boolean {
+  if (!isValidResourceScope(reference)) return false;
+  
   // Must have at least a chapter number to be valid (e.g., "John 3" or "John 3:16")
-  // Book-only references like "John" are too broad
+  // Book-only references like "John" are too broad for word-links
   if (!/\d/.test(reference)) {
     return false;
   }
@@ -420,22 +428,33 @@ serve(async (req) => {
     const counts: Record<string, number> = {};
     const fetchPromises: Promise<Resource[]>[] = [];
 
+    // Validate reference scope before making MCP API calls
+    // Broad scopes like "Bible", "OT", "NT" are not valid and cause 500 errors
+    const validScope = isValidResourceScope(reference);
+    if (!validScope) {
+      console.log(`[resource-agent] Skipping resource fetches for invalid/broad scope: ${reference}`);
+    }
+
     for (const t of types) {
       switch (t) {
         case 'notes':
-          fetchPromises.push(fetchNotes(reference, language, organization));
+          if (validScope) {
+            fetchPromises.push(fetchNotes(reference, language, organization));
+          }
           break;
         case 'questions':
-          fetchPromises.push(fetchQuestions(reference, language, organization));
+          if (validScope) {
+            fetchPromises.push(fetchQuestions(reference, language, organization));
+          }
           break;
         case 'words':
+          // Words can be fetched by term without a valid reference
           if (term) {
-            fetchPromises.push(fetchWord(term, reference));
+            fetchPromises.push(fetchWord(term, validScope ? reference : undefined));
           }
           break;
         case 'word-links':
           // Only fetch word-links for specific references (chapter or verse level)
-          // Broad scopes like OT, NT, Bible cause 500 errors from MCP server
           if (isValidWordLinksScope(reference)) {
             fetchPromises.push(fetchWordLinks(reference, language, organization));
           } else {

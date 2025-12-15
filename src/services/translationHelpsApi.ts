@@ -882,7 +882,21 @@ export async function fetchBookWithFallback(bookName: string, resourceOverride?:
   };
 }
 
+// Check if reference is too broad for MCP resource endpoints
+function isValidResourceReference(reference: string): boolean {
+  const normalized = reference.toLowerCase().trim();
+  const invalidScopes = ['ot', 'nt', 'bible', 'old testament', 'new testament', 'all', 
+    'gospels', 'pentateuch', 'pauline epistles', 'prophets', 'wisdom', 'law', 'history'];
+  return !invalidScopes.includes(normalized);
+}
+
 export async function fetchTranslationNotes(reference: string): Promise<TranslationNote[]> {
+  // Skip invalid broad scopes like "Bible", "OT", "NT" - they cause 500 errors
+  if (!isValidResourceReference(reference)) {
+    console.log(`[translationHelpsApi] Skipping notes fetch for invalid scope: ${reference}`);
+    return [];
+  }
+  
   try {
     const data = await callProxy('fetch-translation-notes', { reference });
     const content = data.content || '';
@@ -910,6 +924,12 @@ export async function fetchTranslationNotes(reference: string): Promise<Translat
 }
 
 export async function fetchTranslationQuestions(reference: string): Promise<TranslationQuestion[]> {
+  // Skip invalid broad scopes like "Bible", "OT", "NT" - they cause 500 errors
+  if (!isValidResourceReference(reference)) {
+    console.log(`[translationHelpsApi] Skipping questions fetch for invalid scope: ${reference}`);
+    return [];
+  }
+  
   try {
     const data = await callProxy('fetch-translation-questions', { reference });
     const content = data.content || '';
@@ -937,6 +957,13 @@ export async function fetchTranslationQuestions(reference: string): Promise<Tran
 }
 
 export async function fetchTranslationWordLinks(reference: string): Promise<TranslationWordLink[]> {
+  // Skip invalid broad scopes like "Bible", "OT", "NT" - they cause 500 errors
+  // Word links also require at least chapter-level references
+  if (!isValidResourceReference(reference) || !/\d/.test(reference)) {
+    console.log(`[translationHelpsApi] Skipping word-links fetch for invalid/broad scope: ${reference}`);
+    return [];
+  }
+  
   try {
     const data = await callProxy('fetch-translation-word-links', { reference });
     const content = data.content || '';
