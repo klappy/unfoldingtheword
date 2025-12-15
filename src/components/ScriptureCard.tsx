@@ -1,7 +1,7 @@
-import { useEffect, useRef, useCallback, memo, useState, useLayoutEffect, useMemo } from 'react';
+import { useEffect, useRef, useCallback, memo, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Book, ChevronLeft, ChevronRight, AlertCircle, RefreshCw, X, ChevronDown } from 'lucide-react';
-import { ScripturePassage, ScriptureChapter, ScriptureVerse } from '@/types';
+import { ScripturePassage, ScriptureChapter } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FallbackBadge } from '@/components/FallbackBadge';
@@ -9,8 +9,9 @@ import { FallbackState } from '@/hooks/useScriptureData';
 import { ResourceSelector } from '@/components/ResourceSelector';
 import { ScriptureResource } from '@/hooks/useLanguage';
 import { cn } from '@/lib/utils';
-import { useVisibleChapters } from '@/hooks/useVisibleChapters';
+import { useVirtualizedScripture } from '@/hooks/useVirtualizedScripture';
 import { PlayButton } from '@/components/PlayButton';
+import { ChapterSkeleton } from '@/components/VerseSkeleton';
 
 interface ScriptureCardProps {
   passage: ScripturePassage | null;
@@ -23,39 +24,97 @@ interface ScriptureCardProps {
   fallbackState?: FallbackState;
   onTranslateRequest?: () => void;
   isTranslating?: boolean;
-  // Resource selector props
   resourcePreferences?: ScriptureResource[];
   onResourceSelect?: (resource: ScriptureResource) => void;
   currentLanguage?: string;
 }
 
-// Memoized chapter component to prevent unnecessary re-renders
 // Helper to get chapter text for TTS
 function getChapterText(chapter: ScriptureChapter): string {
   return chapter.verses.map(v => v.text).join(' ');
 }
 
-const ChapterContent = memo(function ChapterContent({
+// Virtualized verse component - only renders when visible
+const VirtualizedVerse = memo(function VirtualizedVerse({
+  verse,
+  chapterNum,
+  isFirst,
+  isSelected,
+  onVerseClick,
+  registerVerse
+}: {
+  verse: { number: number; text: string; isParagraphEnd?: boolean };
+  chapterNum: number;
+  isFirst: boolean;
+  isSelected: boolean;
+  onVerseClick: (chapter: number, verseNum: number, e: React.MouseEvent) => void;
+  registerVerse: (chapter: number, verse: number, el: HTMLElement | null) => void;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  
+  useEffect(() => {
+    registerVerse(chapterNum, verse.number, ref.current);
+    return () => registerVerse(chapterNum, verse.number, null);
+  }, [chapterNum, verse.number, registerVerse]);
+
+  if (isFirst) {
+    return (
+      <span 
+        ref={ref}
+        data-verse={`${chapterNum}:${verse.number}`}
+        onClick={(e) => onVerseClick(chapterNum, verse.number, e)}
+        className={cn(
+          "cursor-pointer transition-all rounded-sm",
+          isSelected && "bg-primary/20 ring-1 ring-primary/30"
+        )}
+      >
+        <span className="drop-cap-chapter">{chapterNum}</span>
+        <sup className="scripture-verse">{verse.number}</sup>
+        {verse.text}
+        {verse.isParagraphEnd && <span className="block h-4" />}
+        {!verse.isParagraphEnd && ' '}
+      </span>
+    );
+  }
+
+  return (
+    <span 
+      ref={ref}
+      data-verse={`${chapterNum}:${verse.number}`}
+      onClick={(e) => onVerseClick(chapterNum, verse.number, e)}
+      className={cn(
+        "cursor-pointer transition-all rounded-sm hover:bg-primary/5",
+        isSelected && "bg-primary/20 ring-1 ring-primary/30"
+      )}
+    >
+      <sup className="scripture-verse">{verse.number}</sup>
+      {verse.text}
+      {verse.isParagraphEnd && <span className="block h-4" />}
+      {!verse.isParagraphEnd && ' '}
+    </span>
+  );
+});
+
+// Virtualized chapter component
+const VirtualizedChapter = memo(function VirtualizedChapter({
   chapter,
   bookName,
   selectedVerse,
   onVerseClick,
-  currentLanguage
+  currentLanguage,
+  registerVerse
 }: {
   chapter: ScriptureChapter;
   bookName: string;
   selectedVerse: { chapter: number; verse: number } | null;
   onVerseClick: (chapter: number, verseNum: number, e: React.MouseEvent) => void;
   currentLanguage?: string;
+  registerVerse: (chapter: number, verse: number, el: HTMLElement | null) => void;
 }) {
   const chapterText = useMemo(() => getChapterText(chapter), [chapter]);
+  
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className="scripture-text text-lg group"
-    >
+    <div className="scripture-text text-lg group">
       {/* Chapter play button */}
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-muted-foreground">Chapter {chapter.chapter}</span>
@@ -66,61 +125,17 @@ const ChapterContent = memo(function ChapterContent({
           language={currentLanguage}
         />
       </div>
-      {chapter.verses.map((verse, index) => {
-        const isSelected = selectedVerse?.chapter === chapter.chapter && selectedVerse?.verse === verse.number;
-        
-        // First verse of chapter gets the drop cap
-        if (index === 0) {
-          return (
-            <span 
-              key={`${chapter.chapter}-${verse.number}-${index}`}
-              data-verse={`${chapter.chapter}:${verse.number}`}
-              onClick={(e) => onVerseClick(chapter.chapter, verse.number, e)}
-              className={cn(
-                "cursor-pointer transition-all rounded-sm",
-                isSelected && "bg-primary/20 ring-1 ring-primary/30"
-              )}
-            >
-              <span className="drop-cap-chapter">{chapter.chapter}</span>
-              <sup className="scripture-verse">{verse.number}</sup>
-              {verse.text}
-              {verse.isParagraphEnd && index < chapter.verses.length - 1 && (
-                <span className="block h-4" />
-              )}
-              {!verse.isParagraphEnd && ' '}
-            </span>
-          );
-        }
-
-        return (
-          <span 
-            key={`${chapter.chapter}-${verse.number}-${index}`}
-            data-verse={`${chapter.chapter}:${verse.number}`}
-            onClick={(e) => onVerseClick(chapter.chapter, verse.number, e)}
-            className={cn(
-              "cursor-pointer transition-all rounded-sm hover:bg-primary/5",
-              isSelected && "bg-primary/20 ring-1 ring-primary/30"
-            )}
-          >
-            <sup className="scripture-verse">{verse.number}</sup>
-            {verse.text}
-            {verse.isParagraphEnd && index < chapter.verses.length - 1 && (
-              <span className="block h-4" />
-            )}
-            {!verse.isParagraphEnd && ' '}
-          </span>
-        );
-      })}
-    </motion.div>
-  );
-});
-
-// Chapter placeholder for unloaded chapters
-const ChapterPlaceholder = memo(function ChapterPlaceholder({ chapter }: { chapter: number }) {
-  return (
-    <div className="py-8 text-center">
-      <Skeleton className="w-12 h-12 mx-auto rounded" />
-      <Skeleton className="w-32 h-4 mx-auto mt-4" />
+      {chapter.verses.map((verse, index) => (
+        <VirtualizedVerse
+          key={`${chapter.chapter}-${verse.number}`}
+          verse={verse}
+          chapterNum={chapter.chapter}
+          isFirst={index === 0}
+          isSelected={selectedVerse?.chapter === chapter.chapter && selectedVerse?.verse === verse.number}
+          onVerseClick={onVerseClick}
+          registerVerse={registerVerse}
+        />
+      ))}
     </div>
   );
 });
@@ -141,108 +156,61 @@ export function ScriptureCard({
   currentLanguage = 'en',
 }: ScriptureCardProps) {
   const [isResourceSelectorOpen, setIsResourceSelectorOpen] = useState(false);
-  const [isContentReady, setIsContentReady] = useState(false);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const passageIdRef = useRef<string | null>(null);
-  
-  // Use lazy chapter loading
-  const totalChapters = passage?.book?.chapters?.length || 0;
-  const { containerRef, registerSentinel, shouldRenderChapter, visibleRange } = useVisibleChapters(
-    totalChapters,
-    passage?.targetChapter
-  );
+  const hasScrolledToTarget = useRef(false);
+  const passageRef = useRef<string | null>(null);
 
-  // Track when passage changes and reset content ready state
-  useLayoutEffect(() => {
-    const newPassageId = passage?.reference || null;
-    if (newPassageId !== passageIdRef.current) {
-      passageIdRef.current = newPassageId;
-      // Reset content ready when loading new passage
-      if (newPassageId && passage?.book?.chapters?.length) {
-        // Use double RAF to ensure paint has occurred
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setIsContentReady(true);
-          });
-        });
-      } else {
-        setIsContentReady(false);
-      }
-    }
-  }, [passage?.reference, passage?.book?.chapters?.length]);
-
-  // Reset content ready when starting to load
+  // Reset scroll tracking when passage changes
   useEffect(() => {
-    if (isLoading) {
-      setIsContentReady(false);
+    if (passage?.reference !== passageRef.current) {
+      passageRef.current = passage?.reference || null;
+      hasScrolledToTarget.current = false;
     }
-  }, [isLoading]);
-  
+  }, [passage?.reference]);
+
+  // Use virtualized scripture hook
+  const chapters = passage?.book?.chapters || [];
+  const {
+    containerRef,
+    registerChapter,
+    registerVerse,
+    shouldRenderChapter,
+    getChapterHeight,
+    scrollToVerse
+  } = useVirtualizedScripture({
+    chapters,
+    targetChapter: passage?.targetChapter,
+    targetVerse: passage?.targetVerse
+  });
+
   // Derive selected verse from verseFilter prop
-  const selectedVerse = (() => {
+  const selectedVerse = useMemo(() => {
     if (!verseFilter) return null;
-    // Parse "Book Chapter:Verse" format
     const match = verseFilter.match(/^(.+)\s+(\d+):(\d+)$/);
     if (match) {
       return { chapter: parseInt(match[2]), verse: parseInt(match[3]) };
     }
     return null;
-  })();
-  // Scroll to target chapter/verse when passage data is fully loaded
-  useEffect(() => {
-    // Only scroll when we have complete book data with chapters
-    if (!passage?.book?.chapters?.length || !passage.targetChapter) return;
-    
-    console.log('[ScriptureCard] Book loaded, scrolling to chapter:', passage.targetChapter, 'verse:', passage.targetVerse);
+  }, [verseFilter]);
 
-    // Use requestAnimationFrame to ensure DOM is painted
-    const scrollToTarget = () => {
-      const container = containerRef.current;
-      if (!container) return false;
-      
-      // If we have a specific verse, try to scroll to and select it
+  // Scroll to target verse once chapter is rendered
+  useEffect(() => {
+    if (!passage?.targetChapter || hasScrolledToTarget.current) return;
+    if (!shouldRenderChapter(passage.targetChapter)) return;
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
       if (passage.targetVerse) {
-        const verseSelector = `[data-verse="${passage.targetChapter}:${passage.targetVerse}"]`;
-        const verseEl = container.querySelector(verseSelector);
-        
-        if (verseEl) {
-          // Scroll verse into view with some offset from top
-          verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          console.log('[ScriptureCard] Scrolled to verse', passage.targetChapter, ':', passage.targetVerse);
-          
-          // Auto-select the verse to highlight it and filter resources
-          if (onVerseSelect && passage.book?.book) {
-            const reference = `${passage.book.book} ${passage.targetChapter}:${passage.targetVerse}`;
-            onVerseSelect(reference);
-          }
-          return true;
+        const found = scrollToVerse(passage.targetChapter!, passage.targetVerse);
+        if (found && onVerseSelect && passage.book?.book) {
+          onVerseSelect(`${passage.book.book} ${passage.targetChapter}:${passage.targetVerse}`);
         }
       }
-      
-      // Fall back to scrolling to just the chapter
-      const targetEl = chapterRefs.current.get(passage.targetChapter!);
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        console.log('[ScriptureCard] Scrolled to chapter', passage.targetChapter);
-        return true;
-      }
-      return false;
-    };
+      hasScrolledToTarget.current = true;
+    }, 50);
 
-    // First attempt after paint
-    requestAnimationFrame(() => {
-      if (!scrollToTarget()) {
-        // Retry a few times if refs aren't ready
-        let attempts = 0;
-        const timer = setInterval(() => {
-          attempts++;
-          if (scrollToTarget() || attempts >= 10) {
-            clearInterval(timer);
-          }
-        }, 50);
-      }
-    });
-  }, [passage?.book?.chapters?.length, passage?.targetChapter, passage?.targetVerse, passage?.reference, onVerseSelect, passage?.book?.book]);
+    return () => clearTimeout(timer);
+  }, [passage?.targetChapter, passage?.targetVerse, passage?.book?.book, shouldRenderChapter, scrollToVerse, onVerseSelect]);
 
   const handleTextSelection = () => {
     const selection = window.getSelection();
@@ -254,8 +222,7 @@ export function ScriptureCard({
     }
   };
 
-  const handleVerseClick = (chapter: number, verseNum: number, e: React.MouseEvent) => {
-    // Don't trigger if user is selecting text
+  const handleVerseClick = useCallback((chapter: number, verseNum: number, e: React.MouseEvent) => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) return;
     
@@ -264,13 +231,12 @@ export function ScriptureCard({
     const bookName = passage?.book?.book || '';
     const reference = `${bookName} ${chapter}:${verseNum}`;
     
-    // Toggle selection - if clicking same verse, clear it
     if (selectedVerse?.chapter === chapter && selectedVerse?.verse === verseNum) {
       onVerseSelect?.(`${bookName} ${chapter}`);
     } else {
       onVerseSelect?.(reference);
     }
-  };
+  }, [passage?.book?.book, selectedVerse, onVerseSelect]);
 
   const clearVerseSelection = () => {
     if (selectedVerse && passage?.book?.book) {
@@ -278,58 +244,28 @@ export function ScriptureCard({
     }
   };
 
-  // Skeleton loading component
-  const ScriptureSkeleton = () => (
-    <div className="flex flex-col h-full">
-      <div className="pt-4 pb-2">
-        <div className="swipe-indicator" />
-      </div>
-      <div className="px-6 pb-3">
-        <div className="flex items-center gap-2 mb-1">
-          <Skeleton className="w-4 h-4 rounded" />
-          <Skeleton className="w-24 h-4" />
+  // Initial loading skeleton
+  if (isLoading && !passage) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="pt-4 pb-2">
+          <div className="swipe-indicator" />
         </div>
-        <Skeleton className="w-16 h-3" />
-      </div>
-      <div className="flex-1 overflow-hidden px-6 pb-24">
-        <div className="max-w-xl mx-auto pt-2 space-y-8">
-          {[1, 2, 3].map((chapter) => (
-            <div key={chapter} className="space-y-3">
-              {/* Chapter heading skeleton */}
-              <div className="flex items-start gap-2">
-                <Skeleton className="w-12 h-12 rounded" />
-                <div className="space-y-2 flex-1">
-                  <Skeleton className="w-full h-4" />
-                  <Skeleton className="w-full h-4" />
-                  <Skeleton className="w-3/4 h-4" />
-                </div>
-              </div>
-              {/* Verse lines skeleton */}
-              {[1, 2, 3, 4].map((line) => (
-                <div key={line} className="flex gap-1">
-                  <Skeleton className="w-4 h-3 shrink-0" />
-                  <Skeleton className={cn("h-4", line % 2 === 0 ? "w-full" : "w-4/5")} />
-                </div>
-              ))}
-            </div>
-          ))}
+        <div className="px-6 pb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Skeleton className="w-4 h-4 rounded" />
+            <Skeleton className="w-24 h-4" />
+          </div>
+          <Skeleton className="w-16 h-3" />
+        </div>
+        <div className="flex-1 overflow-hidden px-6 pb-24">
+          <div className="max-w-xl mx-auto pt-2">
+            <ChapterSkeleton chapterNumber={1} height={400} />
+          </div>
         </div>
       </div>
-    </div>
-  );
-
-  // Show skeleton when loading OR when content isn't ready yet
-  const showSkeleton = isLoading || (passage?.book?.chapters?.length && !isContentReady);
-  if (showSkeleton && !error) {
-    return <ScriptureSkeleton />;
+    );
   }
-
-  // Show skeleton overlay when refreshing with existing data
-  const loadingOverlay = isLoading && passage ? (
-    <div className="absolute inset-0 z-20 pointer-events-none">
-      <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px]" />
-    </div>
-  ) : null;
 
   if (error) {
     return (
@@ -353,12 +289,7 @@ export function ScriptureCard({
               : 'Something went wrong while fetching the scripture data.'}
           </p>
           {onRetry && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onRetry}
-              className="gap-2"
-            >
+            <Button variant="outline" size="sm" onClick={onRetry} className="gap-2">
               <RefreshCw className="w-4 h-4" />
               Try Again
             </Button>
@@ -383,7 +314,6 @@ export function ScriptureCard({
           </p>
         </div>
         
-        {/* Navigation hint */}
         <div className="absolute bottom-20 left-0 right-0 flex justify-between px-6 text-muted-foreground/40">
           <div className="flex items-center gap-1 text-xs">
             <ChevronLeft className="w-4 h-4" />
@@ -398,11 +328,17 @@ export function ScriptureCard({
     );
   }
 
-  // Book view with illuminated drop caps
+  // Book view with virtualized chapters
   if (passage.book && passage.book.chapters.length > 0) {
     return (
       <div className="flex flex-col h-full relative">
-        {loadingOverlay}
+        {/* Loading overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 z-20 pointer-events-none">
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px]" />
+          </div>
+        )}
+
         {/* Swipe indicator */}
         <div className="pt-4 pb-2">
           <div className="swipe-indicator" />
@@ -429,7 +365,7 @@ export function ScriptureCard({
           </motion.div>
         )}
 
-        {/* Header - sticky with background, tappable to open version selector */}
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -475,7 +411,7 @@ export function ScriptureCard({
           />
         )}
 
-        {/* Scripture content - full book with chapters (lazy loaded) */}
+        {/* Virtualized scripture content */}
         <div 
           ref={containerRef}
           className="flex-1 overflow-y-auto px-6 pb-24 fade-edges"
@@ -483,8 +419,8 @@ export function ScriptureCard({
           onTouchEnd={handleTextSelection}
         >
           <div className="max-w-xl mx-auto pt-2">
-            {passage.book.chapters.map((chapter) => {
-              const shouldRender = shouldRenderChapter(chapter.chapter);
+            {chapters.map((chapter) => {
+              const isRendered = shouldRenderChapter(chapter.chapter);
               
               return (
                 <div
@@ -492,23 +428,29 @@ export function ScriptureCard({
                   ref={(el) => {
                     if (el) {
                       chapterRefs.current.set(chapter.chapter, el);
-                      registerSentinel(chapter.chapter, el);
+                      registerChapter(chapter.chapter, el);
                     }
                   }}
-                  className="chapter-section"
+                  className="chapter-section py-4"
                   id={`chapter-${chapter.chapter}`}
                   data-chapter={chapter.chapter}
+                  style={!isRendered ? { minHeight: getChapterHeight(chapter.chapter) } : undefined}
                 >
-                  {shouldRender ? (
-                    <ChapterContent
+                  {isRendered ? (
+                    <VirtualizedChapter
                       chapter={chapter}
                       bookName={passage.book!.book}
                       selectedVerse={selectedVerse}
                       onVerseClick={handleVerseClick}
                       currentLanguage={currentLanguage}
+                      registerVerse={registerVerse}
                     />
                   ) : (
-                    <ChapterPlaceholder chapter={chapter.chapter} />
+                    <ChapterSkeleton 
+                      chapterNumber={chapter.chapter} 
+                      height={getChapterHeight(chapter.chapter)}
+                      verseCount={chapter.verses.length}
+                    />
                   )}
                 </div>
               );
@@ -529,12 +471,10 @@ export function ScriptureCard({
   // Fallback: single passage view (legacy)
   return (
     <div className="flex flex-col h-full">
-      {/* Swipe indicator */}
       <div className="pt-4 pb-2">
         <div className="swipe-indicator" />
       </div>
 
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -547,7 +487,6 @@ export function ScriptureCard({
         <span className="text-xs text-muted-foreground">{passage.translation}</span>
       </motion.div>
 
-      {/* Scripture content */}
       <div 
         className="flex-1 overflow-y-auto px-6 pb-24 fade-edges"
         onMouseUp={handleTextSelection}
@@ -572,7 +511,6 @@ export function ScriptureCard({
         </motion.div>
       </div>
 
-      {/* Selection hint */}
       <div className="absolute bottom-20 left-0 right-0 text-center">
         <p className="text-xs text-muted-foreground/50">
           Select text to add to notes
