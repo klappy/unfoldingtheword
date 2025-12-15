@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { ScripturePassage, Resource, ScriptureBook, SearchResults } from '@/types';
 import { toast } from '@/hooks/use-toast';
+import { useTrace } from '@/contexts/TraceContext';
 import {
   fetchScripture,
   fetchBook,
@@ -14,7 +15,6 @@ import {
   BookData,
   FallbackInfo,
 } from '@/services/translationHelpsApi';
-
 export interface FallbackState {
   hasFallback: boolean;
   fallbackInfo: FallbackInfo | null;
@@ -40,6 +40,7 @@ function parseReference(ref: string): { book: string; chapter: number; verse?: n
 }
 
 export function useScriptureData() {
+  const { trace } = useTrace();
   const [scripture, setScripture] = useState<ScripturePassage | null>(null);
   const [resources, setResources] = useState<Resource[]>([]);
   const [allResources, setAllResources] = useState<Resource[]>([]); // Store all resources for filtering
@@ -133,6 +134,12 @@ export function useScriptureData() {
 
     const effectiveResource = resourceOverride || getCurrentResourceFromPrefs();
     console.log('[useScriptureData] Loading data for:', reference, 'resource:', effectiveResource, retryCount > 0 ? `(retry ${retryCount})` : '');
+
+    // Trace start
+    trace('scripture-loader', 'start', `Loading ${reference} (${effectiveResource})`, {
+      displayName: 'Scripture Loader',
+      layer: 'client',
+    });
 
     try {
       // Start ALL fetches in parallel - book AND resources
@@ -245,6 +252,9 @@ export function useScriptureData() {
       setVerseFilter(null);
 
       // Set scripture and loading state together to prevent flash
+      // Trace completion
+      trace('scripture-loader', 'complete', `${loadedBook.chapters.length} chapters, ${newResources.length} resources`);
+
       setScripture({
         reference,
         text: '',
@@ -270,12 +280,15 @@ export function useScriptureData() {
         return; // Don't set isLoading to false - we're still loading
       }
       
+      // Trace error
+      trace('scripture-loader', 'error', err instanceof Error ? err.message : 'Failed to load data');
+      
       // Only set error and stop loading when retries exhausted
       setError(err instanceof Error ? err.message : 'Failed to load data');
       setIsLoading(false);
       setIsResourcesLoading(false);
     }
-  }, [loadBookInBackground, scripture?.book?.book]);
+  }, [loadBookInBackground, scripture?.book?.book, trace]);
 
   // Search for resources by keyword (for non-scripture queries)
   const loadKeywordResources = useCallback(async (keyword: string) => {

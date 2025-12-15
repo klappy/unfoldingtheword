@@ -2,15 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Note, NoteType, ResourceType } from '@/types';
 import { useDeviceId } from './useDeviceId';
+import { useTrace } from '@/contexts/TraceContext';
 
 export function useNotes() {
+  const { trace } = useTrace();
   const deviceId = useDeviceId();
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
   // Fetch notes function
   const fetchNotes = useCallback(async () => {
     if (!deviceId) return;
+
+    trace('notes-db', 'start', 'Fetching notes', {
+      displayName: 'Notes DB',
+      layer: 'client',
+    });
 
     setIsLoading(true);
     const { data, error } = await supabase
@@ -21,7 +27,9 @@ export function useNotes() {
 
     if (error) {
       console.error('Error fetching notes:', error);
+      trace('notes-db', 'error', error.message);
     } else {
+      trace('notes-db', 'complete', `Fetched ${data.length} notes`);
       setNotes(data.map(note => ({
         id: note.id,
         content: note.content,
@@ -34,7 +42,7 @@ export function useNotes() {
       })));
     }
     setIsLoading(false);
-  }, [deviceId]);
+  }, [deviceId, trace]);
 
   // Fetch notes on mount and when deviceId changes
   useEffect(() => {
@@ -49,6 +57,11 @@ export function useNotes() {
     resourceId?: string
   ) => {
     if (!deviceId) return null;
+
+    trace('notes-db', 'start', `Adding ${noteType}`, {
+      displayName: 'Notes DB',
+      layer: 'client',
+    });
 
     const { data, error } = await supabase
       .from('notes')
@@ -66,8 +79,11 @@ export function useNotes() {
 
     if (error) {
       console.error('Error adding note:', error);
+      trace('notes-db', 'error', error.message);
       return null;
     }
+
+    trace('notes-db', 'complete', `Added ${noteType}`);
 
     const newNote: Note = {
       id: data.id,
@@ -82,7 +98,7 @@ export function useNotes() {
 
     setNotes(prev => [newNote, ...prev]);
     return newNote;
-  }, [deviceId]);
+  }, [deviceId, trace]);
 
   // Convenience method for adding bug reports
   const addBugReport = useCallback(async (errorMessage: string, context?: string) => {
