@@ -45,7 +45,7 @@ const tools = [
         properties: {
           reference: {
             type: "string",
-            description: "Scripture reference extracted from user's message (e.g., 'John 3:16', 'Romans 8', 'Ruth'). Extract in any language."
+            description: "NORMALIZED scripture reference in FULL English book name format (e.g., user says '2 Tim 2:19' → output '2 Timothy 2:19', user says 'Mat 5' → output 'Matthew 5', user says 'Jn 3:16' → output 'John 3:16'). Always expand abbreviations to full book names."
           }
         },
         required: ["reference"]
@@ -66,7 +66,7 @@ const tools = [
           },
           scope: {
             type: "string",
-            description: "Where to search: a book name, chapter reference, 'OT', 'NT', or 'Bible' for everywhere"
+            description: "Where to search: NORMALIZED book name (full English name like 'Matthew' not 'Mat'), chapter reference, 'OT', 'NT', or 'Bible' for everywhere. Always expand abbreviations."
           },
           resourceTypes: {
             type: "array",
@@ -91,7 +91,7 @@ const tools = [
         properties: {
           reference: {
             type: "string",
-            description: "Scripture reference to get resources for"
+            description: "NORMALIZED scripture reference in FULL English book name format (e.g., '2 Tim 2:19' → '2 Timothy 2:19'). Always expand abbreviations to full book names."
           },
           types: {
             type: "array",
