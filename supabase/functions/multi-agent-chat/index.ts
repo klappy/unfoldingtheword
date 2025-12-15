@@ -352,19 +352,33 @@ serve(async (req) => {
         }
 
         case 'get_resources': {
-          const resourceResult = await invokeSubAgent('resource-agent', {
-            reference: args.reference,
-            type: args.types || ['notes', 'questions', 'word-links'],
-            language: prefs.language,
-            organization: prefs.organization,
-          });
+          // For get_resources, we ALSO load scripture so the user can see the passage
+          const [scriptureResult, resourceResult] = await Promise.all([
+            invokeSubAgent('scripture-agent', {
+              reference: args.reference,
+              language: prefs.language,
+              organization: prefs.organization,
+              resource: prefs.resource,
+            }),
+            invokeSubAgent('resource-agent', {
+              reference: args.reference,
+              type: args.types || ['notes', 'questions', 'word-links'],
+              language: prefs.language,
+              organization: prefs.organization,
+            }),
+          ]);
 
+          if (scriptureResult?.text) {
+            scriptureText = scriptureResult.text;
+            scriptureReference = args.reference;
+            toolCalls.push({ tool: 'scripture-agent', args: { reference: args.reference } });
+          }
           if (resourceResult?.resources) {
             resources = resourceResult.resources;
             toolCalls.push({ tool: 'resource-agent', args: { reference: args.reference, type: args.types } });
-            scriptureReference = args.reference;
           }
-          navigationHint = 'resources';
+          // Navigate to scripture so user sees the passage with resources available
+          navigationHint = 'scripture';
           break;
         }
 
