@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useRef, useCallback, ReactNode, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useTrace } from '@/contexts/TraceContext';
 
 export const PLAYBACK_SPEEDS = [0.5, 0.7, 1, 1.2, 1.5, 2] as const;
 export type PlaybackSpeed = typeof PLAYBACK_SPEEDS[number];
@@ -21,6 +22,7 @@ const TTSContext = createContext<TTSContextType | null>(null);
 const SPEED_STORAGE_KEY = 'tts-playback-speed';
 
 export function TTSProvider({ children }: { children: ReactNode }) {
+  const { trace } = useTrace();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
@@ -146,6 +148,12 @@ export function TTSProvider({ children }: { children: ReactNode }) {
 
     console.log('[TTS] Fetching audio, text length:', cleanText.length, 'language:', language);
 
+    // Trace TTS start
+    trace('tts', 'start', `${cleanText.length} chars (${language})`, {
+      displayName: 'Text-to-Speech',
+      layer: 'edge',
+    });
+
     // Fetch audio - audio element already created synchronously
     fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`,
@@ -188,12 +196,14 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       
       audio.onplay = () => {
         console.log('[TTS] Audio playing');
+        trace('tts', 'first_token', 'Audio playback started');
         setIsPlaying(true);
         setIsLoading(false);
       };
       
       audio.onended = () => {
         console.log('[TTS] Playback ended');
+        trace('tts', 'complete', 'Playback finished');
         setIsPlaying(false);
         setCurrentId(null);
         setProgress(0);
@@ -202,6 +212,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
       
       audio.onerror = () => {
         console.error('[TTS] Audio error:', audio.error);
+        trace('tts', 'error', audio.error?.message || 'Unknown error');
         setIsLoading(false);
         setIsPlaying(false);
         setCurrentId(null);
@@ -237,6 +248,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         return;
       }
       console.error('[TTS] Error:', err);
+      trace('tts', 'error', err instanceof Error ? err.message : 'Failed to generate audio');
       setIsLoading(false);
       setCurrentId(null);
       toast({
@@ -245,7 +257,7 @@ export function TTSProvider({ children }: { children: ReactNode }) {
         variant: 'destructive',
       });
     });
-  }, [currentId, isPlaying, stop, toast, playbackSpeed]);
+  }, [currentId, isPlaying, stop, toast, playbackSpeed, trace]);
 
   return (
     <TTSContext.Provider value={{ speak, stop, isPlaying, isLoading, currentId, progress, playbackSpeed, setPlaybackSpeed }}>
