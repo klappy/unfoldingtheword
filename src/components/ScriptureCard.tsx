@@ -244,8 +244,10 @@ export function ScriptureCard({
     }
   };
 
-  // Initial loading skeleton
-  if (isLoading && !passage) {
+  // Loading skeleton - show when loading OR when passage exists but has no chapters yet
+  const showLoadingSkeleton = isLoading && (!passage || !passage.book?.chapters?.length);
+  
+  if (showLoadingSkeleton) {
     return (
       <div className="flex flex-col h-full">
         <div className="pt-4 pb-2">
@@ -329,7 +331,10 @@ export function ScriptureCard({
   }
 
   // Book view with virtualized chapters
-  if (passage.book && passage.book.chapters.length > 0) {
+  // Show book view only when we have chapters loaded
+  const hasChapters = passage.book && passage.book.chapters.length > 0;
+  
+  if (hasChapters) {
     return (
       <div className="flex flex-col h-full relative">
         {/* Loading overlay */}
