@@ -85,7 +85,12 @@ const Index = () => {
   // Replay tool calls when MCP state changes
   useEffect(() => {
     if (mcpReplay.scripture && !mcpReplay.isLoading) {
-      setScripture(mcpReplay.scripture);
+      // Try fast navigation first if same book is already loaded
+      const fastNav = navigateToVerse(mcpReplay.scripture.reference);
+      if (!fastNav) {
+        // Different book, need to load full scripture
+        setScripture(mcpReplay.scripture);
+      }
     }
     if (!mcpReplay.isLoading) {
       if (mcpReplay.resources.length > 0) {
