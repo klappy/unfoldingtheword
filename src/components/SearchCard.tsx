@@ -144,7 +144,7 @@ export function SearchCard({
               {/* Render each match using unified SearchResultItem */}
               {data.matches.map((match, idx) => (
                 <SearchResultItem
-                  key={`${key}-${match.reference || idx}`}
+                  key={`${key}-${match.reference || ''}-${match.metadata?.term || match.metadata?.moduleId || idx}`}
                   type={key}
                   reference={match.reference || ''}
                   rawMarkdown={match.rawMarkdown || match.text || ''}
