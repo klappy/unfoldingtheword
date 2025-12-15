@@ -40,6 +40,7 @@ const VirtualizedVerse = memo(function VirtualizedVerse({
   chapterNum,
   isFirst,
   isSelected,
+  isHighlighted,
   onVerseClick,
   registerVerse
 }: {
@@ -47,6 +48,7 @@ const VirtualizedVerse = memo(function VirtualizedVerse({
   chapterNum: number;
   isFirst: boolean;
   isSelected: boolean;
+  isHighlighted: boolean;
   onVerseClick: (chapter: number, verseNum: number, e: React.MouseEvent) => void;
   registerVerse: (chapter: number, verse: number, el: HTMLElement | null) => void;
 }) {
@@ -65,7 +67,8 @@ const VirtualizedVerse = memo(function VirtualizedVerse({
         onClick={(e) => onVerseClick(chapterNum, verse.number, e)}
         className={cn(
           "cursor-pointer transition-all rounded-sm",
-          isSelected && "bg-primary/20 ring-1 ring-primary/30"
+          isSelected && "bg-primary/20 ring-1 ring-primary/30",
+          isHighlighted && "animate-verse-highlight"
         )}
       >
         <span className="drop-cap-chapter">{chapterNum}</span>
@@ -84,7 +87,8 @@ const VirtualizedVerse = memo(function VirtualizedVerse({
       onClick={(e) => onVerseClick(chapterNum, verse.number, e)}
       className={cn(
         "cursor-pointer transition-all rounded-sm hover:bg-primary/5",
-        isSelected && "bg-primary/20 ring-1 ring-primary/30"
+        isSelected && "bg-primary/20 ring-1 ring-primary/30",
+        isHighlighted && "animate-verse-highlight"
       )}
     >
       <sup className="scripture-verse">{verse.number}</sup>
@@ -100,6 +104,7 @@ const VirtualizedChapter = memo(function VirtualizedChapter({
   chapter,
   bookName,
   selectedVerse,
+  highlightedVerse,
   onVerseClick,
   currentLanguage,
   registerVerse
@@ -107,6 +112,7 @@ const VirtualizedChapter = memo(function VirtualizedChapter({
   chapter: ScriptureChapter;
   bookName: string;
   selectedVerse: { chapter: number; verse: number } | null;
+  highlightedVerse: { chapter: number; verse: number } | null;
   onVerseClick: (chapter: number, verseNum: number, e: React.MouseEvent) => void;
   currentLanguage?: string;
   registerVerse: (chapter: number, verse: number, el: HTMLElement | null) => void;
@@ -132,6 +138,7 @@ const VirtualizedChapter = memo(function VirtualizedChapter({
           chapterNum={chapter.chapter}
           isFirst={index === 0}
           isSelected={selectedVerse?.chapter === chapter.chapter && selectedVerse?.verse === verse.number}
+          isHighlighted={highlightedVerse?.chapter === chapter.chapter && highlightedVerse?.verse === verse.number}
           onVerseClick={onVerseClick}
           registerVerse={registerVerse}
         />
@@ -156,9 +163,30 @@ export function ScriptureCard({
   currentLanguage = 'en',
 }: ScriptureCardProps) {
   const [isResourceSelectorOpen, setIsResourceSelectorOpen] = useState(false);
+  const [highlightedVerse, setHighlightedVerse] = useState<{ chapter: number; verse: number } | null>(null);
   const chapterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const hasScrolledToTarget = useRef(false);
   const passageRef = useRef<string | null>(null);
+  const lastTargetRef = useRef<{ chapter?: number; verse?: number } | null>(null);
+
+  // Track fast navigation (same book, different verse) and trigger highlight
+  useEffect(() => {
+    const newTarget = { chapter: passage?.targetChapter, verse: passage?.targetVerse };
+    const isSameBook = passage?.reference && passageRef.current && 
+      passage.book?.book && passageRef.current.startsWith(passage.book.book);
+    
+    // If same book but different target, trigger highlight animation
+    if (isSameBook && newTarget.chapter && newTarget.verse &&
+        (lastTargetRef.current?.chapter !== newTarget.chapter || 
+         lastTargetRef.current?.verse !== newTarget.verse)) {
+      setHighlightedVerse({ chapter: newTarget.chapter, verse: newTarget.verse });
+      // Clear highlight after animation completes
+      const timer = setTimeout(() => setHighlightedVerse(null), 1500);
+      return () => clearTimeout(timer);
+    }
+    
+    lastTargetRef.current = newTarget;
+  }, [passage?.targetChapter, passage?.targetVerse, passage?.book?.book, passage?.reference]);
 
   // Reset scroll tracking when passage changes
   useEffect(() => {
@@ -446,6 +474,7 @@ export function ScriptureCard({
                       chapter={chapter}
                       bookName={passage.book!.book}
                       selectedVerse={selectedVerse}
+                      highlightedVerse={highlightedVerse}
                       onVerseClick={handleVerseClick}
                       currentLanguage={currentLanguage}
                       registerVerse={registerVerse}
