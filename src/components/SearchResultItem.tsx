@@ -54,17 +54,48 @@ const typeLabels: Record<SearchResultType, string> = {
 
 const PREVIEW_LENGTH = 200;
 
-// Extract a prominent display title from metadata or reference
-function getDisplayTitle(type: SearchResultType, reference: string, metadata?: Record<string, any>): string {
-  if (type === 'words') return metadata?.term || metadata?.title || reference;
-  if (type === 'academy') return metadata?.title || metadata?.moduleId || reference;
-  if (type === 'questions') return metadata?.question || reference;
-  if (type === 'notes') return metadata?.title || reference;
-  // Scripture: show reference with resource version if available
-  if (type === 'scripture' && metadata?.resource) {
-    return `${reference} (${metadata.resource})`;
+// Extract header info from metadata with fallbacks
+function getHeaderInfo(type: SearchResultType, reference: string, metadata?: Record<string, any>): {
+  title: string;
+  subtitle?: string;
+} {
+  if (type === 'scripture') {
+    // Use metadata fields for scripture header
+    const resource = metadata?.resource || metadata?.version;
+    const title = resource ? `${reference} (${resource.toUpperCase()})` : reference;
+    return { title };
   }
-  return reference;
+  if (type === 'words') {
+    return { title: metadata?.term || metadata?.title || reference };
+  }
+  if (type === 'academy') {
+    return { title: metadata?.title || metadata?.moduleId || reference };
+  }
+  if (type === 'questions') {
+    return { title: metadata?.question || reference };
+  }
+  if (type === 'notes') {
+    return { title: metadata?.title || reference };
+  }
+  return { title: reference };
+}
+
+// Extract verse text from metadata or parse from markdown
+function getScriptureText(rawMarkdown: string, metadata?: Record<string, any>): string {
+  // Prefer structured metadata if available
+  if (metadata?.text) return metadata.text;
+  if (metadata?.verse_text) return metadata.verse_text;
+  if (metadata?.content) return metadata.content;
+  
+  // Fallback: parse from markdown
+  let content = rawMarkdown.replace(/^---[\s\S]*?---\n*/m, ''); // Remove YAML
+  content = content.replace(/^#+\s+.*$/gm, ''); // Remove headings
+  content = content.replace(/^(ULT|UST|T4T|UEB|UDB)\s*(v\d+)?.*$/gim, ''); // Remove version lines
+  content = content.replace(/^\(.*?\)$/gm, ''); // Remove parenthetical lines
+  content = content.replace(/^unfoldingWord.*$/gim, '');
+  content = content.replace(/^(reference|book|chapter|verse|resource|language|organization|testament|matches|version):\s*.*$/gim, '');
+  content = content.replace(/^\*\*[^*]+\*\*\s*$/gm, ''); // Remove bold metadata
+  return content.split('\n').filter(line => line.trim()).join('\n').trim();
 }
 
 function SearchResultItemInner({
@@ -87,30 +118,16 @@ function SearchResultItemInner({
   const Icon = typeIcons[type];
   const colors = typeColors[type];
   const label = typeLabels[type];
-  const displayTitle = getDisplayTitle(type, reference, metadata);
+  const headerInfo = getHeaderInfo(type, reference, metadata);
+  const displayTitle = headerInfo.title;
   const isScriptureType = type === 'scripture';
 
-  // For scripture: extract ONLY verse text (strip all metadata, frontmatter, headings)
-  const extractScriptureContent = (markdown: string): string => {
-    // Remove YAML frontmatter (---...---)
-    let content = markdown.replace(/^---[\s\S]*?---\n*/m, '');
-    // Remove markdown headings (# Ruth 3:2, ## Title, etc.)
-    content = content.replace(/^#+\s+.*$/gm, '');
-    // Remove resource metadata lines (ULT v87, unfoldingWord® Literal Text, etc.)
-    content = content.replace(/^(ULT|UST|T4T|UEB|UDB)\s*(v\d+)?.*$/gim, '');
-    content = content.replace(/^\(.*?\)$/gm, ''); // Lines that are just (parenthetical)
-    content = content.replace(/^unfoldingWord.*$/gim, '');
-    // Remove metadata-like lines (key: value patterns)
-    content = content.replace(/^(reference|book|chapter|verse|resource|language|organization|testament|matches|version):\s*.*$/gim, '');
-    // Remove bold metadata like **Ruth 3:2** or **ULT**
-    content = content.replace(/^\*\*[^*]+\*\*\s*$/gm, '');
-    // Clean up excessive whitespace
-    return content.split('\n').filter(line => line.trim()).join('\n').trim();
-  };
-
-  // Use full content if fetched, otherwise use raw markdown from search
+  // Use full content if fetched, otherwise use raw markdown
   const rawContent = fullContent || rawMarkdown;
-  const displayContent = isScriptureType ? extractScriptureContent(rawContent) : rawContent;
+  // For scripture: use metadata or parse; for others: use raw
+  const displayContent = isScriptureType 
+    ? getScriptureText(rawContent, metadata) 
+    : rawContent;
   const contentPreview = displayContent.length > PREVIEW_LENGTH
     ? displayContent.substring(0, PREVIEW_LENGTH) + '...'
     : displayContent;
