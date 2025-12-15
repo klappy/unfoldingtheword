@@ -306,17 +306,65 @@ async function searchNotes(
         const text = await response.text();
         if (text.trim()) {
           allMarkdown.push(text);
-          
-          // For text/markdown responses, DO NOT split into dozens of pseudo-notes.
-          // The MCP server may return large book/chapter notes with many headings.
-          // Treat the entire payload as a single match tied to the requested scope.
-          allMarkdown.push(text);
-          allMatches.push({
-            reference: scope || 'Bible',
-            text: text.trim(),
-            rawMarkdown: text.trim(),
-          });
-          totalCount += 1;
+
+          // Smart TN markdown splitting: only split on meaningful section headers
+          // like "Front:intro", "3:intro", "3:2".
+          const book = (scope || '').replace(/\s+\d.*$/, '').trim();
+          const isSectionHeader = (h: string) => {
+            const t = h.trim();
+            if (!t) return false;
+            if (/^front\s*:\s*intro$/i.test(t)) return true;
+            if (/^\d+\s*:\s*intro$/i.test(t)) return true;
+            if (/^\d+\s*:\s*\d+(?:\s*-\s*\d+)?$/.test(t)) return true;
+            return false;
+          };
+          const toReference = (header: string) => {
+            const t = header.trim();
+            if (/^front\s*:\s*intro$/i.test(t)) return book ? `${book} front:intro` : (scope || 'Bible');
+            const chapIntro = t.match(/^(\d+)\s*:\s*intro$/i);
+            if (chapIntro) return book ? `${book} ${chapIntro[1]}:intro` : (scope || 'Bible');
+            const verse = t.match(/^(\d+)\s*:\s*(\d+(?:\s*-\s*\d+)?)$/);
+            if (verse) return book ? `${book} ${verse[1]}:${verse[2].replace(/\s+/g, '')}` : (scope || 'Bible');
+            return scope || 'Bible';
+          };
+
+          const lines = text.split('\n');
+          let currentHeader: string | null = null;
+          let buf: string[] = [];
+
+          const push = () => {
+            const body = buf.join('\n').trim();
+            if (!body) return;
+            allMatches.push({
+              reference: currentHeader ? toReference(currentHeader) : (scope || 'Bible'),
+              text: body,
+              rawMarkdown: body,
+              metadata: currentHeader ? { section: currentHeader } : undefined,
+            });
+            totalCount += 1;
+          };
+
+          for (const line of lines) {
+            const m = line.match(/^#{1,6}\s+(.+)$/);
+            if (m && isSectionHeader(m[1])) {
+              push();
+              currentHeader = m[1];
+              buf = [];
+              continue;
+            }
+            buf.push(line);
+          }
+          push();
+
+          // If we didn't find any meaningful headers, keep as one big match.
+          if (totalCount === 0 && allMatches.length === 0) {
+            allMatches.push({
+              reference: scope || 'Bible',
+              text: text.trim(),
+              rawMarkdown: text.trim(),
+            });
+            totalCount += 1;
+          }
         }
       }
     } catch (error) {
