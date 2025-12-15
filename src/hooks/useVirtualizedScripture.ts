@@ -65,6 +65,34 @@ export function useVirtualizedScripture({
     return state;
   });
 
+  // Reinitialize render state when chapters or target change (new passage/book)
+  useEffect(() => {
+    const state = new Map<number, ChapterRenderState>();
+
+    chapters.forEach(ch => {
+      const estimatedHeight = estimateChapterHeight(ch);
+      const isTarget = ch.chapter === targetChapter;
+
+      state.set(ch.chapter, {
+        rendered: isTarget,
+        estimatedHeight,
+        measuredHeight: null,
+        verses: new Map(
+          ch.verses.map(v => [
+            v.number,
+            {
+              rendered: isTarget && (targetVerse ? v.number === targetVerse : true),
+              height: null,
+            },
+          ])
+        ),
+      });
+    });
+
+    setRenderState(state);
+    initialScrollDone.current = false;
+  }, [chapters, targetChapter, targetVerse]);
+
   // Estimate chapter height based on verse text lengths
   function estimateChapterHeight(chapter: ScriptureChapter): number {
     let totalLines = 0;
