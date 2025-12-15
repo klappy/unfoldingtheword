@@ -66,16 +66,22 @@ function getHeaderInfo(type: SearchResultType, reference: string, metadata?: Rec
     return { title };
   }
   if (type === 'words') {
+    // Words have term as primary identifier
     return { title: metadata?.term || metadata?.title || reference };
   }
   if (type === 'academy') {
+    // Academy uses title or moduleId
     return { title: metadata?.title || metadata?.moduleId || reference };
   }
   if (type === 'questions') {
-    return { title: metadata?.question || reference };
+    // Questions: use the question text itself as title for context
+    const question = metadata?.question || metadata?.Question;
+    return { title: question || reference };
   }
   if (type === 'notes') {
-    return { title: metadata?.title || reference };
+    // Notes: reference is the title, they don't have separate title field
+    // MCP notes have: reference, note/occurrenceNote, supportReference, etc.
+    return { title: reference };
   }
   return { title: reference };
 }
