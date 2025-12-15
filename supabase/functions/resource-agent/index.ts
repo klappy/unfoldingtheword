@@ -85,16 +85,31 @@ async function fetchNotes(reference: string, language: string, organization: str
       const items = Array.isArray(data) ? data : (data.matches || data.notes || data.items || []);
       console.log(`[resource-agent] Found ${items.length} note items`);
       
-      return items.map((r: any, i: number) => ({
-        id: r.id || `tn-${i}`,
-        type: 'translation-note',
-        title: r.title || r.quote || r.reference || reference,
-        content: r.content || r.note || r.text || '',
-        reference: r.reference || reference,
-        quote: r.quote,
-        // Preserve raw markdown for rendering
-        rawMarkdown: r.rawMarkdown || r.markdown || r.content || r.note || '',
-      }));
+      // Log first item structure to understand field names
+      if (items.length > 0) {
+        console.log(`[resource-agent] First note item keys:`, Object.keys(items[0]));
+        console.log(`[resource-agent] First note item sample:`, JSON.stringify(items[0]).substring(0, 500));
+      }
+      
+      return items.map((r: any, i: number) => {
+        // MCP JSON format fields have capital letters: Note, Reference, Quote, ID, SupportReference, etc.
+        const noteContent = r.Note || r.occurrenceNote || r.note || r.content || r.text || r.markdown || '';
+        const noteRef = r.Reference || r.reference || reference;
+        const noteQuote = r.Quote || r.quote || '';
+        const noteId = r.ID || r.id || `tn-${i}`;
+        
+        return {
+          id: noteId,
+          type: 'translation-note',
+          title: r.title || noteQuote || noteRef || reference,
+          content: noteContent,
+          reference: noteRef,
+          quote: noteQuote,
+          supportReference: r.SupportReference || r.supportReference || '',
+          // Preserve raw markdown for rendering
+          rawMarkdown: r.rawMarkdown || r.markdown || noteContent,
+        };
+      });
     } else {
       // Fallback to markdown if JSON not available
       const text = await response.text();
