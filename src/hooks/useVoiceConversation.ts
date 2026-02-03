@@ -271,10 +271,9 @@ Speak in the user's language. The tool handles translations.`;
           threshold: 0.5,
           prefix_padding_ms: 300,
           silence_duration_ms: 800,
-          // IMPORTANT: We manually trigger responses to ensure the model speaks AFTER tool output.
-          // When create_response is true, the model may end a response immediately after tool call,
-          // resulting in response.done without any response.audio.delta.
-          create_response: false
+          // Let the server create the initial response turn when VAD detects speech end.
+          // We will trigger an additional response AFTER tool output to force reading the tool result.
+          create_response: true
         },
         tools: [
           {
@@ -378,15 +377,6 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           
         case 'input_audio_buffer.speech_stopped':
           setStatus('processing');
-          // When turn_detection.create_response=false, the server will NOT automatically
-          // start generating a response on speech end. We must explicitly kick off
-          // a response, otherwise we can get stuck in "processing".
-          if (dcRef.current?.readyState === 'open') {
-            dcRef.current.send(JSON.stringify({
-              type: 'response.create',
-              response: { modalities: ['text', 'audio'] },
-            }));
-          }
           break;
           
         case 'conversation.item.input_audio_transcription.completed':
@@ -432,7 +422,9 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
             dcRef.current.send(JSON.stringify({
               type: 'response.create',
               response: {
-                modalities: ['text', 'audio']
+                modalities: ['text', 'audio'],
+                // Strongly bias the model to read the tool output instead of generic filler.
+                instructions: 'Read the function_call_output content out loud. Do not add commentary. Do not ask follow-up questions unless the tool output is empty.'
               }
             }));
           }
