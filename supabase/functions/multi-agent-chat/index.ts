@@ -12,6 +12,8 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const ROUTER_SYSTEM_PROMPT = `You are a Bible study assistant that routes user requests to the right tools.
 
 TOOL SELECTION GUIDE:
+- respond_conversationally: Use for greetings, thanks, casual conversation, questions about yourself, or anything NOT requiring Bible data
+  - Examples: "Hello", "Hi there", "Thanks!", "What can you do?", "Goodbye"
 - get_scripture: User wants to READ a specific passage (e.g., "John 3:16", "show me Romans 8", "Mateo 5")
 - search_resources: User wants to FIND where something appears OR find resources about a topic
   - resourceTypes options: "scripture" (verses), "notes" (translation notes), "questions" (comprehension questions), "words" (word definitions), "academy" (translation academy articles)
@@ -35,6 +37,28 @@ Always call a tool - never respond without using a tool first.`;
 
 // Tool definitions for OpenAI function calling
 const tools = [
+  {
+    type: "function",
+    function: {
+      name: "respond_conversationally",
+      description: "Use for greetings, thanks, casual conversation, meta-questions about yourself, or anything that does NOT require Bible/scripture data. Examples: 'Hello', 'Hi', 'Thanks', 'What can you do?', 'Goodbye', 'How are you?'",
+      parameters: {
+        type: "object",
+        properties: {
+          user_intent: {
+            type: "string",
+            enum: ["greeting", "thanks", "farewell", "capabilities", "other"],
+            description: "What the user is expressing"
+          },
+          message: {
+            type: "string",
+            description: "The user's original message"
+          }
+        },
+        required: ["user_intent", "message"]
+      }
+    }
+  },
   {
     type: "function",
     function: {
@@ -258,6 +282,23 @@ serve(async (req) => {
       console.log(`[multi-agent-chat] Executing tool: ${funcName}`, args);
 
       switch (funcName) {
+        case 'respond_conversationally': {
+          // Handle greetings and casual conversation without MCP data
+          const responses: Record<string, string> = {
+            greeting: "Hello! I'm your Bible study assistant. I can help you read scripture passages, explore translation resources, look up biblical terms, and manage your study notes. What would you like to explore today?",
+            thanks: "You're welcome! Let me know if you'd like to explore more scripture or resources.",
+            farewell: "Goodbye! Feel free to come back anytime you want to study the Bible together.",
+            capabilities: "I can help you with: reading scripture passages (just ask for any reference like 'John 3:16'), searching for topics or words in the Bible, exploring translation notes and questions, looking up word definitions, and managing your personal study notes. What would you like to try?",
+            other: "I'm here to help you study the Bible. You can ask me to read any passage, search for topics, or explore translation resources. What would you like to do?"
+          };
+          
+          // Set a conversational response that doesn't require MCP data
+          scriptureText = responses[args.user_intent] || responses.other;
+          navigationHint = null; // No navigation for conversational responses
+          toolCalls.push({ tool: 'respond_conversationally', args });
+          break;
+        }
+        
         case 'get_scripture': {
           // Fetch multiple scripture versions in parallel
           const scriptureVersions = ['ult', 'ust'];
