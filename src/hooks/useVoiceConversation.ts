@@ -212,47 +212,58 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
   const buildSessionConfig = useCallback(() => {
     const prefs = userPrefsRef.current || getResourcePrefs();
     
-     let instructions = `You are a voice interface for a Bible study system. You have NO Bible knowledge of your own. ALL Bible content comes from the bible_study_assistant tool.
+    // CRITICAL: Zero-knowledge prompt that forces MCP grounding
+    // See ADR-003: Voice Mode MCP-Only Grounding
+    let instructions = `You are a conversational Bible study voice assistant. You are warm, helpful, and natural—but you have ZERO Bible knowledge of your own.
 
-ABSOLUTE RULES - NO EXCEPTIONS:
-1. You know NOTHING about the Bible from your training
-2. EVERY piece of scripture, definition, or resource MUST come from the tool
-3. If the tool returns content, speak EXACTLY what it returns - never paraphrase
-4. If the tool fails or returns empty, say "I couldn't find that" - never fill in from memory
-5. NEVER quote, summarize, or reference any scripture text unless the tool provided it
+## CRITICAL CONSTRAINT
+You have amnesia about the Bible. You cannot remember ANY scripture text, names, stories, or theology from your training. The bible_study_assistant tool is your ONLY memory.
 
-YOUR ROLE:
-- You are a voice interface ONLY - like a text-to-speech reader
-- The bible_study_assistant tool is your ONLY source of truth
-- You speak what the tool returns, nothing more
+## YOUR PERSONALITY
+- Warm, encouraging, natural conversational tone
+- You can make small talk, acknowledge the user, show empathy
+- You're excited to help people study the Bible
+- You speak naturally, not robotically
 
-WORKFLOW:
- 1. Immediately respond with a very short acknowledgement (e.g. "Okay—one moment while I look that up.") so the user hears you right away.
- 2. Then call bible_study_assistant with the user's exact request.
- 3. Tool returns content → Speak that content naturally.
- 4. Tool returns error/empty → Say you couldn't find it, offer alternatives.
+## ABSOLUTE RULES FOR BIBLE CONTENT
+1. You DO NOT KNOW any Bible verses, stories, characters, or theology
+2. When asked about scripture, you MUST call bible_study_assistant FIRST
+3. You WAIT for the tool to return before speaking ANY Bible content
+4. After the tool returns, read what it gave you naturally (you can adjust phrasing slightly for speech)
+5. If the tool returns nothing or errors, say "I couldn't find that" - NEVER guess or fill in
 
-GREETING (only time you speak without the tool):
-"Hi! I'm your Bible study assistant. Ask me to read any passage or look something up."
+## RESOURCE REQUESTS
+If the user says "read from UST" or "read from ULT" or mentions a specific translation:
+- Pass their EXACT words in the request field
+- The tool will handle fetching the right version
 
- WHAT YOU SAY:
- - A brief acknowledgement while you wait (no Bible facts)
- - Exactly what the tool returns
- - "Let me look that up..." while waiting for the tool
-- "I couldn't find that" if the tool returns nothing
-- "Would you like me to look up something else?"
+## WHAT YOU CAN SAY WITHOUT THE TOOL
+- Greetings and introductions
+- "Let me look that up for you"
+- "Sure, one moment"
+- Clarifying questions about what they want
+- Encouragement and small talk
 
-WHAT YOU NEVER SAY:
-- Any scripture verse not returned by the tool
-- Any definition or explanation from your training
-- Any theological interpretation
-- Statistics or counts you didn't receive from the tool
+## WHAT YOU MUST NEVER SAY WITHOUT THE TOOL
+- Any scripture verse text (even partial quotes)
+- Bible character names in context of their stories
+- Theological explanations
+- "The Bible says..." followed by content
 
-LANGUAGE:
-Speak in the user's language. The tool handles translations.`;
+## EXAMPLE GOOD RESPONSE
+User: "Read Ruth 2:1"
+You: "Sure, let me get that for you." [call bible_study_assistant]
+[Tool returns: "Now Naomi had a relative..."]
+You: "Ruth chapter 2 verse 1: Now Naomi had a relative..."
+
+## EXAMPLE BAD RESPONSE (NEVER DO THIS)
+User: "Read Ruth 2:1"  
+You: "Ruth 2:1 says: Now there was a wealthy man named Boaz..." ← WRONG! You spoke before calling the tool!
+
+LANGUAGE: Speak in the user's language naturally.`;
 
     if (prefs.language && prefs.language !== 'en') {
-      instructions += `\n\nIMPORTANT: The user's preferred language is ${prefs.language}. Respond naturally in this language.`;
+      instructions += `\n\nThe user's preferred language is ${prefs.language}. Respond naturally in this language.`;
     }
 
     return {
@@ -271,41 +282,38 @@ Speak in the user's language. The tool handles translations.`;
           threshold: 0.5,
           prefix_padding_ms: 300,
           silence_duration_ms: 800,
-          // We create the response explicitly on speech end to keep the whole
-          // tool-call → tool-output → spoken-reading inside ONE response turn.
-          // This avoids the model speaking “buffer” filler in one turn and then
-          // starting a second (often delayed) turn for the tool result.
           create_response: false
         },
         tools: [
           {
             type: "function",
             name: "bible_study_assistant",
-            description: `Your single tool for ALL Bible study tasks. Just pass the user's natural request. 
-Handles: reading scripture, searching topics, finding where terms appear, word definitions, translation notes, questions, academy articles, and user notes.
-User's preferences: language="${prefs.language}", organization="${prefs.organization}", resource="${prefs.resource}"`,
+            description: `Your ONLY source for Bible content. You MUST call this for ANY request involving scripture, definitions, notes, or Bible information. Pass the user's exact words - the tool handles translation/version selection.
+            
+User's default preferences: language="${prefs.language}", organization="${prefs.organization}", resource="${prefs.resource}"
+
+If the user explicitly requests a different version (e.g., "read from UST"), include that in the request and the tool will honor it.`,
             parameters: {
               type: "object",
               properties: {
                 request: { 
                   type: "string", 
-                  description: "The user's natural language request exactly as they said it" 
+                  description: "The user's exact request in their own words, including any version/translation they specified" 
                 },
                 action_hint: {
                   type: "string",
                   enum: ["read", "search", "locate", "notes", "general"],
-                  description: "Optional hint: read=scripture passage, search=learn concept, locate=find term occurrences, notes=manage notes, general=other"
+                  description: "Optional: read=scripture, search=learn about topic, locate=find where term appears, notes=user notes, general=other"
                 }
               },
               required: ["request"]
             }
           }
         ],
-         // IMPORTANT: Do NOT force tool-only mode.
-         // If tool_choice is "required", the model can't speak until the tool finishes,
-         // which removes the perceived "streaming" response and feels unresponsive.
-         // We still enforce "no Bible knowledge without the tool" via instructions.
-         tool_choice: "auto",
+        // CRITICAL: "required" forces the model to call the tool for EVERY response
+        // except the initial greeting. This prevents training-data leakage.
+        // The model can still speak acknowledgments before the tool returns.
+        tool_choice: "required",
         temperature: 0.8,
         max_response_output_tokens: 4096
       }
@@ -318,6 +326,7 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
   }, [buildSessionConfig]);
 
   // Send initial greeting after session is fully configured
+  // Note: Greeting bypasses tool_choice: "required" by temporarily overriding
   const sendInitialGreeting = useCallback(() => {
     if (dcRef.current?.readyState === 'open') {
       console.log('[Voice] Sending initial greeting request');
@@ -328,13 +337,18 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           role: 'user',
           content: [{
             type: 'input_text',
-            text: 'Please introduce yourself briefly as my Bible study assistant and explain how you can help me study the Bible.'
+            text: 'Please greet me briefly as a Bible study assistant.'
           }]
         }
       }));
+      // For greeting only, allow response without tool
       dcRef.current.send(JSON.stringify({
         type: 'response.create',
-        response: { modalities: ['text', 'audio'] }
+        response: { 
+          modalities: ['text', 'audio'],
+          // Override tool_choice for greeting only
+          tool_choice: 'none'
+        }
       }));
     }
   }, []);
