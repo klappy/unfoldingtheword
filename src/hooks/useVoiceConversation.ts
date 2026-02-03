@@ -384,15 +384,7 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           if (dcRef.current?.readyState === 'open') {
             dcRef.current.send(JSON.stringify({
               type: 'response.create',
-              response: {
-                modalities: ['text', 'audio'],
-                instructions: [
-                  'First say a very short acknowledgement like "Okay—one moment."',
-                  'Then immediately call bible_study_assistant with the user request.',
-                  'After you receive the function_call_output, read it out loud verbatim.',
-                  'Do not ask follow-up questions unless the tool output is empty.'
-                ].join(' '),
-              },
+              response: { modalities: ['text', 'audio'] },
             }));
           }
           break;
