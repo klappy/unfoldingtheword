@@ -378,6 +378,15 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           
         case 'input_audio_buffer.speech_stopped':
           setStatus('processing');
+          // When turn_detection.create_response=false, the server will NOT automatically
+          // start generating a response on speech end. We must explicitly kick off
+          // a response, otherwise we can get stuck in "processing".
+          if (dcRef.current?.readyState === 'open') {
+            dcRef.current.send(JSON.stringify({
+              type: 'response.create',
+              response: { modalities: ['text', 'audio'] },
+            }));
+          }
           break;
           
         case 'conversation.item.input_audio_transcription.completed':
