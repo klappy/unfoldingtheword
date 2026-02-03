@@ -268,7 +268,11 @@ Speak in the user's language. The tool handles translations.`;
           type: "server_vad",
           threshold: 0.5,
           prefix_padding_ms: 300,
-          silence_duration_ms: 800
+          silence_duration_ms: 800,
+          // IMPORTANT: We manually trigger responses to ensure the model speaks AFTER tool output.
+          // When create_response is true, the model may end a response immediately after tool call,
+          // resulting in response.done without any response.audio.delta.
+          create_response: false
         },
         tools: [
           {
@@ -321,7 +325,10 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           }]
         }
       }));
-      dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+      dcRef.current.send(JSON.stringify({
+        type: 'response.create',
+        response: { modalities: ['text', 'audio'] }
+      }));
     }
   }, []);
 
@@ -406,8 +413,12 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
               }
             }));
             
+            // Trigger the assistant to speak the tool result.
             dcRef.current.send(JSON.stringify({
-              type: 'response.create'
+              type: 'response.create',
+              response: {
+                modalities: ['text', 'audio']
+              }
             }));
           }
           break;
@@ -579,7 +590,10 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
         }
       }));
       
-      dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+      dcRef.current.send(JSON.stringify({
+        type: 'response.create',
+        response: { modalities: ['text', 'audio'] }
+      }));
     }
   }, []);
 
