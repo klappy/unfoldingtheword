@@ -138,7 +138,7 @@ export function SearchCard({
       const hiddenCount = data.matches.length - INITIAL_VISIBLE_COUNT;
 
       return (
-        <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
+        <div key={key} className="border border-border/30 rounded-lg overflow-hidden">
           <button
             className="w-full flex items-center justify-between p-3 sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/30 hover:bg-muted/50 transition-colors"
             onClick={() => toggleSection(key)}
@@ -196,7 +196,7 @@ export function SearchCard({
     return (
       <div className="h-full w-full flex flex-col bg-background">
         {/* Header */}
-        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-border/50">
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-border/30">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-primary" />
@@ -317,7 +317,7 @@ export function SearchCard({
   return (
     <div className="h-full w-full flex flex-col bg-background">
       {/* Header */}
-      <div className="flex-shrink-0 px-4 pt-4 pb-2 border-b border-border/50">
+      <div className="flex-shrink-0 px-4 pt-4 pb-2 border-b border-border/30">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-primary" />
