@@ -42,6 +42,7 @@ Why this approach over alternatives?
 |-----|-------|--------|------|
 | [001](./001-display-layer-regex-exception.md) | Display Layer Regex Exception | Accepted | 2026-02-03 |
 | [002](./002-unified-text-voice-orchestration.md) | Unified Text/Voice Orchestration | Accepted | 2026-02-03 |
+| [003](./003-voice-mcp-only-grounding.md) | Voice Mode MCP-Only Grounding | Accepted | 2026-02-03 |
 
 ## When to Write an ADR
 
