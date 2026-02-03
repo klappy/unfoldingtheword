@@ -52,6 +52,21 @@ When user intent is ambiguous or context-dependent, send a natural language prom
 - Word article deep-dive: "Tell me more about agape" → LLM decides how to expand
 - Cross-reference exploration: "Show me related passages" → LLM finds connections
 
-**Exceptions (use direct navigation):**
+**Exceptions (use direct code):**
 - Scripture clicks in search results → Direct navigation (user intent is clear)
 - Filter badge clicks → Direct expand/collapse (UI state, not content decisions)
+- Display-layer enhancements → See [ADR-001](../decisions/001-display-layer-regex-exception.md)
+
+**Key distinction:** AI handles *input interpretation*. Code handles *output presentation*.
+
+---
+
+## Documenting Exceptions
+
+When a decision contradicts a principle, document it as an Architecture Decision Record (ADR):
+
+1. Create a file in `docs/decisions/` following the [ADR template](../decisions/README.md)
+2. Link to it from the relevant principle
+3. Explain the rationale and tradeoffs
+
+This ensures exceptions are intentional, not accidental drift.
