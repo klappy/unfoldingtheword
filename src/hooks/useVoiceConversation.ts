@@ -271,9 +271,11 @@ Speak in the user's language. The tool handles translations.`;
           threshold: 0.5,
           prefix_padding_ms: 300,
           silence_duration_ms: 800,
-          // Let the server create the initial response turn when VAD detects speech end.
-          // We will trigger an additional response AFTER tool output to force reading the tool result.
-          create_response: true
+          // We create the response explicitly on speech end to keep the whole
+          // tool-call → tool-output → spoken-reading inside ONE response turn.
+          // This avoids the model speaking “buffer” filler in one turn and then
+          // starting a second (often delayed) turn for the tool result.
+          create_response: false
         },
         tools: [
           {
@@ -377,6 +379,22 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
           
         case 'input_audio_buffer.speech_stopped':
           setStatus('processing');
+          // Since create_response=false, we must start the response explicitly.
+          // Instruct the model to call the tool first and then read its output.
+          if (dcRef.current?.readyState === 'open') {
+            dcRef.current.send(JSON.stringify({
+              type: 'response.create',
+              response: {
+                modalities: ['text', 'audio'],
+                instructions: [
+                  'First say a very short acknowledgement like "Okay—one moment."',
+                  'Then immediately call bible_study_assistant with the user request.',
+                  'After you receive the function_call_output, read it out loud verbatim.',
+                  'Do not ask follow-up questions unless the tool output is empty.'
+                ].join(' '),
+              },
+            }));
+          }
           break;
           
         case 'conversation.item.input_audio_transcription.completed':
@@ -415,16 +433,6 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
                 type: 'function_call_output',
                 call_id: data.call_id,
                 output: toolResult
-              }
-            }));
-            
-            // Trigger the assistant to speak the tool result.
-            dcRef.current.send(JSON.stringify({
-              type: 'response.create',
-              response: {
-                modalities: ['text', 'audio'],
-                // Strongly bias the model to read the tool output instead of generic filler.
-                instructions: 'Read the function_call_output content out loud. Do not add commentary. Do not ask follow-up questions unless the tool output is empty.'
               }
             }));
           }
