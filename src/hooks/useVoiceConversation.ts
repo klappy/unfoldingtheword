@@ -212,7 +212,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}) 
   const buildSessionConfig = useCallback(() => {
     const prefs = userPrefsRef.current || getResourcePrefs();
     
-    let instructions = `You are a voice interface for a Bible study system. You have NO Bible knowledge of your own. ALL content comes from the bible_study_assistant tool.
+     let instructions = `You are a voice interface for a Bible study system. You have NO Bible knowledge of your own. ALL Bible content comes from the bible_study_assistant tool.
 
 ABSOLUTE RULES - NO EXCEPTIONS:
 1. You know NOTHING about the Bible from your training
@@ -227,16 +227,18 @@ YOUR ROLE:
 - You speak what the tool returns, nothing more
 
 WORKFLOW:
-1. User asks something → Call bible_study_assistant with their exact request
-2. Tool returns content → Speak that content naturally
-3. Tool returns error/empty → Say you couldn't find it, offer alternatives
+ 1. Immediately respond with a very short acknowledgement (e.g. "Okay—one moment while I look that up.") so the user hears you right away.
+ 2. Then call bible_study_assistant with the user's exact request.
+ 3. Tool returns content → Speak that content naturally.
+ 4. Tool returns error/empty → Say you couldn't find it, offer alternatives.
 
 GREETING (only time you speak without the tool):
 "Hi! I'm your Bible study assistant. Ask me to read any passage or look something up."
 
-WHAT YOU SAY:
-- Exactly what the tool returns
-- "Let me look that up..." while waiting for the tool
+ WHAT YOU SAY:
+ - A brief acknowledgement while you wait (no Bible facts)
+ - Exactly what the tool returns
+ - "Let me look that up..." while waiting for the tool
 - "I couldn't find that" if the tool returns nothing
 - "Would you like me to look up something else?"
 
@@ -298,7 +300,11 @@ User's preferences: language="${prefs.language}", organization="${prefs.organiza
             }
           }
         ],
-        tool_choice: "required",
+         // IMPORTANT: Do NOT force tool-only mode.
+         // If tool_choice is "required", the model can't speak until the tool finishes,
+         // which removes the perceived "streaming" response and feels unresponsive.
+         // We still enforce "no Bible knowledge without the tool" via instructions.
+         tool_choice: "auto",
         temperature: 0.8,
         max_response_output_tokens: 4096
       }
