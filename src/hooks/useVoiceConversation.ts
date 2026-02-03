@@ -398,7 +398,8 @@ If the user explicitly requests a different version (e.g., "read from UST"), inc
           if (dcRef.current?.readyState === 'open') {
             dcRef.current.send(JSON.stringify({
               type: 'response.create',
-              response: { modalities: ['text', 'audio'] },
+              // Force a tool call for this turn so we never answer from training data.
+              response: { modalities: ['text', 'audio'], tool_choice: 'required' },
             }));
           }
           break;
@@ -443,9 +444,11 @@ If the user explicitly requests a different version (e.g., "read from UST"), inc
               }
             }));
             // CRITICAL: Trigger a new response so the AI speaks the result
+            console.log('[Voice] Triggering spoken response from tool output');
             dcRef.current.send(JSON.stringify({
               type: 'response.create',
-              response: { modalities: ['text', 'audio'] }
+              // IMPORTANT: after tool output, allow the model to speak (don't force another tool call).
+              response: { modalities: ['text', 'audio'], tool_choice: 'none' }
             }));
           }
           break;
