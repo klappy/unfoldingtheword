@@ -56,15 +56,17 @@ ABSOLUTE RULES - NO EXCEPTIONS:
 - Scripture text spoken matches scripture text displayed (both from MCP)
 - Consistent experience between text and voice modes
 - No theological drift from model's training corpus
+- Per-request resource overrides (e.g., "read from UST") are honored
 
 **Negative:**
 - Slightly higher latency (must wait for tool response)
-- Greeting is the only "free" speech (no tool call)
+- Greeting is the only "free" speech (no tool call, uses `tool_choice: 'none'` override)
 - If MCP is down, voice mode cannot help at all (no graceful degradation)
 
 **Neutral:**
 - Tool response includes `voice_response` field optimized for speech
 - Navigation hints still work for UI synchronization
+- Explicit resource requests (e.g., "from UST", "in ULT") are detected via regex and override user preferences for that request only
 
 ## Verification
 

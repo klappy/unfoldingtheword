@@ -230,10 +230,21 @@ serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
+    // Detect explicit resource/translation requests in the message
+    // Supports: "from UST", "from ULT", "in UST", "in ULT", "the UST", "the ULT", "UST version", "ULT version"
+    const resourceOverrideMatch = message.match(/\b(?:from|in|the)\s+(ust|ult|ulb|udb)\b|\b(ust|ult|ulb|udb)\s+(?:version|translation)\b/i);
+    const resourceOverride = resourceOverrideMatch 
+      ? (resourceOverrideMatch[1] || resourceOverrideMatch[2]).toLowerCase() 
+      : null;
+    
+    if (resourceOverride) {
+      console.log(`[multi-agent-chat] Explicit resource override detected: ${resourceOverride}`);
+    }
+
     const prefs = {
       language: userPrefs.language || 'en',
       organization: userPrefs.organization || 'unfoldingWord',
-      resource: userPrefs.resource || 'ult',
+      resource: resourceOverride || userPrefs.resource || 'ult',
       deviceId: userPrefs.deviceId,
     };
 
