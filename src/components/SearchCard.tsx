@@ -75,6 +75,8 @@ export function SearchCard({
   };
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(getInitialExpandedSections);
+  const [showAllMatches, setShowAllMatches] = useState<Record<string, boolean>>({});
+  const INITIAL_VISIBLE_COUNT = 10;
 
   // Memoize markdown components with current search term and click handler
   const searchQuery = results?.query || filterQuery || '';
@@ -95,6 +97,17 @@ export function SearchCard({
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Expand only one section (used by header filter badges)
+  const expandOnlySection = (section: string) => {
+    setExpandedSections({
+      scripture: section === 'scripture',
+      notes: section === 'notes',
+      questions: section === 'questions',
+      words: section === 'words',
+      academy: section === 'academy',
+    });
   };
 
   // New format rendering with unified SearchResultItem
@@ -118,6 +131,11 @@ export function SearchCard({
       const isExpanded = expandedSections[key];
       const config = sectionConfig[key];
       const Icon = config.icon;
+      const showAll = showAllMatches[key];
+      const visibleMatches = showAll 
+        ? data.matches 
+        : data.matches.slice(0, INITIAL_VISIBLE_COUNT);
+      const hiddenCount = data.matches.length - INITIAL_VISIBLE_COUNT;
 
       return (
         <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
@@ -141,8 +159,8 @@ export function SearchCard({
 
           {isExpanded && (
             <div className="p-3 space-y-2 max-w-xl mx-auto">
-              {/* Render each match using unified SearchResultItem */}
-              {data.matches.map((match, idx) => (
+              {/* Render visible matches using unified SearchResultItem */}
+              {visibleMatches.map((match, idx) => (
                 <SearchResultItem
                   key={`${key}-${match.reference || ''}-${match.metadata?.term || match.metadata?.moduleId || idx}`}
                   type={key}
@@ -158,6 +176,17 @@ export function SearchCard({
                   metadata={match.metadata}
                 />
               ))}
+              
+              {/* Show more button for progressive loading */}
+              {!showAll && hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowAllMatches(prev => ({ ...prev, [key]: true }))}
+                  className="w-full py-2 text-sm text-primary hover:underline flex items-center justify-center gap-1"
+                >
+                  Show {hiddenCount} more
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -192,34 +221,54 @@ export function SearchCard({
               {totalMatches} total
             </Badge>
             {totalScriptureMatches > 0 && (
-              <span className="flex items-center gap-1">
+              <button
+                onClick={() => expandOnlySection('scripture')}
+                className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-amber-400/10 active:bg-amber-400/20 transition-colors cursor-pointer"
+                aria-label={`Filter to ${totalScriptureMatches} scripture results`}
+              >
                 <BookMarked className="h-3 w-3 text-amber-400" />
-                <span className="text-amber-400">{totalScriptureMatches}</span>
-              </span>
+                <span className="text-amber-400 font-medium">{totalScriptureMatches}</span>
+              </button>
             )}
             {totalNotesMatches > 0 && (
-              <span className="flex items-center gap-1">
+              <button
+                onClick={() => expandOnlySection('notes')}
+                className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-emerald-400/10 active:bg-emerald-400/20 transition-colors cursor-pointer"
+                aria-label={`Filter to ${totalNotesMatches} notes results`}
+              >
                 <FileText className="h-3 w-3 text-emerald-400" />
-                <span className="text-emerald-400">{totalNotesMatches}</span>
-              </span>
+                <span className="text-emerald-400 font-medium">{totalNotesMatches}</span>
+              </button>
             )}
             {totalQuestionsMatches > 0 && (
-              <span className="flex items-center gap-1">
+              <button
+                onClick={() => expandOnlySection('questions')}
+                className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-violet-400/10 active:bg-violet-400/20 transition-colors cursor-pointer"
+                aria-label={`Filter to ${totalQuestionsMatches} questions results`}
+              >
                 <HelpCircle className="h-3 w-3 text-violet-400" />
-                <span className="text-violet-400">{totalQuestionsMatches}</span>
-              </span>
+                <span className="text-violet-400 font-medium">{totalQuestionsMatches}</span>
+              </button>
             )}
             {totalWordsMatches > 0 && (
-              <span className="flex items-center gap-1">
+              <button
+                onClick={() => expandOnlySection('words')}
+                className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-rose-400/10 active:bg-rose-400/20 transition-colors cursor-pointer"
+                aria-label={`Filter to ${totalWordsMatches} words results`}
+              >
                 <BookOpen className="h-3 w-3 text-rose-400" />
-                <span className="text-rose-400">{totalWordsMatches}</span>
-              </span>
+                <span className="text-rose-400 font-medium">{totalWordsMatches}</span>
+              </button>
             )}
             {totalAcademyMatches > 0 && (
-              <span className="flex items-center gap-1">
+              <button
+                onClick={() => expandOnlySection('academy')}
+                className="flex items-center gap-1 px-2 py-1 rounded-md hover:bg-sky-400/10 active:bg-sky-400/20 transition-colors cursor-pointer"
+                aria-label={`Filter to ${totalAcademyMatches} academy results`}
+              >
                 <GraduationCap className="h-3 w-3 text-sky-400" />
-                <span className="text-sky-400">{totalAcademyMatches}</span>
-              </span>
+                <span className="text-sky-400 font-medium">{totalAcademyMatches}</span>
+              </button>
             )}
           </div>
         </div>

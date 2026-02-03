@@ -205,18 +205,11 @@ function SearchResultItemInner({
   // Create markdown components with search highlighting and reference clicking
   const markdownComponents = createMarkdownComponents(searchQuery, onVerseClick);
 
-  // Handle click - LLM-driven interactions (Prompt over code)
+  // Handle click - direct navigation for scripture, expand for others
   const handleClick = () => {
     if (isScriptureType) {
-      // Scripture clicks send prompt to LLM: "Read Romans 8:39"
-      if (onInteraction) {
-        onInteraction({
-          type: 'read_scripture',
-          reference,
-          resource: metadata?.resource,
-        });
-      } else if (onVerseClick) {
-        // Fallback for backwards compatibility
+      // Direct navigation for instant response (no LLM round-trip)
+      if (onVerseClick) {
         onVerseClick(reference);
       }
     } else if (type === 'words' || type === 'academy') {
