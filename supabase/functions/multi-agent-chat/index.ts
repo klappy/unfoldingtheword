@@ -300,8 +300,11 @@ serve(async (req) => {
         }
         
         case 'get_scripture': {
-          // Fetch multiple scripture versions in parallel
-          const scriptureVersions = ['ult', 'ust'];
+          // For voice requests, ALWAYS prefer the user's selected version to avoid
+          // the assistant reading from an unexpected translation.
+          const scriptureVersions = isVoiceRequest
+            ? [prefs.resource]
+            : ['ult', 'ust'];
           const [resourceResult, ...scriptureResults] = await Promise.all([
             invokeSubAgent('resource-agent', {
               reference: args.reference,
