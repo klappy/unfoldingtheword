@@ -433,6 +433,7 @@ If the user explicitly requests a different version (e.g., "read from UST"), inc
           const toolResult = await handleToolCallRef.current?.(toolName, toolArgs) || 'Error processing request';
           
           if (dcRef.current?.readyState === 'open') {
+            // Send the tool result
             dcRef.current.send(JSON.stringify({
               type: 'conversation.item.create',
               item: {
@@ -440,6 +441,11 @@ If the user explicitly requests a different version (e.g., "read from UST"), inc
                 call_id: data.call_id,
                 output: toolResult
               }
+            }));
+            // CRITICAL: Trigger a new response so the AI speaks the result
+            dcRef.current.send(JSON.stringify({
+              type: 'response.create',
+              response: { modalities: ['text', 'audio'] }
             }));
           }
           break;
